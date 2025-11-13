@@ -17,7 +17,7 @@ if ($enlace->connect_error) {
 $sql = "SELECT e.Id_EncabPedido AS idPedido, e.FechaOrden, e.PurchaseOrder, c.Nombre
         FROM EncabPedido e
         INNER JOIN Clientes c ON e.Id_Cliente = c.Id_Cliente
-        ORDER BY e.FechaOrden DESC";
+        ORDER BY e.Id_EncabPedido DESC";
 
 $result = $enlace->query($sql);
 $pedidos = [];

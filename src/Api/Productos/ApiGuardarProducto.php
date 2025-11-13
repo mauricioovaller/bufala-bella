@@ -43,6 +43,7 @@ $codigoSiesa = limpiar_texto($data["codigoSiesa"] ?? "");
 $codigoFDA = limpiar_texto($data["codigoFDA"] ?? "");
 $pesoGr = validar_flotante($data["pesoGr"] ?? 0);
 $factorPesoBruto = validar_flotante($data["factorPesoBruto"] ?? 0);
+$precioVenta = validar_flotante($data["precioVenta"] ?? 0);
 $activo = validar_entero($data["activo"] ?? 1);
 
 // Validar campos obligatorios
@@ -53,10 +54,10 @@ if (!$descripProducto || !$descripFactura || !$codigoSiesa) {
 
 try {
     // Insertar producto
-    $sql = "INSERT INTO Productos (DescripProducto, DescripFactura, Codigo_Siesa, Codigo_FDA, PesoGr, FactorPesoBruto, Activo) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $sql = "INSERT INTO Productos (DescripProducto, DescripFactura, Codigo_Siesa, Codigo_FDA, PesoGr, FactorPesoBruto, PrecioVenta, Activo) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $enlace->prepare($sql);
-    $stmt->bind_param("ssssddi", $descripProducto, $descripFactura, $codigoSiesa, $codigoFDA, $pesoGr, $factorPesoBruto, $activo);
+    $stmt->bind_param("ssssdddi", $descripProducto, $descripFactura, $codigoSiesa, $codigoFDA, $pesoGr, $factorPesoBruto, $precioVenta, $activo);
     $stmt->execute();
     
     $idProducto = $stmt->insert_id;

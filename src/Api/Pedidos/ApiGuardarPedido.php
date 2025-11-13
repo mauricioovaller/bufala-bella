@@ -43,6 +43,8 @@ $idCliente = validar_entero($encabezado["clienteId"] ?? null);
 $idClienteRegion = validar_entero($encabezado["regionId"] ?? null);
 $idTransportadora = validar_entero($encabezado["transportadoraId"] ?? null);
 $idBodega = validar_entero($encabezado["bodegaId"] ?? null);
+$idAerolinea = validar_entero($encabezado["aerolineaId"] ?? null);
+$idAgencia = validar_entero($encabezado["agenciaId"] ?? null);
 $purchaseOrder = limpiar_texto($encabezado["purchaseOrder"] ?? "");
 $fechaOrden = limpiar_texto($encabezado["fechaOrden"] ?? "");
 $fechaSalida = limpiar_texto($encabezado["fechaSalida"] ?? "");
@@ -50,6 +52,8 @@ $fechaEnroute = limpiar_texto($encabezado["fechaEnroute"] ?? "");
 $fechaDelivery = limpiar_texto($encabezado["fechaDelivery"] ?? "");
 $fechaIngreso = limpiar_texto($encabezado["fechaIngreso"] ?? "");
 $cantidadEstibas = validar_flotante($encabezado["cantidadEstibas"] ?? null);
+$guiaMaster = limpiar_texto($encabezado["noGuia"] ?? "");
+$guiaHija = limpiar_texto($encabezado["guiaHija"] ?? "");
 $observaciones = limpiar_texto($encabezado["comentarios"] ?? "");
 
 // Validaciones obligatorias
@@ -63,10 +67,10 @@ try {
 
     // Insertar encabezado
     $sqlEnc = "INSERT INTO EncabPedido 
-        (Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, Observaciones) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        (Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmtEnc = $enlace->prepare($sqlEnc);
-    $stmtEnc->bind_param("iiiissssssds", $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $observaciones);
+    $stmtEnc->bind_param("iiiissssssdiisss", $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones);
     $stmtEnc->execute();
 
     if ($stmtEnc->affected_rows <= 0) {

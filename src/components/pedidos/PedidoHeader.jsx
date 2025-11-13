@@ -7,14 +7,16 @@ export default function PedidoHeader({
   transportadoras = [],
   bodegas = [],
   regiones = [],
+  aerolineas = [],
+  agencias = [],
   inputRefs = {},
 }) {
   return (
     <section className="bg-white rounded-xl shadow-md p-4 sm:p-6">
       <h3 className="text-xl font-semibold mb-4 text-slate-700">Encabezado del Pedido</h3>
 
-      {/* Grid principal - MEJORADO */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {/* PRIMERA FILA - 5 campos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
         {/* Número (readonly) */}
         <div className="space-y-1">
           <label className="block text-sm font-medium text-gray-700">Número</label>
@@ -94,7 +96,10 @@ export default function PedidoHeader({
             ))}
           </select>
         </div>
+      </div>
 
+      {/* SEGUNDA FILA - 6 campos (PO + 5 fechas) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
         {/* Purchase Order */}
         <div className="space-y-1">
           <label className="block text-sm font-medium text-gray-700">Purchase Order</label>
@@ -118,26 +123,58 @@ export default function PedidoHeader({
             className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
         </div>
-        
-        {/* Fechas adicionales */}
-        {[
-          ["fechaSalida", "Fecha Salida"],
-          ["fechaEnroute", "Fecha Enroute"],
-          ["fechaDelivery", "Fecha Delivery"],
-          ["fechaIngreso", "Fecha Ingreso"],
-        ].map(([key, label]) => (
-          <div key={key} className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700">{label}</label>
-            <input
-              ref={inputRefs[key]}
-              type="date"
-              value={header[key] || ""}
-              onChange={(e) => onChange(key, e.target.value)}
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-          </div>
-        ))}
 
+        {/* Fecha Salida */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Fecha Salida</label>
+          <input
+            ref={inputRefs.fechaSalida}
+            type="date"
+            value={header.fechaSalida || ""}
+            onChange={(e) => onChange("fechaSalida", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+        </div>
+
+        {/* Fecha Enroute */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Fecha Enroute</label>
+          <input
+            ref={inputRefs.fechaEnroute}
+            type="date"
+            value={header.fechaEnroute || ""}
+            onChange={(e) => onChange("fechaEnroute", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+        </div>
+
+        {/* Fecha Delivery */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Fecha Delivery</label>
+          <input
+            ref={inputRefs.fechaDelivery}
+            type="date"
+            value={header.fechaDelivery || ""}
+            onChange={(e) => onChange("fechaDelivery", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+        </div>
+
+        {/* Fecha Ingreso */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Fecha Ingreso QB</label>
+          <input
+            ref={inputRefs.fechaIngreso}
+            type="date"
+            value={header.fechaIngreso || ""}
+            onChange={(e) => onChange("fechaIngreso", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+        </div>
+      </div>
+
+      {/* TERCERA FILA - 6 campos (Estibas + 5 campos de transporte) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
         {/* Cantidad Estibas */}
         <div className="space-y-1">
           <label className="block text-sm font-medium text-gray-700">Cantidad Estibas</label>
@@ -150,9 +187,77 @@ export default function PedidoHeader({
             min="1"
           />
         </div>
+
+        {/* Aerolínea */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Aerolínea</label>
+          <select
+            ref={inputRefs.aerolineaId}
+            value={header.aerolineaId || ""}
+            onChange={(e) => onChange("aerolineaId", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="">-- Seleccione --</option>
+            {aerolineas.map((a) => (
+              <option key={a.IdAerolinea} value={a.IdAerolinea}>
+                {a.Nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Agencia */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Agencia</label>
+          <select
+            ref={inputRefs.agenciaId}
+            value={header.agenciaId || ""}
+            onChange={(e) => onChange("agenciaId", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="">-- Seleccione --</option>
+            {agencias.map((a) => (
+              <option key={a.IdAgencia} value={a.IdAgencia}>
+                {a.Nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* No. Guía */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">No. Guía (Master)</label>
+          <input
+            ref={inputRefs.noGuia}
+            value={header.noGuia || ""}
+            onChange={(e) => onChange("noGuia", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            placeholder="Número de guía"
+          />
+        </div>
+
+        {/* Guía Hija */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Guía Hija</label>
+          <input
+            type="text"
+            value={header.guiaHija || ""}
+            onChange={(e) => onChange("guiaHija", e.target.value)}
+            className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            placeholder="Guía hija"
+          />
+        </div>
+
+        {/* Campo extra para completar 6 (puede ser vacío o útil en el futuro) */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Extra</label>
+          <div className="border rounded-lg p-2 bg-gray-50 text-sm text-gray-500">
+            Disponible
+          </div>
+        </div>
       </div>
 
-      {/* Comentarios */}
+      {/* Comentarios - full width */}
       <div className="mt-6 space-y-1">
         <label className="block text-sm font-medium text-gray-700">Comentarios</label>
         <textarea

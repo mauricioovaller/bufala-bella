@@ -44,6 +44,8 @@ $idCliente = validar_entero($encabezado["clienteId"] ?? null);
 $idClienteRegion = validar_entero($encabezado["regionId"] ?? null);
 $idTransportadora = validar_entero($encabezado["transportadoraId"] ?? null);
 $idBodega = validar_entero($encabezado["bodegaId"] ?? null);
+$idAerolinea = validar_entero($encabezado["aerolineaId"] ?? null);
+$idAgencia = validar_entero($encabezado["agenciaId"] ?? null);
 $purchaseOrder = limpiar_texto($encabezado["purchaseOrder"] ?? "");
 $fechaOrden = limpiar_texto($encabezado["fechaOrden"] ?? "");
 $fechaSalida = limpiar_texto($encabezado["fechaSalida"] ?? "");
@@ -52,6 +54,8 @@ $fechaDelivery = limpiar_texto($encabezado["fechaDelivery"] ?? "");
 $fechaIngreso = limpiar_texto($encabezado["fechaIngreso"] ?? "");
 $cantidadEstibas = validar_flotante($encabezado["cantidadEstibas"] ?? null);
 $observaciones = limpiar_texto($encabezado["comentarios"] ?? "");
+$guiaMaster = limpiar_texto($encabezado["noGuia"] ?? "");
+$guiaHija = limpiar_texto($encabezado["guiaHija"] ?? "");
 
 // Validaciones obligatorias
 if (!$idCliente || !$idTransportadora || !$idBodega || !$fechaOrden || empty($detalle)) {
@@ -64,11 +68,11 @@ try {
 
     // Actualizar encabezado
     $sqlEnc = "UPDATE EncabPedido  
-        SET Id_Cliente = ?, Id_ClienteRegion = ?, Id_Transportadora = ?, Id_Bodega = ?, PurchaseOrder = ?, FechaOrden = ?, FechaSalida = ?, FechaEnroute = ?, FechaDelivery = ?, FechaIngreso = ?, CantidadEstibas = ?, Observaciones = ?
+        SET Id_Cliente = ?, Id_ClienteRegion = ?, Id_Transportadora = ?, Id_Bodega = ?, PurchaseOrder = ?, FechaOrden = ?, FechaSalida = ?, FechaEnroute = ?, FechaDelivery = ?, FechaIngreso = ?, CantidadEstibas = ?, IdAerolinea = ?, IdAgencia = ?, GuiaMaster = ?, GuiaHija = ?, Observaciones = ?
         WHERE Id_EncabPedido = ?";
     $stmtEnc = $enlace->prepare($sqlEnc);
-    $stmtEnc->bind_param("iiiissssssdsi", $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $observaciones, $idPedido);
-    $stmtEnc->execute();    
+    $stmtEnc->bind_param("iiiissssssdiisssi", $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $idPedido);
+    $stmtEnc->execute();
 
     // Insertar detalle actualizado
     $sqlDelDet = "DELETE FROM DetPedido WHERE Id_EncabPedido = ?";

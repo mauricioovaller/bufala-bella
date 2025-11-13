@@ -14,7 +14,22 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Obtener clientes con sus regiones usando bind_result
+// 👇 NUEVO: Obtener todas las bodegas
+$sqlBodegas = "SELECT Id_Bodega, Descripcion FROM Bodegas ORDER BY Descripcion";
+$stmtBodegas = $enlace->prepare($sqlBodegas);
+$stmtBodegas->execute();
+$stmtBodegas->bind_result($Id_Bodega, $Descripcion);
+
+$bodegas = [];
+while ($stmtBodegas->fetch()) {
+    $bodegas[] = [
+        'Id_Bodega' => $Id_Bodega,
+        'Descripcion' => $Descripcion
+    ];
+}
+$stmtBodegas->close();
+
+// 👇 Obtener clientes con sus regiones (existente)
 $sql = "SELECT 
             c.Id_Cliente,
             c.Nombre,
@@ -31,7 +46,6 @@ $sql = "SELECT
 $stmt = $enlace->prepare($sql);
 $stmt->execute();
 
-// Vincular resultados
 $stmt->bind_result(
     $Id_Cliente,
     $Nombre,
@@ -56,11 +70,16 @@ while ($stmt->fetch()) {
 }
 $stmt->close();
 
-if (!empty($clientes)) {
-    echo json_encode($clientes);
+// 👇 Devolver ambos arrays en la respuesta
+$response = [
+    'clientes' => $clientes,
+    'bodegas' => $bodegas
+];
+
+if (!empty($clientes) || !empty($bodegas)) {
+    echo json_encode($response);
 } else {
-    echo json_encode(["error" => "No se encontraron clientes"]);
+    echo json_encode(["error" => "No se encontraron datos"]);
 }
 
 $enlace->close();
-?>

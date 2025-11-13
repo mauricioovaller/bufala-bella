@@ -1,5 +1,13 @@
 import React, { useEffect } from "react";
 
+// Mapeo de embalajes por defecto según el Id_Producto
+const embalajesPorDefecto = {
+  "36": "6",    // Producto: Mozzarella Standard Moisture 250g (Caprese) → Embalaje: Caja 12 unidades
+  "7": "2",    // Producto: Burrata Buf Food Service Trays 1000g → Embalaje: Caja 4 unidades  
+  "11": "2",   // Producto: Ovoline Buf Food Service Trays 1000g  → Embalaje: Caja 4 unidades
+  // Seguir agregando los que se necesiten...
+};
+
 function formatCurrency(v) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -22,7 +30,7 @@ export default function PedidoDetail({
       // Convertir campos a string para consistencia
       const productoStr = String(item.producto || "");
       const embalajeStr = String(item.embalaje || "");
-      
+
       // Si ya tenemos todos los datos calculados, no recalcular
       if (item.pesoNeto !== undefined && item.pesoNeto !== 0 &&
         item.pesoBruto !== undefined && item.pesoBruto !== 0) {
@@ -113,11 +121,31 @@ export default function PedidoDetail({
         item.descripcion = prod.DescripFactura || "";
         item.pesoGr = prod.PesoGr || 0;
         item.factorPesoBruto = prod.FactorPesoBruto || 0;
+        // 👇 NUEVO: Cargar automáticamente el precio de venta del producto
+        item.precio = prod.PrecioVenta || 0;
+
+        // Aplicar embalaje por defecto si existe para este producto
+        const embalajePorDefecto = embalajesPorDefecto[String(prod.Id_Producto)];
+        if (embalajePorDefecto) {
+          const emb = embalajes.find((e) => String(e.Id_Embalaje) === String(embalajePorDefecto));
+          if (emb) {
+            item.embalaje = emb.Id_Embalaje;
+            item.cantidadEmbalaje = emb.Cantidad || 0;
+          }
+        } else {
+          // Si no hay embalaje por defecto, limpiar el campo
+          item.embalaje = "";
+          item.cantidadEmbalaje = 0;
+        }
+
       } else {
         item.producto = "";
         item.descripcion = "";
         item.pesoGr = 0;
         item.factorPesoBruto = 0;
+        item.precio = 0; // 👈 Limpiar precio si no hay producto
+        item.embalaje = ""; // 👈 También limpiar embalaje aquí
+        item.cantidadEmbalaje = 0;
       }
     } else if (field === "embalaje") {
       const emb = embalajes.find((e) => String(e.Id_Embalaje) === String(value));
@@ -297,7 +325,7 @@ export default function PedidoDetail({
             </tbody>
           </table>
         </div>
-        
+
         {items.length === 0 && (
           <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-gray-50 m-2">
             <div className="text-gray-400 mb-2">
@@ -394,7 +422,7 @@ export default function PedidoDetail({
                 </div>
               </div>
             </div>
-            
+
             <div className="mt-3 text-right">
               <button
                 type="button"

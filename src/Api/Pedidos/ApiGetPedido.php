@@ -26,14 +26,14 @@ if ($idPedido <= 0) {
 // ===================
 // Obtener encabezado
 // ===================
-$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, Observaciones
+$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones
              FROM EncabPedido 
              WHERE Id_EncabPedido = ?";
 
 $stmtEnc = $enlace->prepare($sqlEnc);
 $stmtEnc->bind_param("i", $idPedido);
 $stmtEnc->execute();
-$stmtEnc->bind_result($idEncabPedido, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $observaciones);
+$stmtEnc->bind_result($idEncabPedido, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones);
 
 $header = null;
 if ($stmtEnc->fetch()) {
@@ -50,6 +50,10 @@ if ($stmtEnc->fetch()) {
         "FechaDelivery"  => $fechaDelivery,
         "FechaIngreso"   => $fechaIngreso,
         "CantidadEstibas"=> $cantidadEstibas,
+        "Id_Aerolinea"    => $idAerolinea,
+        "Id_Agencia"      => $idAgencia,
+        "GuiaMaster"     => $guiaMaster,
+        "GuiaHija"       => $guiaHija,
         "Observaciones"  => $observaciones
     ];
 }

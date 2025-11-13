@@ -60,16 +60,17 @@ try {
 
     // Insertar regiones
     if (!empty($regiones)) {
-        $sqlRegion = "INSERT INTO ClientesRegion (Id_Cliente, Region, Direccion, Frecuencia) VALUES (?, ?, ?, ?)";
+        $sqlRegion = "INSERT INTO ClientesRegion (Id_Cliente, Region, Direccion, Id_Bodega, Frecuencia) VALUES (?, ?, ?, ?, ?)";
         $stmtRegion = $enlace->prepare($sqlRegion);
         
         foreach ($regiones as $region) {
             $regionNombre = limpiar_texto($region["region"] ?? "");
             $direccion = limpiar_texto($region["direccion"] ?? "");
+            $idBodega = validar_entero($region["idBodega"] ?? 0);
             $frecuencia = limpiar_texto($region["frecuencia"] ?? "");
             
             if ($regionNombre) {
-                $stmtRegion->bind_param("isss", $idCliente, $regionNombre, $direccion, $frecuencia);
+                $stmtRegion->bind_param("issis", $idCliente, $regionNombre, $direccion, $idBodega, $frecuencia);
                 $stmtRegion->execute();
             }
         }

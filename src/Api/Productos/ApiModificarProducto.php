@@ -43,6 +43,7 @@ $codigoSiesa = limpiar_texto($data["codigoSiesa"] ?? "");
 $codigoFDA = limpiar_texto($data["codigoFDA"] ?? "");
 $pesoGr = validar_flotante($data["pesoGr"] ?? 0);
 $factorPesoBruto = validar_flotante($data["factorPesoBruto"] ?? 0);
+$precioVenta = validar_flotante($data["precioVenta"] ?? 0);
 $activo = validar_entero($data["activo"] ?? 1);
 
 // Validar campos obligatorios
@@ -60,11 +61,12 @@ try {
             Codigo_FDA = ?, 
             PesoGr = ?, 
             FactorPesoBruto = ?, 
+            PrecioVenta = ?, 
             Activo = ? 
             WHERE Id_Producto = ?";
     
     $stmt = $enlace->prepare($sql);
-    $stmt->bind_param("ssssddii", $descripProducto, $descripFactura, $codigoSiesa, $codigoFDA, $pesoGr, $factorPesoBruto, $activo, $idProducto);
+    $stmt->bind_param("ssssdddii", $descripProducto, $descripFactura, $codigoSiesa, $codigoFDA, $pesoGr, $factorPesoBruto, $precioVenta, $activo, $idProducto);
     $stmt->execute();
     $stmt->close();
 

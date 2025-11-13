@@ -23,7 +23,7 @@ export async function getClienteRegion(clienteId) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ clienteId } ),
+        body: JSON.stringify({ clienteId }),
       }
     );
     return await res.json();
@@ -105,10 +105,23 @@ export async function actualizarPedido(encabezado, detalle) {
   }
 }
 
-export async function imprimirPedido(idPedido) {
+// En services/pedidosService.js - AGREGAR ESTAS FUNCIONES:
+
+export async function imprimirPedido(idPedido, tipoDocumento = "pedido") {
   try {
-    const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirPedido.php";
-    
+    // Mapear los tipos de documento a los endpoints correspondientes
+    const endpoints = {
+      pedido:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirPedido.php",
+      bol: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirBOL.php",
+      listaempaque:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirListaEmpaque.php",
+      listaempaqueprecios:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirListaEmpaquePrecios.php",
+    };
+
+    const endpoint = endpoints[tipoDocumento] || endpoints.pedido;
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -126,11 +139,14 @@ export async function imprimirPedido(idPedido) {
   }
 }
 
+// También puedes mantener la función original por compatibilidad
+export async function imprimirBOL(idPedido) {
+  return await imprimirPedido(idPedido, "bol");
+}
 
-
-
-
-
+export async function imprimirListaEmpaque(idPedido) {
+  return await imprimirPedido(idPedido, "listaempaque");
+}
 
 const STORAGE_KEY = "demo_pedidos_v1";
 

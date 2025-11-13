@@ -23,6 +23,7 @@ $sql = "SELECT
             Codigo_FDA,
             PesoGr,
             FactorPesoBruto,
+            PrecioVenta,
             Activo
         FROM Productos 
         ORDER BY DescripProducto";
@@ -39,6 +40,7 @@ $stmt->bind_result(
     $Codigo_FDA,
     $PesoGr,
     $FactorPesoBruto,
+    $PrecioVenta,
     $Activo
 );
 
@@ -52,6 +54,7 @@ while ($stmt->fetch()) {
         'Codigo_FDA' => $Codigo_FDA,
         'PesoGr' => $PesoGr,
         'FactorPesoBruto' => $FactorPesoBruto,
+        'PrecioVenta' => $PrecioVenta,
         'Activo' => $Activo
     ];
 }

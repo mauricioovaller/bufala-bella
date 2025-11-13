@@ -17,6 +17,7 @@ export default function Productos() {
     codigoFDA: "",
     pesoGr: 0,
     factorPesoBruto: 0,
+    precioVenta: 0, // 👈 Nuevo campo
     activo: 1,
   });
 
@@ -64,6 +65,7 @@ export default function Productos() {
       codigoFDA: "",
       pesoGr: 0,
       factorPesoBruto: 0,
+      precioVenta: 0, // 👈 Incluir en limpieza
       activo: 1,
     });
     setEditMode(false);
@@ -78,9 +80,15 @@ export default function Productos() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validar campos obligatorios
+    // 👇 MODIFICADO: Validar campos obligatorios incluyendo precioVenta
     if (!form.descripProducto.trim() || !form.descripFactura.trim() || !form.codigoSiesa.trim()) {
       Swal.fire("Error", "Todos los campos son obligatorios", "warning");
+      return;
+    }
+
+    // 👇 NUEVA VALIDACIÓN: Precio de venta debe ser mayor o igual a 0
+    if (form.precioVenta < 0) {
+      Swal.fire("Error", "El precio de venta debe ser mayor o igual a 0", "warning");
       return;
     }
 
@@ -130,6 +138,7 @@ export default function Productos() {
         codigoFDA: data.Codigo_FDA,
         pesoGr: data.PesoGr,
         factorPesoBruto: data.FactorPesoBruto,
+        precioVenta: data.PrecioVenta || 0, // 👈 Mapear PrecioVenta
         activo: data.Activo,
       });
 
@@ -230,6 +239,7 @@ export default function Productos() {
                 value={form.pesoGr}
                 onChange={handleChange}
                 className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="0"
                 required
               />
             </div>
@@ -247,6 +257,25 @@ export default function Productos() {
                 value={form.factorPesoBruto}
                 onChange={handleChange}
                 className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="0"
+                required
+              />
+            </div>
+
+            {/* 👇 NUEVO: Precio de Venta */}
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Precio de Venta *
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                name="precioVenta"
+                placeholder="0.00"
+                value={form.precioVenta}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="0"
                 required
               />
             </div>
@@ -329,6 +358,7 @@ export default function Productos() {
                       <th className="p-2 border">Código FDA</th>
                       <th className="p-2 border">Peso (Gr)</th>
                       <th className="p-2 border">Factor</th>
+                      <th className="p-2 border">Precio Venta</th> {/* 👈 Nueva columna */}
                       <th className="p-2 border">Estado</th>
                       <th className="p-2 border text-center">Acciones</th>
                     </tr>
@@ -345,6 +375,9 @@ export default function Productos() {
                           <td className="p-2 border">{producto.Codigo_FDA}</td>
                           <td className="p-2 border text-right">{producto.PesoGr}</td>
                           <td className="p-2 border text-right">{producto.FactorPesoBruto}</td>
+                          <td className="p-2 border text-right font-medium text-green-600">
+                            ${producto.PrecioVenta ? parseFloat(producto.PrecioVenta).toFixed(2) : '0.00'} {/* 👈 Nueva celda */}
+                          </td>
                           <td className="p-2 border text-center">
                             <span className={`px-2 py-1 rounded-full text-xs ${
                               producto.Activo === 1 
@@ -366,7 +399,7 @@ export default function Productos() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="7" className="p-4 text-center text-gray-500">
+                        <td colSpan="8" className="p-4 text-center text-gray-500"> {/* 👈 Ajustar colSpan */}
                           No hay productos registrados
                         </td>
                       </tr>
@@ -406,6 +439,12 @@ export default function Productos() {
                           <div>
                             <span className="text-gray-600">Factor:</span>
                             <p className="font-medium">{producto.FactorPesoBruto}</p>
+                          </div>
+                          <div className="col-span-2"> {/* 👈 Nueva fila para precio */}
+                            <span className="text-gray-600">Precio Venta:</span>
+                            <p className="font-medium text-green-600">
+                              ${producto.PrecioVenta ? parseFloat(producto.PrecioVenta).toFixed(2) : '0.00'}
+                            </p>
                           </div>
                         </div>
                         

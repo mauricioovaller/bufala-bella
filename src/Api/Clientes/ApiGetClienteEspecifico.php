@@ -68,6 +68,7 @@ $stmtRegiones->bind_result(
     $Id_Cliente,
     $Region,
     $Direccion,
+    $Id_Bodega,
     $Frecuencia
 );
 
@@ -78,6 +79,7 @@ while ($stmtRegiones->fetch()) {
         'Id_Cliente' => $Id_Cliente,
         'Region' => $Region,
         'Direccion' => $Direccion,
+        'Id_Bodega' => $Id_Bodega,
         'Frecuencia' => $Frecuencia
     ];
 }

@@ -1,5 +1,20 @@
 const BASE_URL = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Clientes";
 
+// Listar todos los bodegas
+export async function listarBodegas() {
+  const res = await fetch(`${BASE_URL}/ApiGetBodegas.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!res.ok) {
+    throw new Error("Error HTTP al listar clientes");
+  }
+
+  const data = await res.json();
+  return data;
+}
+
 // Listar todos los clientes
 export async function listarClientes() {
   const res = await fetch(`${BASE_URL}/ApiGetClientes.php`, {

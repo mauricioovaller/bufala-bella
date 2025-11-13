@@ -20,23 +20,33 @@ export default function Clientes() {
 
   const [regiones, setRegiones] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [bodegas, setBodegas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [mostrarLista, setMostrarLista] = useState(false); // 👈 Nuevo estado
+  const [mostrarLista, setMostrarLista] = useState(false);
 
-  // Cargar clientes al iniciar
   useEffect(() => {
-    cargarClientes();
+    cargarDatosIniciales();
   }, []);
 
-  const cargarClientes = async () => {
+  const cargarDatosIniciales = async () => {
     try {
       setLoading(true);
       const data = await listarClientes();
-      setClientes(data);
+      
+      if (data && data.clientes && data.bodegas) {
+        setClientes(data.clientes);
+        setBodegas(data.bodegas);
+      } else if (Array.isArray(data)) {
+        setClientes(data);
+        setBodegas([]);
+      } else {
+        setClientes([]);
+        setBodegas([]);
+      }
     } catch (error) {
-      console.error("Error cargando clientes:", error);
-      Swal.fire("Error", "No se pudieron cargar los clientes", "error");
+      console.error("Error cargando datos:", error);
+      Swal.fire("Error", "No se pudieron cargar los datos", "error");
     } finally {
       setLoading(false);
     }
@@ -66,7 +76,13 @@ export default function Clientes() {
   const agregarRegion = () => {
     setRegiones([
       ...regiones,
-      { region: "", direccion: "", frecuencia: "" },
+      { 
+        region: "", 
+        direccion: "", 
+        frecuencia: "", 
+        idBodega: "",
+        idClienteRegion: 0
+      },
     ]);
   };
 
@@ -98,7 +114,6 @@ export default function Clientes() {
     }
 
     try {
-      // Validar que no exista otro cliente con el mismo nombre
       const esValido = await validarDatos();
       if (!esValido) {
         Swal.fire("Error", "Ya existe un cliente con ese nombre", "warning");
@@ -107,7 +122,15 @@ export default function Clientes() {
 
       const clienteData = {
         ...form,
-        regiones: regiones.filter(region => region.region.trim() !== ""),
+        regiones: regiones
+          .filter(region => region.region.trim() !== "")
+          .map(region => ({
+            region: region.region,
+            direccion: region.direccion,
+            frecuencia: region.frecuencia,
+            idBodega: region.idBodega,
+            idClienteRegion: region.idClienteRegion || 0
+          }))
       };
 
       let resultado;
@@ -120,9 +143,7 @@ export default function Clientes() {
       if (resultado.success) {
         Swal.fire("Éxito", resultado.message, "success");
         limpiarFormulario();
-        cargarClientes();
-        // Opcional: Mostrar automáticamente la lista después de guardar
-        // setMostrarLista(true);
+        cargarDatosIniciales();
       } else {
         Swal.fire("Error", resultado.message, "error");
       }
@@ -151,17 +172,17 @@ export default function Clientes() {
         diasFechaIngreso: data.cliente.DiasFechaIngreso,
       });
 
-      // CORRECCIÓN: Mapear correctamente los nombres de campos de regiones
       const regionesMapeadas = (data.regiones || []).map(region => ({
-        region: region.Region || "", // De Region (BD) a region (estado)
-        direccion: region.Direccion || "", // De Direccion (BD) a direccion (estado)
-        frecuencia: region.Frecuencia || "", // De Frecuencia (BD) a frecuencia (estado)
-        idClienteRegion: region.Id_ClienteRegion // Mantener el ID si existe
+        region: region.Region || "",
+        direccion: region.Direccion || "",
+        frecuencia: region.Frecuencia || "",
+        idBodega: region.Id_Bodega || "",
+        idClienteRegion: region.Id_ClienteRegion || 0
       }));
 
       setRegiones(regionesMapeadas);
       setEditMode(true);
-      setMostrarLista(false); // 👈 Ocultar lista cuando se edita
+      setMostrarLista(false);
     } catch (error) {
       console.error("Error cargando cliente:", error);
       Swal.fire("Error", "No se pudo cargar el cliente", "error");
@@ -261,7 +282,7 @@ export default function Clientes() {
             </div>
           </div>
 
-          {/* Regiones - MEJORADO PARA MÓVILES */}
+          {/* Regiones con campo Bodega */}
           <div className="border-t pt-4">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
               <h3 className="text-lg font-medium text-slate-700">Regiones del Cliente</h3>
@@ -276,15 +297,14 @@ export default function Clientes() {
 
             {regiones.map((region, index) => (
               <div key={index} className="border rounded-lg p-3 mb-3 bg-gray-50">
-                {/* Número de región */}
+                {/* Solo el número de región - SIN BOTÓN ELIMINAR */}
                 <div className="flex items-center mb-2">
                   <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
                     Región {index + 1}
                   </span>
                 </div>
                 
-                {/* Campos de región - MEJOR DISPOSICIÓN PARA MÓVILES */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Nombre de la Región */}
                   <div className="space-y-1">
                     <label className="block text-sm font-medium text-gray-700">
@@ -327,6 +347,25 @@ export default function Clientes() {
                       className="border rounded p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     />
                   </div>
+
+                  {/* Campo de selección para Bodega */}
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Bodega
+                    </label>
+                    <select
+                      value={region.idBodega || ""}
+                      onChange={(e) => handleRegionChange(index, "idBodega", e.target.value)}
+                      className="border rounded p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    >
+                      <option value="">Seleccionar bodega</option>
+                      {bodegas.map((bodega) => (
+                        <option key={bodega.Id_Bodega} value={bodega.Id_Bodega}>
+                          {bodega.Descripcion}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             ))}
@@ -344,7 +383,7 @@ export default function Clientes() {
             )}
           </div>
 
-          {/* Botones - MEJORADO PARA MÓVILES */}
+          {/* Botones */}
           <div className="flex flex-col sm:flex-row gap-2 pt-4">
             <button
               type="submit"
@@ -353,7 +392,6 @@ export default function Clientes() {
               {editMode ? "Actualizar Cliente" : "Guardar Cliente"}
             </button>
             
-            {/* Botón para mostrar/ocultar lista */}
             <button
               type="button"
               onClick={toggleLista}
@@ -375,7 +413,7 @@ export default function Clientes() {
         </form>
       </div>
 
-      {/* Lista de clientes - SOLO VISIBLE CUANDO mostrarLista ES true */}
+      {/* Lista de clientes */}
       {mostrarLista && (
         <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
           <div className="flex justify-between items-center mb-4">
@@ -394,7 +432,6 @@ export default function Clientes() {
             <p className="text-center text-gray-500 py-4">Cargando clientes...</p>
           ) : (
             <>
-              {/* Tabla (solo en pantallas grandes) */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
@@ -441,7 +478,6 @@ export default function Clientes() {
                 </table>
               </div>
 
-              {/* Tarjetas (solo en móvil) - MEJORADO */}
               <div className="grid grid-cols-1 gap-3 md:hidden">
                 {clientes.length > 0 ? (
                   clientes.map((cliente) => (

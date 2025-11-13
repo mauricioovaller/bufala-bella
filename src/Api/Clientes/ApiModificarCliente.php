@@ -48,37 +48,76 @@ if (!$idCliente || !$nombre) {
 try {
     $enlace->begin_transaction();
 
-    // Actualizar cliente
+    // 1. Actualizar cliente
     $sqlCliente = "UPDATE Clientes SET Nombre = ?, DiasFechaSalida = ?, DiasFechaEnroute = ?, DiasFechaDelivery = ?, DiasFechaIngreso = ? WHERE Id_Cliente = ?";
     $stmtCliente = $enlace->prepare($sqlCliente);
     $stmtCliente->bind_param("siiiii", $nombre, $diasSalida, $diasEnroute, $diasDelivery, $diasIngreso, $idCliente);
     $stmtCliente->execute();
     $stmtCliente->close();
 
-    // Eliminar regiones existentes y insertar las nuevas
-    $sqlDeleteRegiones = "DELETE FROM ClientesRegion WHERE Id_Cliente = ?";
-    $stmtDelete = $enlace->prepare($sqlDeleteRegiones);
-    $stmtDelete->bind_param("i", $idCliente);
-    $stmtDelete->execute();
-    $stmtDelete->close();
+    // 2. Obtener regiones existentes del cliente (sin get_result)
+    $regionesExistentes = [];
+    $sqlSelectRegiones = "SELECT Id_ClienteRegion, Region, Direccion, Id_Bodega, Frecuencia FROM ClientesRegion WHERE Id_Cliente = ?";
+    $stmtSelect = $enlace->prepare($sqlSelectRegiones);
+    $stmtSelect->bind_param("i", $idCliente);
+    $stmtSelect->execute();
+    
+    // Método alternativo a get_result()
+    $stmtSelect->bind_result($idRegion, $regionNombre, $direccion, $idBodega, $frecuencia);
+    while ($stmtSelect->fetch()) {
+        $regionesExistentes[] = [
+            'Id_ClienteRegion' => $idRegion,
+            'Region' => $regionNombre,
+            'Direccion' => $direccion,
+            'Id_Bodega' => $idBodega,
+            'Frecuencia' => $frecuencia
+        ];
+    }
+    $stmtSelect->close();
 
-    // Insertar nuevas regiones
-    if (!empty($regiones)) {
-        $sqlRegion = "INSERT INTO ClientesRegion (Id_Cliente, Region, Direccion, Frecuencia) VALUES (?, ?, ?, ?)";
-        $stmtRegion = $enlace->prepare($sqlRegion);
-        
-        foreach ($regiones as $region) {
-            $regionNombre = limpiar_texto($region["region"] ?? "");
-            $direccion = limpiar_texto($region["direccion"] ?? "");
-            $frecuencia = limpiar_texto($region["frecuencia"] ?? "");
-            
+    // 3. Preparar statements para las operaciones
+    $sqlUpdateRegion = "UPDATE ClientesRegion SET Region = ?, Direccion = ?, Id_Bodega = ?, Frecuencia = ? WHERE Id_ClienteRegion = ? AND Id_Cliente = ?";
+    $stmtUpdate = $enlace->prepare($sqlUpdateRegion);
+    
+    $sqlInsertRegion = "INSERT INTO ClientesRegion (Id_Cliente, Region, Direccion, Id_Bodega, Frecuencia) VALUES (?, ?, ?, ?, ?)";
+    $stmtInsert = $enlace->prepare($sqlInsertRegion);
+
+    // 4. Procesar regiones - SOLO ACTUALIZAR Y AGREGAR, NO ELIMINAR
+    foreach ($regiones as $region) {
+        $regionNombre = limpiar_texto($region["region"] ?? "");
+        $direccion = limpiar_texto($region["direccion"] ?? "");
+        $idBodega = validar_entero($region["idBodega"] ?? 0);
+        $frecuencia = limpiar_texto($region["frecuencia"] ?? "");
+        $idClienteRegion = validar_entero($region["idClienteRegion"] ?? 0);
+
+        // Si la región tiene ID, es una actualización
+        if ($idClienteRegion > 0) {
+            // Verificar que la región pertenece al cliente
+            $regionPertenece = false;
+            foreach ($regionesExistentes as $regionExistente) {
+                if ($regionExistente['Id_ClienteRegion'] == $idClienteRegion) {
+                    $regionPertenece = true;
+                    break;
+                }
+            }
+
+            if ($regionPertenece && $regionNombre) {
+                $stmtUpdate->bind_param("ssisii", $regionNombre, $direccion, $idBodega, $frecuencia, $idClienteRegion, $idCliente);
+                $stmtUpdate->execute();
+            }
+        } else {
+            // Es una nueva región
             if ($regionNombre) {
-                $stmtRegion->bind_param("isss", $idCliente, $regionNombre, $direccion, $frecuencia);
-                $stmtRegion->execute();
+                $stmtInsert->bind_param("issis", $idCliente, $regionNombre, $direccion, $idBodega, $frecuencia);
+                $stmtInsert->execute();
             }
         }
-        $stmtRegion->close();
     }
+
+    // 5. NO ELIMINAMOS NINGUNA REGIÓN - Se mantienen todas las regiones existentes
+
+    $stmtUpdate->close();
+    $stmtInsert->close();
 
     $enlace->commit();
     echo json_encode(["success" => true, "message" => "Cliente actualizado exitosamente"]);

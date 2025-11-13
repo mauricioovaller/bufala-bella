@@ -37,6 +37,7 @@ $stmtProducto->bind_result(
     $Codigo_FDA,
     $PesoGr,
     $FactorPesoBruto,
+    $PrecioVenta,
     $Activo
 );
 
@@ -50,6 +51,7 @@ if ($stmtProducto->fetch()) {
         'Codigo_FDA' => $Codigo_FDA,
         'PesoGr' => $PesoGr,
         'FactorPesoBruto' => $FactorPesoBruto,
+        'PrecioVenta' => $PrecioVenta,
         'Activo' => $Activo
     ];
 }
