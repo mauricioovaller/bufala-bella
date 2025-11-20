@@ -44,7 +44,7 @@ $sqlPedidos = "SELECT
         INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.FechaSalida BETWEEN ? AND ?
+        WHERE enc.FechaSalida BETWEEN ? AND ? AND NULLIF(FacturaNo, '') IS NULL
         GROUP BY enc.Id_EncabPedido";
 
 // CONSULTA UNIFICADA - SAMPLES
@@ -58,7 +58,7 @@ $sqlSamples = "SELECT
             enc.IdAgencia,
             enc.GuiaMaster,
             enc.GuiaHija,
-            SUM(det.Cantidad) AS cajas,
+            ROUND(SUM(det.Cantidad), 2) AS cajas,
             SUM(det.Cantidad * emb.Cantidad) AS tms,
             ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr /1000 ),2) AS pesoNeto,
             ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr /1000 * det.PrecioUnitario),2) AS valor,
@@ -68,7 +68,7 @@ $sqlSamples = "SELECT
         INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.FechaSalida BETWEEN ? AND ?
+        WHERE enc.FechaSalida BETWEEN ? AND ? AND NULLIF(FacturaNo, '') IS NULL
         GROUP BY enc.Id_EncabPedido";
 
 // COMBINAR AMBAS CONSULTAS CON UNION
@@ -101,7 +101,7 @@ while ($stmt->fetch()) {
         'idAgencia' => $idAgencia,
         'guiaMaster' => $guiaMaster,
         'guiaHija' => $guiaHija,
-        'cajas' => (int)$cajas,
+        'cajas' => (float)$cajas,
         'tms' => (int)$tms,
         'pesoNeto' => (float)$pesoNeto,
         'valor' => (float)$valor,

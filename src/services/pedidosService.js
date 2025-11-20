@@ -139,6 +139,59 @@ export async function imprimirPedido(idPedido, tipoDocumento = "pedido") {
   }
 }
 
+// 👇 FUNCIÓN MEJORADA PARA IMPRESIÓN MÚLTIPLE DE TODOS LOS REPORTES
+export async function imprimirPedidosMultiples(filtros) {
+  try {
+    // Mapear los tipos de documento a los endpoints correspondientes
+    const endpoints = {
+      pedido: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirMultiplesPedidos.php",
+      bol: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirMultiplesBOL.php",
+      listaempaque: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirMultiplesListaEmpaque.php",
+      listaempaqueprecios: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiImprimirMultiplesListaEmpaquePrecios.php"
+    };
+
+    const endpoint = endpoints[filtros.tipoDocumento] || endpoints.pedido;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filtros),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error al generar el PDF múltiple de ${filtros.tipoDocumento}`);
+    }
+
+    return await response.blob();
+  } catch (error) {
+    console.error("Error en imprimirPedidosMultiples:", error);
+    throw error;
+  }
+}
+
+// 👇 NUEVA FUNCIÓN PARA CONTAR PEDIDOS SEGÚN FILTROS
+export async function contarPedidosPorFiltro(filtros) {
+  try {
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiContarPedidos.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(filtros),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Error al contar pedidos");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error en contarPedidosPorFiltro:", error);
+    throw error;
+  }
+}
+
 // También puedes mantener la función original por compatibilidad
 export async function imprimirBOL(idPedido) {
   return await imprimirPedido(idPedido, "bol");

@@ -26,14 +26,17 @@ if ($idPedido <= 0) {
 // ===================
 // Obtener encabezado
 // ===================
-$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones
+// 👇 MODIFICADO: Agregar los dos campos nuevos al SELECT
+$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones, ComentarioPrimario, ComentarioSecundario
              FROM EncabPedido 
              WHERE Id_EncabPedido = ?";
 
 $stmtEnc = $enlace->prepare($sqlEnc);
 $stmtEnc->bind_param("i", $idPedido);
 $stmtEnc->execute();
-$stmtEnc->bind_result($idEncabPedido, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones);
+
+// 👇 MODIFICADO: Agregar los dos campos nuevos al bind_result
+$stmtEnc->bind_result($idEncabPedido, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $comentarioPrimario, $comentarioSecundario);
 
 $header = null;
 if ($stmtEnc->fetch()) {
@@ -54,13 +57,16 @@ if ($stmtEnc->fetch()) {
         "Id_Agencia"      => $idAgencia,
         "GuiaMaster"     => $guiaMaster,
         "GuiaHija"       => $guiaHija,
-        "Observaciones"  => $observaciones
+        "Observaciones"  => $observaciones,
+        // 👇 NUEVO: Campos agregados
+        "ComentarioPrimario" => $comentarioPrimario,
+        "ComentarioSecundario" => $comentarioSecundario
     ];
 }
 $stmtEnc->close();
 
 // ===================
-// Obtener detalle
+// Obtener detalle (SIN CAMBIOS)
 // ===================
 $sqlDet = "SELECT d.Id_DetPedido, d.Id_EncabPedido, d.Id_Producto, p.DescripProducto, p.DescripFactura, p.Codigo_Siesa, p.Codigo_FDA, p.PesoGr, p.FactorPesoBruto, d.Descripcion, d.Id_Embalaje, d.Cantidad, d.PrecioUnitario, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) / 1000),2) AS PesoNeto, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) * p.FactorPesoBruto / 1000),2) AS PesoBruto, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) / 1000) * d.PrecioUnitario,2) AS ValorRegistro
              FROM DetPedido d

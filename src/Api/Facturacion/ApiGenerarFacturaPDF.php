@@ -90,10 +90,12 @@ $sqlDetalle = "SELECT
                 det.Cajas,
                 det.DescripFactura AS Producto,
                 det.ValKilogramo AS Valor_Kilo,
-                ROUND(det.Kilogramos * det.ValKilogramo, 2) AS Valor_Total
+                ROUND(det.Kilogramos * det.ValKilogramo, 2) AS Valor_Total,
+                prd.PlanVallejo 
             FROM
                 DetInvoice det
             INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
+            INNER JOIN Productos prd ON det.Codigo_Siesa = prd.Codigo_Siesa
             WHERE
                 det.Id_EncabInvoice = ?
             ORDER BY det.Item";
@@ -111,7 +113,8 @@ $stmtDetalle->bind_result(
     $cajas,
     $producto,
     $valor_kilo,
-    $valor_total
+    $valor_total,
+    $plan_vallejo
 );
 
 $detalles = [];
@@ -127,7 +130,8 @@ while ($stmtDetalle->fetch()) {
         'cajas' => $cajas,
         'producto' => $producto,
         'valor_kilo' => $valor_kilo,
-        'valor_total' => $valor_total
+        'valor_total' => $valor_total,
+        'plan_vallejo' => $plan_vallejo,
     ];
     $total_general += $valor_total;
 }
@@ -233,11 +237,11 @@ class PDF extends FPDF
     function Header()
     {
         // Logo Bufalabella - similar estructura al segundo archivo
-        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalaFactura.jpg", 15, 15, 40);
+        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalaFactura.jpg", 15, 10, 40);
 
         // Información de la empresa - estructura similar
         $this->SetFont('Helvetica', 'B', 10);
-        $this->SetXY(90, 15);
+        $this->SetXY(90, 10);
         $this->Cell(60, 4, 'BUFALABELLA S.A.S', 0, 1, 'C');
         $this->SetFont('Helvetica', '', 9);
         $this->SetX(90);
@@ -253,7 +257,7 @@ class PDF extends FPDF
     function Footer()
     {
         $this->SetY(-45);
-        
+
 
         $this->SetFont('Helvetica', 'B', 7);
         $this->Cell(22, 4, 'Elaborado por:', 0, 0, 'R');
@@ -276,14 +280,14 @@ class PDF extends FPDF
 }
 
 $pdf = new PDF('P', 'mm', 'Letter');
-$pdf->SetMargins(10, 5, 10);
+$pdf->SetMargins(10, 10, 10);
 $pdf->AliasNbPages();
 $pdf->AddPage();
 
 // NÚMERO DE FACTURA
-$pdf->SetFont('Helvetica', 'B', 14);
-$pdf->Cell(155, 10);
-$pdf->Cell(30, 10, $numero_factura, 1, 1, 'C');
+$pdf->SetFont('Helvetica', 'B', 12);
+$pdf->Cell(155, 4);
+$pdf->Cell(30, 8, $numero_factura, 1, 1, 'C');
 $pdf->Ln(3);
 
 // INFORMACIÓN DEL CONSIGNATARIO - Estructura similar al segundo archivo
@@ -327,9 +331,9 @@ $pdf->Cell(15, 5, 'Codigo FDA', 0, 0, 'C');
 $pdf->Cell(11, 5, 'KI/Gr', 0, 0, 'C');
 $pdf->Cell(8, 5, 'Emb', 0, 0, 'C');
 $pdf->Cell(12, 5, 'Unid', 0, 0, 'C');
-$pdf->Cell(12, 5, 'Caja', 0, 0, 'C');
-$pdf->Cell(83, 5, 'Producto', 0, 0, 'C');
-$pdf->Cell(15, 5, 'Valor Kilo', 0, 0, 'C');
+$pdf->Cell(11, 5, 'Caja', 0, 0, 'C');
+$pdf->Cell(85, 5, 'Producto', 0, 0, 'C');
+$pdf->Cell(14, 5, 'Valor Kilo', 0, 0, 'C');
 $pdf->Cell(20, 5, 'Valor Total', 0, 1, 'C');
 $pdf->Cell(198, 0.5, '', 'TB', 1, 'C');
 
@@ -337,25 +341,55 @@ $pdf->Cell(198, 0.5, '', 'TB', 1, 'C');
 $totUnidades = 0;
 $totCajas = 0;
 $commercialDiscounts = 0;
-$pdf->SetFont('Helvetica', '', 7);
+
 foreach ($detalles as $detalle) {
-    $pdf->Cell(8, 5, $detalle['item'], 0, 0, 'C');
-    $pdf->Cell(14, 5, $detalle['codigo_siesa'], 0, 0, 'C');
-    $pdf->Cell(15, 5, $detalle['codigo_fda'], 0, 0, 'C');
-    $pdf->Cell(11, 5, number_format($detalle['kilogramos'], 2), 0, 0, 'R');
-    $pdf->Cell(8, 5, number_format($detalle['embalaje'], 0), 0, 0, 'C');
-    $pdf->Cell(12, 5, number_format($detalle['unidades'], 0), 0, 0, 'R');
-    $pdf->Cell(12, 5, number_format($detalle['cajas'], 0), 0, 0, 'R');
-    $pdf->Cell(83, 5, utf8_decode($detalle['producto']), 0, 0, 'L');
-    $pdf->Cell(15, 5, '$' . number_format($detalle['valor_kilo'], 2), 0, 0, 'R');
-    $pdf->Cell(20, 5, '$' . number_format($detalle['valor_total'], 2), 0, 1, 'R');
+    if ($detalle['plan_vallejo'] <> 0) {
+        $pdf->SetFont('Helvetica', 'B', 7);
+    } else {
+        $pdf->SetFont('Helvetica', '', 7);
+    }
+
+    // Guardar posición inicial
+    $x_inicial = $pdf->GetX();
+    $y_inicial = $pdf->GetY();
+
+    // Primero dibujar todas las celdas fijas (antes del producto)
+    $pdf->Cell(8, 4, $detalle['item'], 0, 0, 'C');
+    $pdf->Cell(14, 4, $detalle['codigo_siesa'], 0, 0, 'C');
+    $pdf->Cell(15, 4, $detalle['codigo_fda'], 0, 0, 'C');
+    $pdf->Cell(11, 4, number_format($detalle['kilogramos'], 2), 0, 0, 'R');
+    $pdf->Cell(8, 4, number_format($detalle['embalaje'], 0), 0, 0, 'C');
+    $pdf->Cell(12, 4, number_format($detalle['unidades'], 0), 0, 0, 'R');
+    $pdf->Cell(11, 4, number_format($detalle['cajas'], 0), 0, 0, 'R');
+
+    $x_despues_producto = $pdf->GetX();
+    $y_despues_producto = $pdf->GetY();
+
+    // Ahora el producto con MultiCell
+    $pdf->MultiCell(85, 4, utf8_decode($detalle['producto']), 0, 'L');
+
+    $y_final_producto = $pdf->GetY();
+    $altura_necesaria = $y_final_producto - $y_despues_producto;
+
+    // Dibujar las celdas restantes alineadas
+    $pdf->SetXY($x_despues_producto + 85, $y_despues_producto);
+    $pdf->Cell(14, $altura_necesaria, '$' . number_format($detalle['valor_kilo'], 2), 0, 0, 'R');
+    $pdf->Cell(20, $altura_necesaria, '$' . number_format($detalle['valor_total'], 2), 0, 1, 'R');
+
+    // Si el producto fue multilínea, asegurar que la siguiente fila empiece después
+    if ($altura_necesaria > 4) {
+        $pdf->SetY($y_final_producto);
+    }
+
     $totUnidades += $detalle['unidades'];
     $totCajas += $detalle['cajas'];
 }
 
 // TOTAL
 $pdf->SetFont('Helvetica', 'B', 8);
-$pdf->Cell(56, 6, 'Total', 0, 0, 'R');
+$pdf->Cell(37, 6, 'Total   ', 0, 0, 'R');
+$pdf->Cell(11, 6, number_format($tot_kgm_netos, 2), 0, 0, 'R');
+$pdf->Cell(8, 6, '', 0, 0, 'R');
 $pdf->Cell(12, 6, number_format($totUnidades, 0), 0, 0, 'R');
 $pdf->Cell(12, 6, number_format($totCajas, 0), 0, 0, 'R');
 $pdf->Cell(98, 6, '', 0, 0, 'R');
@@ -438,13 +472,13 @@ $pdf->Cell(32, 4, $aerolinea, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', '', 8);
 $pdf->Cell(22, 4, '', 0, 0, 'R');
-$pdf->Cell(34, 4, 'Guia Master ', 0, 0, 'R');
+$pdf->Cell(34, 4, 'Guia Master', 0, 0, 'R');
 $pdf->SetFont('Helvetica', 'B', 8);
 $pdf->Cell(32, 4, utf8_decode($guia_master), 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', '', 8);
 $pdf->Cell(22, 4, '', 0, 0, 'R');
-$pdf->Cell(34, 4, 'Guia Hija ', 0, 0, 'R');
+$pdf->Cell(34, 4, 'Guia Hija', 0, 0, 'R');
 $pdf->SetFont('Helvetica', 'B', 8);
 $pdf->Cell(32, 4, $guia_hija, 0, 1, 'L');
 

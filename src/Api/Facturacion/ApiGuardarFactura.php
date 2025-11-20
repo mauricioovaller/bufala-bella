@@ -26,7 +26,7 @@ if (!$data) {
 
 // Funciones de sanitización
 function limpiar_texto($txt) {
-    return htmlspecialchars(trim($txt), ENT_QUOTES, "UTF-8");
+    return trim($txt);
 }
 function validar_entero($valor) {
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
@@ -38,8 +38,9 @@ function validar_flotante($valor) {
 // Extraer datos
 $encabezado = $data["encabezado"] ?? [];
 $pedidosIds = $data["pedidosIds"] ?? [];
+$tipoPedido = $data["tipoPedido"] ?? "normal"; // 🔴 NUEVO: Tipo de pedido
 
-$numeroFactura = validar_entero($encabezado["numeroFactura"] ?? null); // 🔴 Ahora como entero
+$numeroFactura = validar_entero($encabezado["numeroFactura"] ?? null);
 $fechaFactura = limpiar_texto($encabezado["fechaFactura"] ?? "");
 $idConsignatario = validar_entero($encabezado["consignatarioId"] ?? null);
 $idAgencia = validar_entero($encabezado["agenciaId"] ?? null);
@@ -54,13 +55,19 @@ if (!$numeroFactura || !$fechaFactura || !$idConsignatario || empty($pedidosIds)
     exit;
 }
 
+// 🔴 VALIDAR TIPO DE PEDIDO
+if (!in_array($tipoPedido, ['normal', 'sample'])) {
+    echo json_encode(["success" => false, "message" => "Tipo de pedido no válido"]);
+    exit;
+}
+
 try {
     $enlace->begin_transaction();
 
     // 🔴 VALIDAR QUE EL NÚMERO DE FACTURA (ENTERO) NO EXISTA
     $sqlValidar = "SELECT Id_EncabInvoice FROM EncabInvoice WHERE Id_EncabInvoice = ?";
     $stmtValidar = $enlace->prepare($sqlValidar);
-    $stmtValidar->bind_param("i", $numeroFactura); // 🔴 'i' para entero
+    $stmtValidar->bind_param("i", $numeroFactura);
     $stmtValidar->execute();
     $stmtValidar->store_result();
     
@@ -69,10 +76,14 @@ try {
     }
     $stmtValidar->close();
 
-    // 🔴 CONSULTAR CANTIDAD ESTIBAS
+    // 🔴 DETERMINAR TABLAS SEGÚN EL TIPO
+    $tablaEncabezado = $tipoPedido === 'normal' ? 'EncabPedido' : 'EncabPedidoSample';
+    $tablaDetalle = $tipoPedido === 'normal' ? 'DetPedido' : 'DetPedidoSample';
+    
+    // 🔴 CONSULTAR CANTIDAD ESTIBAS (PARA AMBOS TIPOS)
     $placeholders = str_repeat('?,', count($pedidosIds) - 1) . '?';
     $sqlEstibas = "SELECT SUM(CantidadEstibas) AS TotalEstibas 
-                   FROM EncabPedido 
+                   FROM $tablaEncabezado 
                    WHERE Id_EncabPedido IN ($placeholders)";
     
     $stmtEstibas = $enlace->prepare($sqlEstibas);
@@ -84,29 +95,50 @@ try {
     $cantidadEstibas = $cantidadEstibas ?? 0;
     $stmtEstibas->close();
 
-    // 🔴 CONSULTAR DETALLE DE PEDIDOS
-    $sqlDetalle = "SELECT      
-        prd.Codigo_Siesa,
-        prd.Codigo_FDA,
-        ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS Kilogramos,
-        det.Id_Embalaje,
-        SUM(det.Cantidad * emb.Cantidad) AS CantidadEmbalaje,
-        SUM(det.Cantidad) AS Cajas,
-        CONCAT(det.Descripcion, ' x ', emb.Cantidad) AS DescripFactura,
-        ROUND(det.PrecioUnitario,2) AS ValKilogramo       
-    FROM EncabPedido enc
-    INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido    
-    INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-    INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje    
-    WHERE enc.Id_EncabPedido IN ($placeholders)
-    GROUP BY det.Id_Producto, det.Id_Embalaje, det.PrecioUnitario";
+    // 🔴 CONSULTAR DETALLE DE PEDIDOS (PARA AMBOS TIPOS)
+    if ($tipoPedido === 'normal') {
+        // CONSULTA PARA PEDIDOS NORMALES
+        $sqlDetalle = "SELECT      
+            prd.Codigo_Siesa,
+            prd.Codigo_FDA,
+            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS Kilogramos,
+            det.Id_Embalaje,
+            SUM(det.Cantidad * emb.Cantidad) AS CantidadEmbalaje,
+            SUM(det.Cantidad) AS Cajas,
+            CONCAT(det.Descripcion, ' x ', emb.Cantidad) AS DescripFactura,
+            ROUND(det.PrecioUnitario,2) AS ValKilogramo       
+        FROM $tablaEncabezado enc
+        INNER JOIN $tablaDetalle det ON enc.Id_EncabPedido = det.Id_EncabPedido    
+        INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
+        INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje    
+        WHERE enc.Id_EncabPedido IN ($placeholders)
+        GROUP BY det.Id_Producto, det.Id_Embalaje, det.PrecioUnitario
+        ORDER BY prd.Codigo_Siesa";
+    } else {
+        // CONSULTA PARA SAMPLES
+        $sqlDetalle = "SELECT      
+            prd.Codigo_Siesa,
+            prd.Codigo_FDA,
+            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS Kilogramos,
+            det.Id_Embalaje,
+            SUM(det.Cantidad * emb.Cantidad) AS CantidadEmbalaje,
+            SUM(det.Cantidad) AS Cajas,
+            CONCAT(det.Descripcion, ' x ', emb.Cantidad) AS DescripFactura,
+            ROUND(det.PrecioUnitario,2) AS ValKilogramo       
+        FROM $tablaEncabezado enc
+        INNER JOIN $tablaDetalle det ON enc.Id_EncabPedido = det.Id_EncabPedido    
+        INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
+        INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje    
+        WHERE enc.Id_EncabPedido IN ($placeholders)
+        GROUP BY det.Id_Producto, det.Id_Embalaje, det.PrecioUnitario
+        ORDER BY prd.Codigo_Siesa";
+    }
     
     $stmtDetalle = $enlace->prepare($sqlDetalle);
     $tiposDetalle = str_repeat('i', count($pedidosIds));
     $stmtDetalle->bind_param($tiposDetalle, ...$pedidosIds);
     $stmtDetalle->execute();
     
-    // 🔴 USAR bind_result() EN LUGAR DE get_result()
     $stmtDetalle->bind_result(
         $codigoSiesa,
         $codigoFDA,
@@ -133,29 +165,31 @@ try {
     }
     $stmtDetalle->close();
 
-    // 🔴 INSERTAR ENCABEZADO DE FACTURA (USANDO NÚMERO ENTERO)
+    // 🔴 INSERTAR ENCABEZADO DE FACTURA
     $sqlEnc = "INSERT INTO EncabInvoice 
-        (Id_EncabInvoice, Id_Consignatario, Fecha, IdAgencia, IdAerolinea, GuiaMaster, GuiaHija, CantidadEstibas, Observaciones) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        (Id_EncabInvoice, Id_Consignatario, Fecha, IdAgencia, IdAerolinea, GuiaMaster, GuiaHija, CantidadEstibas, Observaciones, TipoPedido) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // 🔴 NUEVO: Campo TipoPedido
+    
     $stmtEnc = $enlace->prepare($sqlEnc);
-    $stmtEnc->bind_param("iisiissds", $numeroFactura, $idConsignatario, $fechaFactura, $idAgencia, $idAerolinea, $guiaMaster, $guiaHija, $cantidadEstibas, $observaciones); // 🔴 'i' para entero
+    $stmtEnc->bind_param("iisiissdss", $numeroFactura, $idConsignatario, $fechaFactura, $idAgencia, $idAerolinea, $guiaMaster, $guiaHija, $cantidadEstibas, $observaciones, $tipoPedido);
     $stmtEnc->execute();
 
     if ($stmtEnc->affected_rows <= 0) {
         throw new Exception("Error al insertar el encabezado de factura");
     }
 
-    // 🔴 INSERTAR DETALLE DE FACTURA (USANDO NÚMERO ENTERO)
+    // 🔴 INSERTAR DETALLE DE FACTURA
     $sqlDet = "INSERT INTO DetInvoice 
-        (Id_EncabInvoice, Item, Codigo_Siesa, Codigo_FDA, Kilogramos, Id_Embalaje, CantidadEmbalaje, Cajas, DescripFactura, ValKilogramo) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        (Id_EncabInvoice, Item, Codigo_Siesa, Codigo_FDA, Kilogramos, Id_Embalaje, CantidadEmbalaje, Cajas, DescripFactura, ValKilogramo, TipoPedido) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // 🔴 NUEVO: Campo TipoPedido
+    
     $stmtDet = $enlace->prepare($sqlDet);
 
     $item = 1;
     foreach ($detallesFactura as $detalle) {
         $stmtDet->bind_param(
-            "iissdiidsd", // 🔴 'i' para Id_EncabInvoice (entero)
-            $numeroFactura, // ✅ Usar número entero
+            "iissdiidsds",
+            $numeroFactura,
             $item,
             $detalle['Codigo_Siesa'],
             $detalle['Codigo_FDA'],
@@ -164,23 +198,23 @@ try {
             $detalle['CantidadEmbalaje'],
             $detalle['Cajas'],
             $detalle['DescripFactura'],
-            $detalle['ValKilogramo']
+            $detalle['ValKilogramo'],
+            $tipoPedido
         );
         $stmtDet->execute();
         $item++;
     }
 
-    // 🔴 ACTUALIZAR CAMPO FacturaNo EN EncabPedido (USANDO FORMATO 'FEX-')
-    $sqlActualizarPedidos = "UPDATE EncabPedido SET FacturaNo = ? WHERE Id_EncabPedido IN ($placeholders)";
+    // 🔴 ACTUALIZAR CAMPO FacturaNo EN LA TABLA CORRESPONDIENTE
+    $sqlActualizarPedidos = "UPDATE $tablaEncabezado SET FacturaNo = ? WHERE Id_EncabPedido IN ($placeholders)";
     $stmtActualizar = $enlace->prepare($sqlActualizarPedidos);
     
-    // 🔴 Formatear número para los pedidos: "FEX-2417"
-    $facturaNoFormateado = "FEX-" . $numeroFactura;
+    // 🔴 Formatear número según el tipo
+    $facturaNoFormateado = $tipoPedido === 'normal' 
+        ? "FEX-" . $numeroFactura 
+        : "SMP-FEX-" . $numeroFactura; // 🔴 PREFIJO DIFERENTE PARA SAMPLES
     
-    // 🔴 Construir tipos de parámetros: 's' para el FacturaNo (string) + 'i' para cada Id_EncabPedido
     $tiposActualizar = 's' . str_repeat('i', count($pedidosIds));
-    
-    // 🔴 Preparar parámetros: FacturaNo (texto formateado) + array de pedidosIds
     $parametrosActualizar = array_merge([$facturaNoFormateado], $pedidosIds);
     
     $stmtActualizar->bind_param($tiposActualizar, ...$parametrosActualizar);
@@ -193,11 +227,12 @@ try {
 
     echo json_encode([
         "success" => true, 
-        "numeroFactura" => $numeroFactura, // ✅ Devolver número entero
-        "numeroFacturaFormateado" => $facturaNoFormateado, // ✅ También devolver formateado para referencia
+        "numeroFactura" => $numeroFactura,
+        "numeroFacturaFormateado" => $facturaNoFormateado,
         "cantidadItems" => count($detallesFactura),
         "cantidadEstibas" => $cantidadEstibas,
-        "pedidosActualizados" => $pedidosActualizados
+        "pedidosActualizados" => $pedidosActualizados,
+        "tipoPedido" => $tipoPedido // 🔴 INCLUIR TIPO EN RESPUESTA
     ]);
 
 } catch (Exception $e) {

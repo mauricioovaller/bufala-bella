@@ -10,6 +10,9 @@ export default function PedidoHeader({
   aerolineas = [],
   agencias = [],
   inputRefs = {},
+  // 👇 NUEVO: Recibir los props de comentarios seleccionados
+  comentariosSeleccionados = {},
+  onComentariosChange,
 }) {
   return (
     <section className="bg-white rounded-xl shadow-md p-4 sm:p-6">
@@ -248,11 +251,31 @@ export default function PedidoHeader({
           />
         </div>
 
-        {/* Campo extra para completar 6 (puede ser vacío o útil en el futuro) */}
+        {/* 👇 NUEVO: Checkboxes en lugar del campo "Extra" */}
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">Extra</label>
-          <div className="border rounded-lg p-2 bg-gray-50 text-sm text-gray-500">
-            Disponible
+          <label className="block text-sm font-medium text-gray-700">Comentarios PDF</label>
+          <div className="border rounded-lg p-2 bg-white space-y-2">
+            {/* Checkbox Comentario Primario */}
+            <label className="flex items-center space-x-2 text-xs">
+              <input
+                type="checkbox"
+                checked={comentariosSeleccionados.incluirPrimario || false}
+                onChange={(e) => onComentariosChange("incluirPrimario", e.target.checked)}
+                className="w-3 h-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-gray-700">Incluir Primario</span>
+            </label>
+            
+            {/* Checkbox Comentario Secundario */}
+            <label className="flex items-center space-x-2 text-xs">
+              <input
+                type="checkbox"
+                checked={comentariosSeleccionados.incluirSecundario || false}
+                onChange={(e) => onComentariosChange("incluirSecundario", e.target.checked)}
+                className="w-3 h-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-gray-700">Incluir Secundario</span>
+            </label>
           </div>
         </div>
       </div>

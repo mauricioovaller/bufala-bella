@@ -41,6 +41,7 @@ $transportadoras = obtenerDatos($enlace, "SELECT Id_Transportadora, Nombre, Dire
 $aerolineas = obtenerDatos($enlace, "SELECT IdAerolinea, NOMAEROLINEA AS Nombre FROM Aerolineas ORDER BY NOMAEROLINEA");
 $agencias = obtenerDatos($enlace, "SELECT IdAgencia, NOMAGENCIA AS Nombre FROM Agencias ORDER BY NOMAGENCIA");
 $consignatarios = obtenerDatos($enlace, "SELECT Id_Consignatario, Nombre FROM Consignatarios ORDER BY Nombre");
+$conductores = obtenerDatos($enlace, "SELECT Id_Conductor, Nombre FROM Conductores ORDER BY Nombre");
 
 // Responder con los datos en formato JSON
 echo json_encode([
@@ -52,6 +53,7 @@ echo json_encode([
     'aerolineas' => $aerolineas,
     'agencias' => $agencias,
     'consignatarios' => $consignatarios,
+    'conductores' => $conductores
 ]);
 
 $enlace->close();

@@ -5,6 +5,7 @@ import PedidoHeader from "../components/pedidos/PedidoHeader";
 import PedidoDetail from "../components/pedidos/PedidoDetail";
 import ModalSeleccionDocumento from "../components/ModalSeleccionDocumento";
 import ModalVisorPreliminar from "../components/ModalVisorPreliminar";
+import ModalImpresionMultiple from "../components/ModalImpresionMultiple"; // 👈 NUEVO
 import {
   getDatosSelect,
   getClienteRegion,
@@ -13,6 +14,7 @@ import {
   getPedidoEspecifico,
   actualizarPedido,
   imprimirPedido,
+  imprimirPedidosMultiples, // 👈 NUEVO - agregar en services
 } from "../services/pedidosService";
 
 
@@ -80,6 +82,14 @@ export default function Pedidos() {
   const [items, setItems] = useState([]);
 
   // --------------------------------------------------------------
+  // 👇 NUEVO: Estados para comentarios seleccionados
+  // --------------------------------------------------------------
+  const [comentariosSeleccionados, setComentariosSeleccionados] = useState({
+    incluirPrimario: true,
+    incluirSecundario: true
+  });
+
+  // --------------------------------------------------------------
   // Datos de selects globales
   // --------------------------------------------------------------
   const [datosSelect, setDatosSelect] = useState({
@@ -101,6 +111,9 @@ export default function Pedidos() {
 
   // Estados de carga inicial del modal de selección de documento
   const [mostrarSelectorDocumento, setMostrarSelectorDocumento] = useState(false);
+  
+  // 👇 NUEVO: Estado para modal de impresión múltiple
+  const [mostrarImpresionMultiple, setMostrarImpresionMultiple] = useState(false);
 
   // --------------------------------------------------------------
   // Estados para búsqueda y selección de pedidos - MEJORADOS
@@ -268,6 +281,16 @@ export default function Pedidos() {
   }
 
   // --------------------------------------------------------------
+  // 👇 NUEVO: Manejo de cambios en comentarios seleccionados
+  // --------------------------------------------------------------
+  function handleComentariosChange(field, value) {
+    setComentariosSeleccionados(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }
+
+  // --------------------------------------------------------------
   // Manejo de cambios en detalle
   // --------------------------------------------------------------
   function handleItemsChange(newItems) {
@@ -373,14 +396,20 @@ export default function Pedidos() {
     if (!validateAll()) return;
 
     try {
+      // 👇 MODIFICADO: Incluir comentarios seleccionados en el encabezado
+      const encabezado = {
+        ...header,
+        comentariosSeleccionados: comentariosSeleccionados // 👈 Agregar esto
+      };
+
       // Si el pedido ya tiene ID (diferente de 0 o null/undefined), significa que ya existe en BD → ACTUALIZAR
       if (header.id && header.id !== 0) {
-        const encabezado = {
-          ...header,
+        const encabezadoConId = {
+          ...encabezado,
           pedidoId: header.id,
         };
 
-        const res = await actualizarPedido(encabezado, items);
+        const res = await actualizarPedido(encabezadoConId, items);
         if (res.success) {
           Swal.fire("¡Actualizado!", "Pedido actualizado correctamente.", "success");
           // Opcional: refrescar el pedido desde backend
@@ -390,7 +419,7 @@ export default function Pedidos() {
         }
       } else {
         // Si no tiene ID → GUARDAR NUEVO
-        const res = await guardarPedido(header, items);
+        const res = await guardarPedido(encabezado, items);
         if (res.success) {
           const nuevoNumero = `PED-${String(res.idPedido).padStart(6, "0")}`;
           setHeader((p) => ({ ...p, id: res.idPedido, numero: nuevoNumero }));
@@ -416,9 +445,11 @@ export default function Pedidos() {
     if (!validateAll()) return;
 
     try {
+      // 👇 MODIFICADO: Incluir comentarios seleccionados
       const encabezado = {
         ...header,
         pedidoId: header.id,   // 👈 obligatorio para el backend
+        comentariosSeleccionados: comentariosSeleccionados // 👈 Agregar esto
       };
 
       const res = await actualizarPedido(encabezado, items);
@@ -459,6 +490,11 @@ export default function Pedidos() {
     });
     setItems([]);
     setRegiones([]);
+    // 👇 NUEVO: Limpiar comentarios seleccionados
+    setComentariosSeleccionados({
+      incluirPrimario: true,
+      incluirSecundario: true
+    });
     itemRefs.current = [];
   }
 
@@ -576,6 +612,12 @@ export default function Pedidos() {
         guiaHija: apiHeader.Guia_Hija ?? apiHeader.GuiaHija ?? "",
       };
 
+      // 👇 NUEVO: Cargar comentarios seleccionados desde la API
+      const comentariosCargados = {
+        incluirPrimario: apiHeader.ComentarioPrimario === 1,
+        incluirSecundario: apiHeader.ComentarioSecundario === 1
+      };
+
       // 4) Mapear detalle a los campos que usa PedidoDetail
       const mappedItems = (apiDetalle || []).map((d) => {
         // Buscar información completa del producto y embalaje para recalcular
@@ -617,6 +659,8 @@ export default function Pedidos() {
       // 5) Aplicar al estado
       setHeader((p) => ({ ...p, ...mappedHeader }));
       setItems(mappedItems);
+      // 👇 NUEVO: Cargar comentarios seleccionados
+      setComentariosSeleccionados(comentariosCargados);
       itemRefs.current = [];
 
       cerrarModalBuscarPedidos();
@@ -639,7 +683,7 @@ export default function Pedidos() {
   }
 
   // --------------------------------------------------------------
-  // Función para manejar la impresión con selección de documento
+  // Función para manejar la impresión con selección de documento (INDIVIDUAL)
   // --------------------------------------------------------------
   const handlePrint = async (tipoDocumento = null) => {
     if (!header.id) {
@@ -727,6 +771,78 @@ export default function Pedidos() {
     }
   };
 
+  // --------------------------------------------------------------
+  // 👇 NUEVO: Función para impresión múltiple
+  // --------------------------------------------------------------
+  const handlePrintMultiple = async (filtros) => {
+    try {
+      // Mostrar loading
+      Swal.fire({
+        title: "Generando PDF Múltiple...",
+        text: `Generando ${filtros.pedidosEncontrados} pedidos`,
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      // Detectar sistema operativo (misma lógica que handlePrint)
+      const ua = navigator.userAgent || navigator.vendor || window.opera;
+      const esAndroid = /android/i.test(ua);
+      const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      const esWindows = /Win/i.test(ua);
+      const esMac = /Mac/i.test(ua);
+
+      const esMovilOTablet = !esWindows && !esMac;
+
+      let pestañaPreabierta = null;
+      if (esMovilOTablet) {
+        try {
+          pestañaPreabierta = window.open("", "_blank");
+        } catch (e) {
+          pestañaPreabierta = null;
+        }
+      }
+
+      // Generar el PDF múltiple
+      const blob = await imprimirPedidosMultiples(filtros);
+      const fileURL = URL.createObjectURL(blob);
+
+      // Cerrar loading
+      Swal.close();
+
+      if (esMovilOTablet) {
+        // Para móviles/tablets: abrir en nueva pestaña
+        if (pestañaPreabierta) {
+          pestañaPreabierta.location.href = fileURL;
+        } else {
+          const a = document.createElement("a");
+          a.href = fileURL;
+          a.target = "_blank";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+
+        // Limpiar URL después de 10 segundos
+        setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
+      } else {
+        // Para escritorio: mostrar en modal
+        setUrlPDF(fileURL);
+        setMostrarModal(true);
+      }
+
+    } catch (error) {
+      console.error("Error al imprimir múltiple:", error);
+      Swal.close();
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: `No se pudo generar el PDF múltiple. Verifica los filtros.`,
+      });
+    }
+  };
+
   // Función auxiliar para obtener nombres de documentos
   const getNombreDocumento = (tipo) => {
     const nombres = {
@@ -744,6 +860,11 @@ export default function Pedidos() {
   const handleSeleccionarDocumento = (tipoDocumento) => {
     setMostrarSelectorDocumento(false);
     handlePrint(tipoDocumento);
+  };
+
+  // 👇 NUEVO: Abrir modal de impresión múltiple
+  const handleAbrirImpresionMultiple = () => {
+    setMostrarImpresionMultiple(true);
   };
 
   // Función para cerrar el modal y limpiar la URL
@@ -765,7 +886,7 @@ export default function Pedidos() {
 
   return (
     <div className="space-y-6">
-      {/* Barra de acciones - NUEVO DISEÑO */}
+      {/* Barra de acciones - NUEVO DISEÑO CON BOTÓN MÚLTIPLE */}
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
         <h2 className="text-xl font-semibold mb-4 text-slate-700">Gestión de Pedidos</h2>
         <div className="flex flex-col sm:flex-row gap-2">
@@ -797,6 +918,13 @@ export default function Pedidos() {
           >
             Imprimir PDF
           </button>
+          {/* 👇 NUEVO BOTÓN IMPRIMIR MÚLTIPLE */}
+          <button
+            onClick={handleAbrirImpresionMultiple}
+            className="bg-green-600 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-green-700 transition font-medium flex-1"
+          >
+            Imprimir Múltiple
+          </button>
         </div>
       </div>
 
@@ -810,6 +938,9 @@ export default function Pedidos() {
         aerolineas={datosSelect.aerolineas}
         agencias={datosSelect.agencias}
         inputRefs={headerRefs}
+        // 👇 NUEVO: Pasar los comentarios seleccionados
+        comentariosSeleccionados={comentariosSeleccionados}
+        onComentariosChange={handleComentariosChange}
       />
 
       <PedidoDetail
@@ -928,12 +1059,20 @@ export default function Pedidos() {
         </div>
       )}
 
-      {/* Modal de selección de tipo de documento */}
+      {/* Modal de selección de tipo de documento (INDIVIDUAL) */}
       <ModalSeleccionDocumento
         isOpen={mostrarSelectorDocumento}
         onClose={() => setMostrarSelectorDocumento(false)}
         onSeleccionar={handleSeleccionarDocumento}
         pedidoId={header.id}
+      />
+
+      {/* 👇 NUEVO: Modal de impresión múltiple */}
+      <ModalImpresionMultiple
+        isOpen={mostrarImpresionMultiple}
+        onClose={() => setMostrarImpresionMultiple(false)}
+        onImprimir={handlePrintMultiple}
+        bodegas={datosSelect.bodegas}
       />
 
       {/* Modal del visor de PDF */}

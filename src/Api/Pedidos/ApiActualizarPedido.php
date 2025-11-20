@@ -26,13 +26,25 @@ if (!$data) {
 
 // Funciones de sanitización
 function limpiar_texto($txt) {
-    return htmlspecialchars(trim($txt), ENT_QUOTES, "UTF-8");
+    return trim($txt); // 👈 SOLO trim, sin htmlspecialchars
+}
+
+function limpiar_descripcion($txt) {
+    // 👈 Para campos de descripción, solo trim y mantener caracteres especiales
+    return trim($txt);
 }
 function validar_entero($valor) {
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
 function validar_flotante($valor) {
     return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : null;
+}
+function validar_tinyint($valor) {
+    // Para TINYINT: convertir boolean a 1/0, cualquier valor truthy a 1, falsy a 0
+    if ($valor === true || $valor === 1 || $valor === '1' || $valor === -1) {
+        return 1;
+    }
+    return 0;
 }
 
 // Extraer datos
@@ -57,6 +69,11 @@ $observaciones = limpiar_texto($encabezado["comentarios"] ?? "");
 $guiaMaster = limpiar_texto($encabezado["noGuia"] ?? "");
 $guiaHija = limpiar_texto($encabezado["guiaHija"] ?? "");
 
+// 👇 NUEVO: Extraer y convertir comentarios seleccionados a TINYINT
+$comentariosSeleccionados = $encabezado["comentariosSeleccionados"] ?? [];
+$comentarioPrimario = validar_tinyint($comentariosSeleccionados["incluirPrimario"] ?? false);
+$comentarioSecundario = validar_tinyint($comentariosSeleccionados["incluirSecundario"] ?? false);
+
 // Validaciones obligatorias
 if (!$idCliente || !$idTransportadora || !$idBodega || !$fechaOrden || empty($detalle)) {
     echo json_encode(["success" => false, "message" => "Faltan datos obligatorios"]);
@@ -66,15 +83,35 @@ if (!$idCliente || !$idTransportadora || !$idBodega || !$fechaOrden || empty($de
 try {
     $enlace->begin_transaction();
 
-    // Actualizar encabezado
+    // 👇 MODIFICADO: Actualizar encabezado con los nuevos campos TINYINT
     $sqlEnc = "UPDATE EncabPedido  
-        SET Id_Cliente = ?, Id_ClienteRegion = ?, Id_Transportadora = ?, Id_Bodega = ?, PurchaseOrder = ?, FechaOrden = ?, FechaSalida = ?, FechaEnroute = ?, FechaDelivery = ?, FechaIngreso = ?, CantidadEstibas = ?, IdAerolinea = ?, IdAgencia = ?, GuiaMaster = ?, GuiaHija = ?, Observaciones = ?
+        SET Id_Cliente = ?, Id_ClienteRegion = ?, Id_Transportadora = ?, Id_Bodega = ?, PurchaseOrder = ?, FechaOrden = ?, FechaSalida = ?, FechaEnroute = ?, FechaDelivery = ?, FechaIngreso = ?, CantidadEstibas = ?, IdAerolinea = ?, IdAgencia = ?, GuiaMaster = ?, GuiaHija = ?, Observaciones = ?, ComentarioPrimario = ?, ComentarioSecundario = ?
         WHERE Id_EncabPedido = ?";
     $stmtEnc = $enlace->prepare($sqlEnc);
-    $stmtEnc->bind_param("iiiissssssdiisssi", $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $idPedido);
+    $stmtEnc->bind_param("iiiissssssdiisssiii", 
+        $idCliente, 
+        $idClienteRegion, 
+        $idTransportadora, 
+        $idBodega, 
+        $purchaseOrder, 
+        $fechaOrden, 
+        $fechaSalida, 
+        $fechaEnroute, 
+        $fechaDelivery, 
+        $fechaIngreso, 
+        $cantidadEstibas, 
+        $idAerolinea, 
+        $idAgencia, 
+        $guiaMaster, 
+        $guiaHija, 
+        $observaciones,
+        $comentarioPrimario,    // 👈 Nuevo campo TINYINT
+        $comentarioSecundario,  // 👈 Nuevo campo TINYINT
+        $idPedido
+    );
     $stmtEnc->execute();
 
-    // Insertar detalle actualizado
+    // Insertar detalle actualizado (sin cambios)
     $sqlDelDet = "DELETE FROM DetPedido WHERE Id_EncabPedido = ?";
     $stmtDelDet = $enlace->prepare($sqlDelDet);
     $stmtDelDet->bind_param("i", $idPedido);
@@ -91,7 +128,7 @@ try {
 
     foreach ($detalle as $item) {
         $idProducto = validar_entero($item["producto"] ?? null);
-        $descripcion = limpiar_texto($item["descripcion"] ?? "");
+        $descripcion = limpiar_descripcion($item["descripcion"] ?? ""); // 👈 Usar limpiar_descripcion
         $idEmbalaje = validar_entero($item["embalaje"] ?? null);
         $cantidad = validar_flotante($item["cantidad"] ?? null);
         $precio = validar_flotante($item["precio"] ?? null);
@@ -110,7 +147,7 @@ try {
 
     $enlace->commit();
 
-    echo json_encode(["success" => true, "idPedido" => $idEncabPedido]);
+    echo json_encode(["success" => true, "idPedido" => $idPedido]);
 
 } catch (Exception $e) {
     $enlace->rollback();

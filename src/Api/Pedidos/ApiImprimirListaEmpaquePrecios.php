@@ -301,10 +301,10 @@ function dibujarFilaConAlturaVariable($pdf, $etiqueta, $texto, $oc)
 dibujarFilaConAlturaVariable($pdf, 'Destino / Cliente Final ', $destinoClienteFinal, $purchaseOrder);
 
 $pdf->SetFont('Arial', 'B', 8);
-$pdf->Cell(90, 6, 'Fecha Solicitud Inicial Entrega Aeropuerto El Dorado (BOG) ', 'LTB', 0, 'L');
-$pdf->Cell(46, 6, utf8_decode($fechaSalida), 'TBR', 0, 'L');
-$pdf->Cell(49, 6, 'Fecha Final Entrega Cliente: ', 'LTB', 0, 'L');
-$pdf->Cell(47, 6, utf8_decode($fechaEntregaCliente), 'TBR', 0, 'L');
+$pdf->Cell(86, 6, 'Fecha Solicitud Inicial Entrega Aeropuerto El Dorado (BOG) ', 'LTB', 0, 'L');
+$pdf->Cell(50, 6, utf8_decode($fechaSalida), 'TBR', 0, 'L');
+$pdf->Cell(47, 6, 'Fecha Final Entrega Cliente: ', 'LTB', 0, 'L');
+$pdf->Cell(49, 6, utf8_decode($fechaEntregaCliente), 'TBR', 0, 'L');
 $pdf->Cell(30, 6, 'Cant Estibas: ' . $cantidadEstibas, 1, 1, 'L');
 
 $pdf->Ln(3);

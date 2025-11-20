@@ -1,5 +1,5 @@
 <?php
-require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");  // Incluye la librería FPDF
+require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
 $enlace->set_charset("utf8mb4"); // 👈 importante
 error_reporting(E_ALL);
@@ -22,39 +22,50 @@ $idPedido = intval($input['idPedido']);
 
 // Primero estableces el idioma para la sesión
 $enlace->query("SET lc_time_names = 'es_ES'");
-// Consultar datos del encabezado del pedido
+
+// 👇 MODIFICADO: Consultar datos del encabezado del pedido CON COMENTARIOS
 $sqlEncabezado = "SELECT 
-                    enc.Id_EncabPedido AS NoListaEmpaque,
-                    DATE_FORMAT(enc.FechaOrden, '%W, %e de %M de %Y') AS FechaOrden,
-                    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaSalida,
-                    enc.FechaEnroute,
-                    DATE_FORMAT(enc.FechaEnroute, '%d-%b-%y') AS FechaEnrouteFormateada,
-                    enc.FechaDelivery,
-                    DATE_FORMAT(enc.FechaDelivery, '%d-%b-%y') AS FechaDeliveryFormateada,
-                    DATE_FORMAT(enc.FechaIngreso, '%W, %e de %M de %Y') AS FechaEntregaCliente,
-                    DATE_FORMAT(DATE_ADD(enc.FechaIngreso, INTERVAL 30 DAY), '%W, %e de %M de %Y') AS FechaVencimiento,
-                    '' AS NoGuia,
-                    '' AS FEX,
-                    'Kuehne + Nagel S.A.S' AS AgenciaCarga,
-                    'UPS' AS Aerolinea,
-                    'GT Brokers Corp' AS Brokers,
-                    '' AS Inv,
-                    CONCAT(cli.Nombre, ' - ', cliReg.Direccion) AS Destino_ClienteFinal,
-                    enc.PurchaseOrder,
-                    enc.CantidadEstibas,
-                    enc.Observaciones,
-                    cli.Nombre AS NombreCliente,
-                    cliReg.Region,
-                    cliReg.Direccion,
-                    trans.Nombre AS Transportadora,
-                    CONCAT(trans.Nombre, ' - ', trans.Direccion) AS TransportadoraFinal,
-                    bod.Descripcion AS Bodega
-                  FROM EncabPedido enc
-                  INNER JOIN Clientes cli ON enc.Id_Cliente = cli.Id_Cliente
-                  INNER JOIN ClientesRegion cliReg ON enc.Id_ClienteRegion = cliReg.Id_ClienteRegion
-                  LEFT JOIN Transportadoras trans ON enc.Id_Transportadora = trans.Id_Transportadora
-                  LEFT JOIN Bodegas bod ON enc.Id_Bodega = bod.Id_Bodega
-                  WHERE enc.Id_EncabPedido = ?";
+    enc.Id_EncabPedido AS NoListaEmpaque,
+    DATE_FORMAT(enc.FechaOrden, '%W, %e de %M de %Y') AS FechaOrden,
+    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaSalida,
+    enc.FechaEnroute,
+    DATE_FORMAT(enc.FechaEnroute, '%d-%b-%y') AS FechaEnrouteFormateada,
+    enc.FechaDelivery,
+    DATE_FORMAT(enc.FechaDelivery, '%d-%b-%y') AS FechaDeliveryFormateada,
+    DATE_FORMAT(enc.FechaIngreso, '%W, %e de %M de %Y') AS FechaEntregaCliente,
+    DATE_FORMAT(DATE_ADD(enc.FechaIngreso, INTERVAL 30 DAY), '%W, %e de %M de %Y') AS FechaVencimiento,
+    '' AS NoGuia,
+    '' AS FEX,
+    'Kuehne + Nagel S.A.S' AS AgenciaCarga,
+    'UPS' AS Aerolinea,
+    'GT Brokers Corp' AS Brokers,
+    '' AS Inv,
+    CONCAT(cli.Nombre, ' - ', cliReg.Direccion) AS Destino_ClienteFinal,
+    enc.PurchaseOrder,
+    enc.CantidadEstibas,
+    enc.Observaciones,
+    cli.Nombre AS NombreCliente,
+    cliReg.Region,
+    cliReg.Direccion,
+    trans.Nombre AS Transportadora,
+    CONCAT(trans.Nombre, ' - ', trans.Direccion) AS TransportadoraFinal,
+    bod.Descripcion AS Bodega,
+    -- 👇 NUEVO: Campos de comentarios seleccionados
+    enc.ComentarioPrimario,
+    enc.ComentarioSecundario,
+    -- 👇 NUEVO: Campos de comentarios de la tabla Comentarios (usando subconsulta)
+    (SELECT ComentarioPrimario FROM Comentarios 
+     WHERE Id_Cliente = enc.Id_Cliente AND Id_ClienteRegion = enc.Id_ClienteRegion 
+     LIMIT 1) AS TextoComentarioPrimario,
+    (SELECT ComentarioSecundario FROM Comentarios 
+     WHERE Id_Cliente = enc.Id_Cliente AND Id_ClienteRegion = enc.Id_ClienteRegion 
+     LIMIT 1) AS TextoComentarioSecundario
+FROM EncabPedido enc
+INNER JOIN Clientes cli ON enc.Id_Cliente = cli.Id_Cliente
+INNER JOIN ClientesRegion cliReg ON enc.Id_ClienteRegion = cliReg.Id_ClienteRegion
+LEFT JOIN Transportadoras trans ON enc.Id_Transportadora = trans.Id_Transportadora
+LEFT JOIN Bodegas bod ON enc.Id_Bodega = bod.Id_Bodega
+WHERE enc.Id_EncabPedido = ?";
 
 $stmtEncabezado = $enlace->prepare($sqlEncabezado);
 $stmtEncabezado->bind_param("i", $idPedido);
@@ -75,7 +86,7 @@ $stmtEncabezado->bind_result(
     $aerolinea,
     $brokers,
     $inv,
-    $destinoClienteFinal,    
+    $destinoClienteFinal,
     $purchaseOrder,
     $cantidadEstibas,
     $observaciones,
@@ -84,7 +95,12 @@ $stmtEncabezado->bind_result(
     $direccion,
     $transportadora,
     $transportadoraFinal,
-    $bodega
+    $bodega,
+    // 👇 NUEVO: Variables para comentarios
+    $comentarioPrimarioSeleccionado,
+    $comentarioSecundarioSeleccionado,
+    $textoComentarioPrimario,
+    $textoComentarioSecundario
 );
 
 if (!$stmtEncabezado->fetch()) {
@@ -92,7 +108,7 @@ if (!$stmtEncabezado->fetch()) {
 }
 $stmtEncabezado->close();
 
-// Consultar datos del detalle del pedido
+// El resto del código del detalle se mantiene igual...
 $sqlDetalle = "SELECT 
                 det.Id_DetPedido,
                 prod.DescripProducto,
@@ -155,7 +171,7 @@ $stmtDetalle->bind_result(
     $factorPesoBruto,
     $pesoNetoKg,
     $pesoBrutoKg,
-    $subtotal,    
+    $subtotal,
 );
 
 // Calcular totales
@@ -201,6 +217,7 @@ while ($stmtDetalle->fetch()) {
     $totalPesoBruto += $pesoBrutoKg;
 }
 $stmtDetalle->close();
+
 // ======================
 // GENERAR PDF
 // ======================
@@ -219,8 +236,7 @@ class PDF extends FPDF
         $this->Cell(198, 4, 'Charlottesville VA, 22902', 'LR', 1,  'L');
         $this->Cell(198, 9, '', 'LBR', 1,  'L');
 
-        $this->Ln(8);       
-        
+        $this->Ln(8);
     }
 
     function Footer()
@@ -276,11 +292,9 @@ if ($alturaTransp < $alturaMax) {
 // --- Mover cursor a la siguiente línea ---
 $pdf->SetY($yInicio + $alturaMax);
 
-
 $pdf->Ln(5);
 
-// bloque para shipper y comments
-
+// 👇 MODIFICADO: Bloque para shipper y comments CON COMENTARIOS
 $pdf->SetFont('Arial', 'B', 9);
 $pdf->Cell(98, 3, '', 'LTR', 0,  'L');
 $pdf->Cell(2, 3, '', 0, 0,  'L');
@@ -300,7 +314,28 @@ $pdf->Cell(2, 3, '', 0, 0,  'L');
 $pdf->Cell(98, 3, '', 'LR', 1,  'L');
 $pdf->Cell(98, 3, 'Charlottesvile VA, 22902', 'LR', 0,  'L');
 $pdf->Cell(2, 3, '', 0, 0,  'L');
-$pdf->Cell(98, 3, '', 'LR', 1,  'L');
+
+// 👇 NUEVO: Mostrar comentarios si están seleccionados
+$comentariosParaMostrar = [];
+
+// Verificar si debe mostrar comentario primario
+if ($comentarioPrimarioSeleccionado == 1 && !empty($textoComentarioPrimario)) {
+    $comentariosParaMostrar[] = $textoComentarioPrimario;
+}
+
+// Verificar si debe mostrar comentario secundario
+if ($comentarioSecundarioSeleccionado == 1 && !empty($textoComentarioSecundario)) {
+    $comentariosParaMostrar[] = $textoComentarioSecundario;
+}
+
+// Si hay comentarios para mostrar
+if (!empty($comentariosParaMostrar)) {
+    $comentariosTexto = implode("\n", $comentariosParaMostrar);
+    $pdf->MultiCell(98, 3, utf8_decode($comentariosTexto), 'LR', 'L');
+} else {
+    $pdf->Cell(98, 3, '', 'LR', 1,  'L');
+}
+
 $pdf->Cell(98, 3, '(434) 434-0034', 'LRB', 0,  'L');
 $pdf->Cell(2, 3, '', 0, 0,  'L');
 $pdf->Cell(98, 3, '', 'LRB', 1,  'L');
@@ -325,10 +360,10 @@ $pdf->Ln(5);
 
 // Encabezado de la tabla de detalle
 $pdf->SetFont('Arial', 'B', 7);
-$pdf->Cell(30, 6, 'Producer', 1 , 0, 'C');
-$pdf->Cell(115, 6, 'Product', 1 , 0, 'C');
-$pdf->Cell(19, 6, 'Box Size', 1 , 0, 'C');
-$pdf->Cell(19, 6, 'Cubes', 1 , 0, 'C');
+$pdf->Cell(30, 6, 'Producer', 1, 0, 'C');
+$pdf->Cell(115, 6, 'Product', 1, 0, 'C');
+$pdf->Cell(19, 6, 'Box Size', 1, 0, 'C');
+$pdf->Cell(19, 6, 'Cubes', 1, 0, 'C');
 $pdf->Cell(15, 6, 'Pieces', 1, 0, 'C');
 
 $pdf->Ln();
@@ -355,7 +390,7 @@ $pdf->Cell(15, 6, number_format($cantidadEstibas, 2), 1, 1, 'R');
 $pdf->Ln(8);
 
 // OBSERVACIONES
-if (!empty($observaciones)) {   
+if (!empty($observaciones)) {
     $pdf->SetFont('Arial', 'B', 9);
     $pdf->Cell(30, 6, 'Observaciones: ', 0, 0, 'L');
     $pdf->SetFont('Arial', '', 9);
