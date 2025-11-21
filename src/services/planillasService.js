@@ -177,34 +177,68 @@ export async function generarDocumentoPlanilla(tipoDocumento, idPlanilla) {
 
 // Función para generar Reporte de Despacho
 export const generarReporteDespacho = async (idFactura) => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/ApiReporteDespacho.php`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                id_factura: idFactura
-            })
-        });
+  try {
+    const response = await fetch(`${API_BASE_URL}/ApiReporteDespacho.php`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id_factura: idFactura,
+      }),
+    });
 
-        if (!response.ok) {
-            throw new Error('Error en la generación del reporte');
-        }
-
-        // Para PDF, manejamos la respuesta como blob
-        const pdfBlob = await response.blob();
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        
-        // Abrir en nueva pestaña
-        window.open(pdfUrl, '_blank');
-        
-        return { success: true };
-    } catch (error) {
-        console.error('Error generando reporte de despacho:', error);
-        return { 
-            success: false, 
-            message: error.message || 'Error generando el reporte de despacho' 
-        };
+    if (!response.ok) {
+      throw new Error("Error en la generación del reporte");
     }
+
+    // Para PDF, manejamos la respuesta como blob
+    const pdfBlob = await response.blob();
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+
+    // Abrir en nueva pestaña
+    window.open(pdfUrl, "_blank");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error generando reporte de despacho:", error);
+    return {
+      success: false,
+      message: error.message || "Error generando el reporte de despacho",
+    };
+  }
+};
+
+// Función para generar Plan Vallejo
+export const generarPlanVallejo = async (idFactura) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/ApiPlanVallejo.php`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id_factura: idFactura,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Error en la generación del Plan Vallejo");
+    }
+
+    // Para PDF, manejamos la respuesta como blob
+    const pdfBlob = await response.blob();
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+
+    // Abrir en nueva pestaña
+    window.open(pdfUrl, "_blank");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error generando Plan Vallejo:", error);
+    return {
+      success: false,
+      message: error.message || "Error generando el Plan Vallejo",
+    };
+  }
 };

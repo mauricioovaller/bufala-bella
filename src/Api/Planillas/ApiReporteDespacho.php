@@ -162,11 +162,12 @@ class PDF extends FPDF
     function Header()
     {
         // Logo Bufalabella
-        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalaFactura.jpg", 15, 10, 40);
+        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 15, 10, 40);
 
         // Encabezado del reporte - similar al ejemplo
         $this->SetFont('Helvetica', 'B', 12);
         $this->SetXY(60, 12);
+        $this->Cell(80, 6, 'SIC SISTEMA INTEGRADO DE CALIDAD', 0, 1, 'C');
         $this->Cell(80, 6, 'SIC SISTEMA INTEGRADO DE CALIDAD', 0, 1, 'C');
         
         $this->SetFont('Helvetica', 'B', 14);
