@@ -28,10 +28,12 @@ if (!$data) {
 }
 
 // Funciones de sanitización
-function limpiar_texto($txt) {
+function limpiar_texto($txt)
+{
     return trim($txt);
 }
-function validar_entero($valor) {
+function validar_entero($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
 
@@ -56,7 +58,7 @@ try {
 
     // OBTENER DATOS DE LAS FACTURAS SELECCIONADAS
     $placeholders = str_repeat('?,', count($facturasIds) - 1) . '?';
-    
+
     $sqlFacturas = "SELECT 
         Id_EncabInvoice,
         Fecha,
@@ -69,12 +71,12 @@ try {
         TipoPedido
     FROM EncabInvoice 
     WHERE Id_EncabInvoice IN ($placeholders)";
-    
+
     $stmtFacturas = $enlace->prepare($sqlFacturas);
     $tiposFacturas = str_repeat('i', count($facturasIds));
     $stmtFacturas->bind_param($tiposFacturas, ...$facturasIds);
     $stmtFacturas->execute();
-    
+
     $stmtFacturas->bind_result(
         $idFactura,
         $fechaFactura,
@@ -86,7 +88,7 @@ try {
         $cantidadEstibas,
         $tipoPedidoFactura
     );
-    
+
     $facturasData = [];
     $fechas = [];
     $aerolineas = [];
@@ -95,7 +97,7 @@ try {
     $consignatarios = [];
     $agencias = [];
     $totalPiezas = 0;
-    
+
     while ($stmtFacturas->fetch()) {
         $facturasData[] = [
             'Id_EncabInvoice' => $idFactura,
@@ -108,7 +110,7 @@ try {
             'CantidadEstibas' => $cantidadEstibas,
             'TipoPedido' => $tipoPedidoFactura
         ];
-        
+
         $fechas[] = $fechaFactura;
         $aerolineas[] = $idAerolinea;
         $guiasMaster[] = $guiaMaster;
@@ -118,28 +120,28 @@ try {
         $totalPiezas += $cantidadEstibas;
     }
     $stmtFacturas->close();
-    
+
     if (empty($facturasData)) {
         throw new Exception("No se encontraron las facturas seleccionadas");
     }
-    
+
     // VALIDAR CONSISTENCIA DE DATOS
     if (count(array_unique($fechas)) > 1) {
         throw new Exception("Las facturas seleccionadas tienen fechas diferentes");
     }
-    
+
     if (count(array_unique($aerolineas)) > 1) {
         throw new Exception("Las facturas seleccionadas tienen aerolíneas diferentes");
     }
-    
+
     if (count(array_unique($consignatarios)) > 1) {
         throw new Exception("Las facturas seleccionadas tienen consignatarios diferentes");
     }
-    
+
     if (count(array_unique($agencias)) > 1) {
         throw new Exception("Las facturas seleccionadas tienen agencias diferentes");
     }
-    
+
     // PREPARAR DATOS PARA LA PLANILLA
     $fechaPlanilla = $fechas[0];
     $idAerolineaPlanilla = $aerolineas[0];
@@ -147,7 +149,7 @@ try {
     $guiaHijaPlanilla = $guiasHija[0];
     $idConsignatarioPlanilla = $consignatarios[0];
     $idAgenciaPlanilla = $agencias[0];
-    
+
     // Lista de facturas con formato FEX-2324, FEX-2325
     $numerosFacturasFormateados = [];
     foreach ($facturasData as $factura) {
@@ -155,35 +157,35 @@ try {
         $numerosFacturasFormateados[] = $prefijo . $factura['Id_EncabInvoice'];
     }
     $facturasString = implode(', ', $numerosFacturasFormateados);
-    
+
     // Datos de la configuración
     $precinto = limpiar_texto($configuracion["precintoSeguridad"] ?? "");
     $idConductor = validar_entero($configuracion["conductor"]["id"] ?? null);
     $idAyudante = validar_entero($configuracion["ayudante"]["id"] ?? null);
     $placa = limpiar_texto($configuracion["placaVehiculo"] ?? "");
     $vehiculo = limpiar_texto($configuracion["descripcionVehiculo"] ?? "");
-    
+
     // Validar datos de configuración
     if (!$idConductor) {
         throw new Exception("Conductor no válido");
     }
-    
+
     if (!$precinto) {
         throw new Exception("Precinto no válido");
     }
-    
+
     if (!$placa) {
         throw new Exception("Placa del vehículo no válida");
     }
-    
+
     // INSERTAR EN TABLA PLANILLAS
     $sqlPlanilla = "INSERT INTO Planillas 
         (Fecha, IdAerolinea, Facturas, GuiaMaster, GuiaHija, Id_Consignatario, TotalPiezas, Precinto, IdAgencia, Id_Conductor, Id_Ayudante, Placa, Vehiculo) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    
+
     $stmtPlanilla = $enlace->prepare($sqlPlanilla);
     $stmtPlanilla->bind_param(
-        "sisssiisiiiss", 
+        "sisssiisiiiss",
         $fechaPlanilla,
         $idAerolineaPlanilla,
         $facturasString,
@@ -198,19 +200,33 @@ try {
         $placa,
         $vehiculo
     );
-    
+
     $stmtPlanilla->execute();
-    
+
     if ($stmtPlanilla->affected_rows <= 0) {
         throw new Exception("Error al crear la planilla");
     }
-    
+
     $idPlanilla = $enlace->insert_id;
-    
+
+    // NUEVO CÓDIGO: ACTUALIZAR FACTURAS CON ID_PLANILLA
+    foreach ($facturasIds as $idFactura) {
+        $sql_update_factura = "UPDATE EncabInvoice SET Id_Planilla = ? WHERE Id_EncabInvoice = ?";
+        $stmt_update = $enlace->prepare($sql_update_factura);
+
+        if ($stmt_update) {
+            $stmt_update->bind_param("ii", $idPlanilla, $idFactura);
+            if (!$stmt_update->execute()) {
+                error_log("Error actualizando factura $idFactura: " . $stmt_update->error);
+            }
+            $stmt_update->close();
+        }
+    }
+
     $enlace->commit();
 
     echo json_encode([
-        "success" => true, 
+        "success" => true,
         "message" => "Planilla creada exitosamente",
         "idPlanilla" => $idPlanilla,
         "fecha" => $fechaPlanilla,
@@ -221,11 +237,9 @@ try {
         "consignatario" => $idConsignatarioPlanilla,
         "tipoPedido" => "mixto"
     ]);
-
 } catch (Exception $e) {
     $enlace->rollback();
     echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
 }
 
 $enlace->close();
-?>
