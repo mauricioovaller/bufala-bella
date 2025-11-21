@@ -28,13 +28,41 @@ if (!isset($input['id_planilla']) || empty($input['id_planilla'])) {
 $tipo_carta = $input['tipo_carta'];
 $id_planilla = intval($input['id_planilla']);
 
+// Función para convertir mes numérico a texto en español
+function mesEnEspanol($fecha)
+{
+    $meses = [
+        '01' => 'Enero',
+        '02' => 'Febrero',
+        '03' => 'Marzo',
+        '04' => 'Abril',
+        '05' => 'Mayo',
+        '06' => 'Junio',
+        '07' => 'Julio',
+        '08' => 'Agosto',
+        '09' => 'Septiembre',
+        '10' => 'Octubre',
+        '11' => 'Noviembre',
+        '12' => 'Diciembre'
+    ];
+
+    $partes = explode(' de ', $fecha);
+    if (count($partes) === 3 && isset($meses[$partes[1]])) {
+        return $partes[0] . ' de ' . $meses[$partes[1]] . ' de ' . $partes[2];
+    }
+    return $fecha;
+}
+
+// Aplicar la conversión
+$fecha_formateada = mesEnEspanol($fecha_formateada);
+
 // DEBUG: Log de la solicitud
 error_log("🔍 SOLICITUD PDF - Tipo: $tipo_carta, Planilla ID: $id_planilla");
 
 // CONSULTA PRINCIPAL CORREGIDA: DATOS DE LA PLANILLA
 $sqlPlanilla = "SELECT
                 pln.Id_Planilla,
-                DATE_FORMAT(pln.Fecha, '%d de %M de %Y') AS fecha_formateada,
+                DATE_FORMAT(pln.Fecha, '%d de %m de %Y') AS fecha_formateada,
                 pln.Facturas,
                 pln.GuiaMaster,
                 pln.GuiaHija,
@@ -103,6 +131,8 @@ $stmtPlanilla->bind_result(
 $stmtPlanilla->fetch();
 $stmtPlanilla->close();
 
+$fecha_formateada = mesEnEspanol($fecha_formateada);
+
 // DEBUG: Log de datos obtenidos
 error_log("✅ DATOS OBTENIDOS:");
 error_log("  - ID: $id_planilla");
@@ -114,8 +144,8 @@ error_log("  - Conductor: $nombre_conductor");
 error_log("  - Ayudante: " . ($nombre_ayudante ? $nombre_ayudante : 'No asignado'));
 
 // Si el ayudante está vacío, establecer valores por defecto
-if (empty($nombre_ayudante)) {
-    $nombre_ayudante = 'NO ASIGNADO';
+if (empty($nombre_ayudante) || trim($nombre_ayudante) === '') {
+    $nombre_ayudante = 'N/A';
     $cedula_ayudante = 'N/A';
     error_log("🔧 Ayudante no asignado, usando valores por defecto");
 }
@@ -146,12 +176,12 @@ class PDF extends FPDF
 
     function Footer()
     {
-        $this->SetY(-60);      
+        $this->SetY(-60);
 
         // Firma
         $this->SetFont('Helvetica', 'B', 10);
         $this->Cell(0, 6, 'Atentamente,', 0, 1, 'L');
-        $this->Ln(20);
+        $this->Ln(30);
 
         $this->SetFont('Helvetica', 'B', 10);
         $this->Cell(0, 6, utf8_decode('John Jairo Vera Riaño'), 0, 1, 'L');
@@ -168,6 +198,15 @@ class PDF extends FPDF
         $this->Cell(80, 4, utf8_decode('Calle 93 Bis No. 19-50 Of. 305 Bogotá, Colombia'), 0, 0, 'C');
         $this->Cell(53, 4, '', 0, 0, 'C');
         $this->Cell(65, 4, 'Movil. (57) 321 242 45 52', 0, 1, 'C');
+
+        // Agregar imagen de firma
+        $firmaPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/firma.jpg";
+        if (file_exists($firmaPath)) {
+            $this->Image($firmaPath, 10, $this->GetY() - 50, 50);
+            error_log("✅ Firma agregada al PDF");
+        } else {
+            error_log("⚠️ Imagen de firma no encontrada en: " . $firmaPath);
+        }
     }
 }
 
@@ -190,23 +229,23 @@ if ($tipo_carta == 'carta-aerolinea') {
     $pdf->Cell(0, 6, $aerolinea, 0, 1, 'L');
 } else {
     $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 6, utf8_decode('Dirección Antinarcóticos'), 0, 1, 'L');
-    $pdf->Cell(0, 6, utf8_decode('Base Operativa Aeropuerto el Dorado Bogotá'), 0, 1, 'L');
-    $pdf->Cell(0, 6, utf8_decode('Bogotá'), 0, 1, 'L');
+    $pdf->Cell(0, 4, utf8_decode('Dirección Antinarcóticos'), 0, 1, 'L');
+    $pdf->Cell(0, 4, utf8_decode('Base Operativa Aeropuerto el Dorado Bogotá'), 0, 1, 'L');
+    $pdf->Cell(0, 4, utf8_decode('Bogotá'), 0, 1, 'L');
 }
 
-$pdf->Ln(2);
+$pdf->Ln(1);
 
 // Referencia
 $pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(185, 6, 'Referencia: Carta de Responsabilidad', 0, 1, 'R');
+$pdf->Cell(188, 6, 'Referencia: Carta de Responsabilidad', 0, 1, 'R');
 $pdf->Ln(2);
 
 // Cuerpo de la carta
 $pdf->SetFont('Helvetica', '', 9);
 $texto_intro = "Yo, John Jairo Vera Riaño, identificado con número de cédula No. 11.449.717 expedida en Facatativá en mi condición de Coordinador de Exportaciones de la empresa BUFALABELLA S.A.S. con Nit No. 900.254.183-4 y número teléfonico 5466633, certifico que el contenido de la presente carga se ajusta a:";
 $pdf->MultiCell(0, 5, utf8_decode($texto_intro));
-$pdf->Ln(3);
+$pdf->Ln(2);
 
 // Facturas y Guías
 $pdf->SetFont('Helvetica', 'B', 9);
