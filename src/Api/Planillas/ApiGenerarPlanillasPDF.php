@@ -140,25 +140,28 @@ class PDF extends FPDF
         $this->SetFont('Helvetica', '', 9);
         $this->SetX(90);
         $this->Cell(60, 4, 'Nit. 900.254.183-4', 0, 1, 'C');
-        
+
         $this->Ln(8);
     }
 
     function Footer()
     {
-        $this->SetY(-35);
-        
-        $this->SetFont('Helvetica', 'B', 8);
-        $this->Cell(22, 4, 'Elaborado por:', 0, 0, 'R');
-        $this->Cell(34, 4, 'John Jairo Vera Riaño', 0, 1, 'L');
-        $this->Cell(22, 4, '', 0, 0, 'R');
-        $this->Cell(34, 4, 'Coordinador de Exportaciones', 0, 1, 'L');
+        $this->SetY(-60);      
 
-        $this->Ln(8);
+        // Firma
+        $this->SetFont('Helvetica', 'B', 10);
+        $this->Cell(0, 6, 'Atentamente,', 0, 1, 'L');
+        $this->Ln(20);
+
+        $this->SetFont('Helvetica', 'B', 10);
+        $this->Cell(0, 6, utf8_decode('John Jairo Vera Riaño'), 0, 1, 'L');
+        $this->SetFont('Helvetica', '', 9);
+        $this->Cell(0, 5, utf8_decode('C.C. 11.449.717 de Facatativá'), 0, 1, 'L');
+        $this->Cell(0, 5, 'Coordinador de Exportaciones', 0, 1, 'L');
 
         $this->SetFont('Helvetica', 'B', 7);
         $this->Cell(80, 4, utf8_decode('Address. Autopista Medellín Km 18 El Rosal, Cundinamarca-Colombia'), 0, 0, 'C');
-        $this->Cell(53, 4, 'E-Mail. exportaciones@bufalabella.com', 0, 0, 'C');
+        $this->Cell(53, 4, 'E-Mail. exportaciones@bufalabella.com', 0, 0, 'R');
         $this->Cell(65, 4, 'Phone. (60) 1 9172185/5466633', 0, 1, 'C');
 
         $this->SetFont('Helvetica', 'B', 7);
@@ -170,156 +173,148 @@ class PDF extends FPDF
 
 // Crear PDF
 $pdf = new PDF('P', 'mm', 'Letter');
-$pdf->SetMargins(15, 15, 15);
+$pdf->SetMargins(10, 10, 10);
 $pdf->AliasNbPages();
 $pdf->AddPage();
 
 // Ciudad y Fecha
 $pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(0, 6, 'Bogotá, ' . $fecha_formateada, 0, 1, 'L');
-$pdf->Ln(5);
+$pdf->Cell(0, 6, utf8_decode('Bogotá, ') . $fecha_formateada, 0, 1, 'L');
+$pdf->Ln(2);
 
 // Destinatario
 $pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(0, 6, 'Señores:', 0, 1, 'L');
+$pdf->Cell(0, 6, utf8_decode('Señores:'), 0, 1, 'L');
 if ($tipo_carta == 'carta-aerolinea') {
     $pdf->SetFont('Helvetica', 'B', 10);
     $pdf->Cell(0, 6, $aerolinea, 0, 1, 'L');
 } else {
     $pdf->SetFont('Helvetica', 'B', 10);
-    $pdf->Cell(0, 6, 'Dirección Antinarcóticos', 0, 1, 'L');
-    $pdf->Cell(0, 6, 'Base Operativa Aeropuerto el Dorado Bogotá', 0, 1, 'L');
-    $pdf->Cell(0, 6, 'Bogotá', 0, 1, 'L');
+    $pdf->Cell(0, 6, utf8_decode('Dirección Antinarcóticos'), 0, 1, 'L');
+    $pdf->Cell(0, 6, utf8_decode('Base Operativa Aeropuerto el Dorado Bogotá'), 0, 1, 'L');
+    $pdf->Cell(0, 6, utf8_decode('Bogotá'), 0, 1, 'L');
 }
 
-$pdf->Ln(5);
+$pdf->Ln(2);
 
 // Referencia
 $pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(0, 6, 'Referencia: Carta de Responsabilidad', 0, 1, 'L');
-$pdf->Ln(3);
+$pdf->Cell(185, 6, 'Referencia: Carta de Responsabilidad', 0, 1, 'R');
+$pdf->Ln(2);
 
 // Cuerpo de la carta
-$pdf->SetFont('Helvetica', '', 10);
+$pdf->SetFont('Helvetica', '', 9);
 $texto_intro = "Yo, John Jairo Vera Riaño, identificado con número de cédula No. 11.449.717 expedida en Facatativá en mi condición de Coordinador de Exportaciones de la empresa BUFALABELLA S.A.S. con Nit No. 900.254.183-4 y número teléfonico 5466633, certifico que el contenido de la presente carga se ajusta a:";
 $pdf->MultiCell(0, 5, utf8_decode($texto_intro));
 $pdf->Ln(3);
 
 // Facturas y Guías
-$pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(0, 6, 'Factura No. ' . $facturas . ' - con la GUIA MASTER: ' . $guia_master, 0, 1, 'L');
-$pdf->Cell(0, 6, 'GUIA HIJA: ' . $guia_hija, 0, 1, 'L');
-$pdf->Ln(3);
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(0, 6, 'Factura No. ' . $facturas . ' -  GUIA MASTER: ' . $guia_master . ' -   GUIA HIJA: ' . $guia_hija, 0, 1, 'L');
 
-$pdf->Cell(0, 6, 'Correspondiente a nuestro despacho así:', 0, 1, 'L');
-$pdf->Ln(3);
+$pdf->Ln(2);
+
+$pdf->Cell(0, 6, utf8_decode('Correspondiente a nuestro despacho así:'), 0, 1, 'L');
+$pdf->Ln(2);
 
 // Tabla de información
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'CONSIGNATARIO FINAL', 0, 0, 'L');
+$pdf->Cell(75, 5, 'CONSIGNATARIO FINAL', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $consignatario_final, 0, 1, 'L');
+$pdf->Cell(0, 5, $consignatario_final, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'DESTINO', 0, 0, 'L');
+$pdf->Cell(75, 5, 'DESTINO', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, 'MIAMI FLORIDA/ESTADOS UNIDOS', 0, 1, 'L');
+$pdf->Cell(0, 5, 'MIAMI FLORIDA/ESTADOS UNIDOS', 0, 1, 'L');
 
-$pdf->Ln(3);
+$pdf->Ln(0);
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(0, 6, 'DESCRIPCIÓN GENERAL DE LA MERCANCIA', 0, 1, 'L');
+$pdf->Cell(75, 5, utf8_decode('DESCRIPCIÓN GENERAL DE LA MERCANCIA'), 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
 $pdf->Cell(0, 5, 'QUESO MOZZARELLA 100% LECHE DE BUFALA P.A. 0406100000', 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, '', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
 $pdf->Cell(0, 5, 'YOGURT NATURAL 100% LECHE DE BUFALA Y DE SABORES 0403200090', 0, 1, 'L');
 
-$pdf->Ln(3);
+$pdf->Ln(0);
 
 // Información de transporte
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'TOTAL DE PIEZAS', 0, 0, 'L');
+$pdf->Cell(75, 5, 'TOTAL DE PIEZAS', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $total_piezas, 0, 1, 'L');
+$pdf->Cell(0, 5, $total_piezas, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'SELLOS PRECINTOS', 0, 0, 'L');
+$pdf->Cell(75, 5, 'SELLOS PRECINTOS', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $precinto, 0, 1, 'L');
+$pdf->Cell(0, 5, $precinto, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'AGENCIA DE CARGA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'AGENCIA DE CARGA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $agencia_carga, 0, 1, 'L');
+$pdf->Cell(0, 5, $agencia_carga, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'AEROLINEA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'AEROLINEA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $aerolinea, 0, 1, 'L');
+$pdf->Cell(0, 5, $aerolinea, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'EMPRESA TRANSPORTADORA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'EMPRESA TRANSPORTADORA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, 'PARTICULAR', 0, 1, 'L');
+$pdf->Cell(0, 5, 'PARTICULAR', 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'NOMBRE DEL CONDUCTOR', 0, 0, 'L');
+$pdf->Cell(75, 5, 'NOMBRE DEL CONDUCTOR', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $nombre_conductor, 0, 1, 'L');
+$pdf->Cell(0, 5, $nombre_conductor, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $cedula_conductor, 0, 1, 'L');
+$pdf->Cell(0, 5, $cedula_conductor, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'NOMBRE DEL AYUDANTE', 0, 0, 'L');
+$pdf->Cell(75, 5, 'NOMBRE DEL AYUDANTE', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $nombre_ayudante, 0, 1, 'L');
+$pdf->Cell(0, 5, $nombre_ayudante, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $cedula_ayudante, 0, 1, 'L');
+$pdf->Cell(0, 5, $cedula_ayudante, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'NUMERO DE CELULAR O TELEFONO FIJO', 0, 0, 'L');
+$pdf->Cell(75, 5, 'NUMERO DE CELULAR O TELEFONO FIJO', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, '3212424552', 0, 1, 'L');
+$pdf->Cell(0, 5, '3212424552', 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'TIPO VEHICULO', 0, 0, 'L');
+$pdf->Cell(75, 5, 'TIPO VEHICULO', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $vehiculo, 0, 1, 'L');
+$pdf->Cell(0, 5, $vehiculo, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'PLACA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'PLACA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $placa, 0, 1, 'L');
+$pdf->Cell(0, 5, $placa, 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(50, 6, 'No PLANILLA DE CARGA', 0, 0, 'L');
+$pdf->Cell(75, 5, 'No PLANILLA DE CARGA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 6, $id_planilla, 0, 1, 'L');
+$pdf->Cell(0, 5, $id_planilla, 0, 1, 'L');
 
-$pdf->Ln(8);
+$pdf->Ln(2);
 
 // Texto de responsabilidad
 $texto_responsabilidad = "Nos hacemos responsables por el contenido de esta carga ante las autoridades colombianas, extranjeras y ante el transportador en caso que se encuentren sustancias o elementos narcóticos, explosivos ilícitos o prohibidos estipulados en las normas internacionales a excepción de aquellos que expresamente se han declarado como tal armas o partes de ellas, municiones, material de guerra o sus partes u otros elementos que no cumplan con las obligaciones legales establecidas para este tipo de carga, siempre que se conserve sus empaques, características y sellos originales con las que sea entregada al transportador. El embarque ha sido preparado en lugares con óptimas condiciones de seguridad y ha sido protegido de toda intervención ilícita durante su preparación, embalaje, almacenamiento y transportador aéreo hacia las instalaciones de la aerolínea y cumple con todos los requisitos exigidos por la ley y normas fitosanitarias.";
 
 $pdf->SetFont('Helvetica', '', 10);
 $pdf->MultiCell(0, 5, utf8_decode($texto_responsabilidad));
-$pdf->Ln(15);
-
-// Firma
-$pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(0, 6, 'Atentamente,', 0, 1, 'L');
-$pdf->Ln(10);
-
-$pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(0, 6, 'John Jairo Vera Riaño', 0, 1, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 5, 'C.C. 11.449.717 de Facatativá', 0, 1, 'L');
-$pdf->Cell(0, 5, 'Coordinador de Exportaciones', 0, 1, 'L');
+$pdf->Ln(2);
 
 // Generar nombre del archivo
 $nombre_archivo = 'CartaResponsabilidad_' . ($tipo_carta == 'carta-aerolinea' ? 'Aerolinea' : 'Policia') . '_' . $id_planilla . '.pdf';
@@ -340,4 +335,3 @@ error_log("✅ PDF generado exitosamente: " . $nombre_archivo);
 // Enviar el PDF
 $pdf->Output('I', $nombre_archivo);
 exit();
-?>
