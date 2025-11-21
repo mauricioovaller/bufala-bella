@@ -1,9 +1,11 @@
 <?php
+// 🔴 SUPRIMIR ERRORES PARA EVITAR CORRUPCIÓN DEL PDF
+error_reporting(0);
+ini_set('display_errors', 0);
+
 require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
 $enlace->set_charset("utf8mb4");
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
 // Verificar si la petición es POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -31,6 +33,10 @@ $id_planilla = intval($input['id_planilla']);
 // Función para convertir mes numérico a texto en español
 function mesEnEspanol($fecha)
 {
+    if (empty($fecha)) {
+        return 'Fecha no disponible';
+    }
+    
     $meses = [
         '01' => 'Enero',
         '02' => 'Febrero',
@@ -52,12 +58,6 @@ function mesEnEspanol($fecha)
     }
     return $fecha;
 }
-
-// Aplicar la conversión
-$fecha_formateada = mesEnEspanol($fecha_formateada);
-
-// DEBUG: Log de la solicitud
-error_log("🔍 SOLICITUD PDF - Tipo: $tipo_carta, Planilla ID: $id_planilla");
 
 // CONSULTA PRINCIPAL CORREGIDA: DATOS DE LA PLANILLA
 $sqlPlanilla = "SELECT
@@ -87,12 +87,8 @@ $sqlPlanilla = "SELECT
             WHERE
                 pln.Id_Planilla = ?";
 
-error_log("🔍 SQL: " . $sqlPlanilla);
-error_log("🔍 Buscando planilla ID: " . $id_planilla);
-
 $stmtPlanilla = $enlace->prepare($sqlPlanilla);
 if (!$stmtPlanilla) {
-    error_log("❌ Error preparando consulta: " . $enlace->error);
     http_response_code(500);
     die("Error en la consulta: " . $enlace->error);
 }
@@ -101,10 +97,7 @@ $stmtPlanilla->bind_param("i", $id_planilla);
 $stmtPlanilla->execute();
 $stmtPlanilla->store_result();
 
-error_log("🔍 Filas encontradas: " . $stmtPlanilla->num_rows);
-
 if ($stmtPlanilla->num_rows === 0) {
-    error_log("❌ Planilla no encontrada: " . $id_planilla);
     http_response_code(404);
     die("Planilla no encontrada. ID: " . $id_planilla);
 }
@@ -131,23 +124,13 @@ $stmtPlanilla->bind_result(
 $stmtPlanilla->fetch();
 $stmtPlanilla->close();
 
+// 🔴 APLICAR LA CONVERSIÓN DESPUÉS DE OBTENER LOS DATOS
 $fecha_formateada = mesEnEspanol($fecha_formateada);
-
-// DEBUG: Log de datos obtenidos
-error_log("✅ DATOS OBTENIDOS:");
-error_log("  - ID: $id_planilla");
-error_log("  - Fecha: $fecha_formateada");
-error_log("  - Facturas: $facturas");
-error_log("  - Consignatario: $consignatario_final");
-error_log("  - Aerolínea: $aerolinea");
-error_log("  - Conductor: $nombre_conductor");
-error_log("  - Ayudante: " . ($nombre_ayudante ? $nombre_ayudante : 'No asignado'));
 
 // Si el ayudante está vacío, establecer valores por defecto
 if (empty($nombre_ayudante) || trim($nombre_ayudante) === '') {
     $nombre_ayudante = 'N/A';
     $cedula_ayudante = 'N/A';
-    error_log("🔧 Ayudante no asignado, usando valores por defecto");
 }
 
 // ======================
@@ -176,7 +159,7 @@ class PDF extends FPDF
 
     function Footer()
     {
-        $this->SetY(-60);
+        $this->SetY(-70);
 
         // Firma
         $this->SetFont('Helvetica', 'B', 10);
@@ -203,9 +186,6 @@ class PDF extends FPDF
         $firmaPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/firma.jpg";
         if (file_exists($firmaPath)) {
             $this->Image($firmaPath, 10, $this->GetY() - 50, 50);
-            error_log("✅ Firma agregada al PDF");
-        } else {
-            error_log("⚠️ Imagen de firma no encontrada en: " . $firmaPath);
         }
     }
 }
@@ -244,7 +224,7 @@ $pdf->Ln(2);
 // Cuerpo de la carta
 $pdf->SetFont('Helvetica', '', 9);
 $texto_intro = "Yo, John Jairo Vera Riaño, identificado con número de cédula No. 11.449.717 expedida en Facatativá en mi condición de Coordinador de Exportaciones de la empresa BUFALABELLA S.A.S. con Nit No. 900.254.183-4 y número teléfonico 5466633, certifico que el contenido de la presente carga se ajusta a:";
-$pdf->MultiCell(0, 5, utf8_decode($texto_intro));
+$pdf->MultiCell(0, 4, utf8_decode($texto_intro));
 $pdf->Ln(2);
 
 // Facturas y Guías
@@ -352,24 +332,16 @@ $pdf->Ln(2);
 $texto_responsabilidad = "Nos hacemos responsables por el contenido de esta carga ante las autoridades colombianas, extranjeras y ante el transportador en caso que se encuentren sustancias o elementos narcóticos, explosivos ilícitos o prohibidos estipulados en las normas internacionales a excepción de aquellos que expresamente se han declarado como tal armas o partes de ellas, municiones, material de guerra o sus partes u otros elementos que no cumplan con las obligaciones legales establecidas para este tipo de carga, siempre que se conserve sus empaques, características y sellos originales con las que sea entregada al transportador. El embarque ha sido preparado en lugares con óptimas condiciones de seguridad y ha sido protegido de toda intervención ilícita durante su preparación, embalaje, almacenamiento y transportador aéreo hacia las instalaciones de la aerolínea y cumple con todos los requisitos exigidos por la ley y normas fitosanitarias.";
 
 $pdf->SetFont('Helvetica', '', 10);
-$pdf->MultiCell(0, 5, utf8_decode($texto_responsabilidad));
+$pdf->MultiCell(0, 4, utf8_decode($texto_responsabilidad));
 $pdf->Ln(2);
 
 // Generar nombre del archivo
 $nombre_archivo = 'CartaResponsabilidad_' . ($tipo_carta == 'carta-aerolinea' ? 'Aerolinea' : 'Policia') . '_' . $id_planilla . '.pdf';
 
-// Limpiar buffer de salida y enviar headers
+// 🔴 LIMPIAR BUFFER ANTES DE ENVIAR PDF
 while (ob_get_level()) {
     ob_end_clean();
 }
-
-// Enviar headers para PDF
-header('Content-Type: application/pdf');
-header('Content-Disposition: inline; filename="' . $nombre_archivo . '"');
-header('Cache-Control: private, max-age=0, must-revalidate');
-header('Pragma: public');
-
-error_log("✅ PDF generado exitosamente: " . $nombre_archivo);
 
 // Enviar el PDF
 $pdf->Output('I', $nombre_archivo);
