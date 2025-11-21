@@ -151,7 +151,7 @@ try {
     // Lista de facturas con formato FEX-2324, FEX-2325
     $numerosFacturasFormateados = [];
     foreach ($facturasData as $factura) {
-        $prefijo = $factura['TipoPedido'] === 'sample' ? 'SMP-FEX-' : 'FEX-';
+        $prefijo = $factura['TipoPedido'] === 'sample' ? 'FEX-' : 'FEX-';
         $numerosFacturasFormateados[] = $prefijo . $factura['Id_EncabInvoice'];
     }
     $facturasString = implode(', ', $numerosFacturasFormateados);
