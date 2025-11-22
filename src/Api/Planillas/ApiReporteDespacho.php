@@ -162,178 +162,196 @@ class PDF extends FPDF
     function Header()
     {
         // Logo Bufalabella
-        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 15, 10, 40);
+        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 12, 25, 30);
 
         // Encabezado del reporte - similar al ejemplo
-        $this->SetFont('Helvetica', 'B', 12);
-        $this->SetXY(60, 12);
-        $this->Cell(80, 6, 'SIC SISTEMA INTEGRADO DE CALIDAD', 0, 1, 'C');
-        $this->Cell(80, 6, 'SIC SISTEMA INTEGRADO DE CALIDAD', 0, 1, 'C');
-        
-        $this->SetFont('Helvetica', 'B', 14);
-        $this->SetX(60);
-        $this->Cell(80, 8, 'REPORTE DESPACHOS EXPORTACION', 0, 1, 'C');
-        
-        $this->SetFont('Helvetica', '', 9);
-        $this->SetX(60);
-        $this->Cell(80, 5, 'HACCP', 0, 0, 'C');
-        $this->SetX(140);
-        $this->Cell(40, 5, 'Pagina 1 de 1', 0, 1, 'R');
-        
-        $this->SetX(60);
-        $this->Cell(80, 5, 'Codigo R-EXP-004', 0, 0, 'C');
-        $this->SetX(140);
-        $this->Cell(40, 5, 'Version 6', 0, 0, 'R');
-        $this->SetX(170);
-        $this->Cell(30, 5, 'Fecha 02/01/2023', 0, 1, 'R');
+        $this->SetFont('Helvetica', 'B', 9);
+        $this->SetXY(10, 15);
+        $this->Cell(35, 5, '', 'LTR', 0, 'C');
+        $this->Cell(120, 5, 'SIC SISTEMA INTEGRADO DE CALIDAD', 'LTR', 0, 'C');
+        $this->Cell(40, 5, 'HACCP', 1, 1, 'C');
 
-        $this->Ln(5);
+        $this->Cell(35, 5, '', 'LR', 0, 'C');
+        $this->Cell(120, 5, '', 'LR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('Página'), 'LTR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('Código'), 'LTR', 1, 'C');
+
+        $this->Cell(35, 5, '', 'LR', 0, 'C');
+        $this->Cell(120, 5, utf8_decode('REPORTE DESPACHOS EXPORTACIÓN'), 'LR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('1 de 1'), 'LBR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('R-EXP-004'), 'LBR', 1, 'C');
+
+        $this->Cell(35, 5, '', 'LR', 0, 'C');
+        $this->Cell(120, 5, utf8_decode(''), 'LR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('Versión'), 'LTR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('Fecha'), 'LTR', 1, 'C');
+
+        $this->Cell(35, 5, '', 'LBR', 0, 'C');
+        $this->Cell(120, 5, utf8_decode(''), 'LBR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('6'), 'LBR', 0, 'C');
+        $this->Cell(20, 5, utf8_decode('02/01/2023'), 'LBR', 1, 'C');
+
+        $this->Ln(3);
     }
 
     function Footer()
     {
-        $this->SetY(-15);
+        $this->SetY(-45);
+        $this->SetFont('Helvetica', '', 9);
+        $this->MultiCell(195, 5, utf8_decode('Una vez realizada la operacion, se hace su cierre correspondiente, garantizando el selle del vehiculo a la salida de la compania con precinto de seguridad.'), 'LTR', 'L');
+        $this->Cell(195, 12, '', 'LR', 1, 'L');
+        $this->Cell(90, 5, 'Firma', 'L', 0, 'R');
+        $this->Cell(105, 5, '', 'BR', 1, 'R');
+        $this->Cell(195, 5, 'Coordinador de Exportaciones               ', 'LBR', 1, 'R');
+
+        // Agregar imagen de firma
+        $firmaPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/firma.jpg";
+        if (file_exists($firmaPath)) {
+            $this->Image($firmaPath, 145, $this->GetY() - 27, 44);
+        }
+
         $this->SetFont('Helvetica', 'I', 8);
         $this->Cell(0, 10, 'Pagina ' . $this->PageNo() . '/{nb}', 0, 0, 'C');
     }
 }
 
 $pdf = new PDF('P', 'mm', 'Letter');
-$pdf->SetMargins(15, 15, 15);
+$pdf->SetMargins(10, 15, 10);
 $pdf->AliasNbPages();
 $pdf->AddPage();
 
 // FECHA DE SALIDA
-$pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(40, 6, 'Fecha Salida', 0, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(35, 5, 'Fecha Salida', 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(55, 5,  $fecha_salida, 1, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(35, 5, 'Factura No.', 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(30, 5,  $numero_factura, 1, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(20, 5, 'Guia', 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(20, 5,  $guia_master, 1, 1, 'L');
+
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(35, 5, 'Placa Vehiculo', 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(55, 5,  $placa, 1, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(35, 5, utf8_decode('Tº Producto Terminado'), 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(30, 5,  '', 1, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(20, 5, utf8_decode('# Termógrafo'), 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(20, 5,  'N/A', 1, 1, 'L');
+
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(35, 5, 'Hora Inicio Cargue', 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(55, 5,  '', 1, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(35, 5, utf8_decode('Hora Final cargue'), 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(30, 5,  '', 1, 0, 'L');
+$pdf->SetFont('Helvetica', 'B', 8);
+$pdf->Cell(20, 5, utf8_decode('Destino'), 1, 0, 'L');
+$pdf->SetFont('Helvetica', '', 8);
+$pdf->Cell(20, 5,  'USA', 1, 1, 'L');
+
+$pdf->SetFont('Helvetica', 'BU', 10);
+$pdf->Cell(195, 6, 'Verificacion de Etiquetado Externo Cajas', 0, 1, 'C');
+
 $pdf->SetFont('Helvetica', '', 10);
-$pdf->Cell(50, 6, $fecha_salida, 0, 1, 'L');
-
-$pdf->Ln(2);
-
-// TABLA DE INFORMACIÓN DE TRANSPORTE
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Fax', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, 'Fax No.', 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Guia', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(40, 6, $guia_master, 0, 1, 'L');
-
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Placa Vehiculo', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, $placa, 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Tº Producto Terminado', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(40, 6, 'N/A', 0, 1, 'L');
-
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Hora Inicio Carque', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, '', 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Hora Final Carque', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, '', 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(15, 6, 'Destino', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(20, 6, 'USA', 0, 1, 'L');
-
-$pdf->Ln(5);
-
-// VERIFICACIÓN DE ETIQUETADO
+$pdf->Cell(120, 6, 'Fecha Vencimiento (impresa)  /Total Cajas Enviadas:', 'LTB', 0, 'C');
 $pdf->SetFont('Helvetica', 'B', 10);
-$pdf->Cell(90, 6, 'Verificacion de Etiquetado Externo Cajas', 0, 1, 'L');
-
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(60, 6, 'Fecha Vencimiento (impresa) / Total Cajas Enviadas:', 0, 0, 'L');
+$pdf->Cell(20, 6, round($total_cajas,2), 'TRB', 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(20, 6, $total_cajas, 0, 0, 'R');
+$pdf->Cell(25, 6, 'Total Estibas:', 'LTB', 0, 'R');
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Total Estibas:', 0, 0, 'R');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(15, 6, $cantidad_estibas, 0, 1, 'R');
-
-$pdf->Ln(2);
+$pdf->Cell(30, 6, $cantidad_estibas, 'RTB', 1, 'C');
 
 // TABLA DE ITEMS
 $pdf->SetFont('Helvetica', 'B', 7);
 // Encabezado de la tabla
-$pdf->Cell(10, 6, 'Items', 1, 0, 'C');
-$pdf->Cell(50, 6, 'Producto', 1, 0, 'C');
-$pdf->Cell(20, 6, 'Kilos Netos', 1, 0, 'C');
-$pdf->Cell(20, 6, 'Kilos Brutos', 1, 0, 'C');
-$pdf->Cell(20, 6, 'Unidades', 1, 0, 'C');
-$pdf->Cell(15, 6, 'Cajas', 1, 1, 'C');
+$pdf->Cell(10, 5, 'Items', 1, 0, 'C');
+$pdf->Cell(130, 5, 'Producto', 1, 0, 'C');
+$pdf->Cell(15, 5, 'Kilos Netos', 1, 0, 'C');
+$pdf->Cell(15, 5, 'Kilos Brutos', 1, 0, 'C');
+$pdf->Cell(15, 5, 'Unidades', 1, 0, 'C');
+$pdf->Cell(10, 5, 'Cajas', 1, 1, 'C');
 
 $pdf->SetFont('Helvetica', '', 7);
 foreach ($detalles as $detalle) {
     $kilos_brutos = $detalle['kilogramos'] * 2.6;
-    
-    $pdf->Cell(10, 6, $detalle['item'], 1, 0, 'C');
-    $pdf->Cell(50, 6, substr($detalle['producto'], 0, 35), 1, 0, 'L');
-    $pdf->Cell(20, 6, number_format($detalle['kilogramos'], 2), 1, 0, 'R');
-    $pdf->Cell(20, 6, number_format($kilos_brutos, 2), 1, 0, 'R');
-    $pdf->Cell(20, 6, number_format($detalle['unidades'], 0), 1, 0, 'R');
-    $pdf->Cell(15, 6, number_format($detalle['cajas'], 0), 1, 1, 'R');
+
+    $pdf->Cell(10, 5, $detalle['item'], 1, 0, 'C');
+    $pdf->Cell(130, 5, utf8_decode($detalle['producto']), 1, 0, 'L');
+    $pdf->Cell(15, 5, number_format($detalle['kilogramos'], 2), 1, 0, 'R');
+    $pdf->Cell(15, 5, number_format($kilos_brutos, 2), 1, 0, 'R');
+    $pdf->Cell(15, 5, number_format($detalle['unidades'], 0), 1, 0, 'R');
+    $pdf->Cell(10, 5, number_format($detalle['cajas'], 0), 1, 1, 'R');
 }
 
 // TOTALES
 $pdf->SetFont('Helvetica', 'B', 8);
-$pdf->Cell(60, 6, 'TOTAL', 1, 0, 'R');
-$pdf->Cell(20, 6, number_format($tot_kgm_netos, 2), 1, 0, 'R');
-$pdf->Cell(20, 6, number_format($tot_kgm_brutos, 2), 1, 0, 'R');
-$pdf->Cell(20, 6, number_format($total_unidades, 0), 1, 0, 'R');
-$pdf->Cell(15, 6, number_format($total_cajas, 0), 1, 1, 'R');
+$pdf->Cell(140, 6, 'Totales', 1, 0, 'R');
+$pdf->Cell(15, 6, number_format($tot_kgm_netos, 2), 1, 0, 'R');
+$pdf->Cell(15, 6, number_format($tot_kgm_brutos, 2), 1, 0, 'R');
+$pdf->Cell(15, 6, number_format($total_unidades, 0), 1, 0, 'R');
+$pdf->Cell(10, 6, number_format($total_cajas, 0), 1, 1, 'R');
 
-$pdf->Ln(8);
-
-// PERSONAL INVOLUCRADO
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(40, 6, 'PERSONAL INVOLUCRADO (Cto. Frio y/o Carque)', 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'BU', 9);
+$pdf->Cell(195, 5, 'PERSONAL INVOLUCRADO (Cto. Frio y/o Carque)', 0, 1, 'C');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Firma:', 0, 0, 'L');
+$pdf->Cell(20, 5, 'Firmas:', 'LT', 0, 'L');
+$pdf->Cell(120, 5, '', 'TB', 0, 'L');
+$pdf->Cell(20, 5, '', 'T', 0, 'L');
+$pdf->Cell(35, 5, '', 'TRB', 1, 'L');
+
+$pdf->Cell(20, 5, '', 'L', 0, 'L');
+$pdf->Cell(120, 5, '', 'TB', 0, 'L');
+$pdf->Cell(20, 5, '', 0, 0, 'L');
+$pdf->Cell(35, 5, '', 'TRB', 1, 'L');
+
+$pdf->Cell(20, 5, '', 'L', 0, 'L');
+$pdf->Cell(120, 5, '', 'TB', 0, 'L');
+$pdf->Cell(20, 5, '', 0, 0, 'L');
+$pdf->Cell(35, 5, '', 'TRB', 1, 'L');
+
+$pdf->Cell(195, 3, '', 'LBR', 1, 'L');
+
+$pdf->Ln(3);
+
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(35, 5, 'Conductor:', 1, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(50, 6, $conductor, 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(20, 6, 'Firma:', 0, 1, 'L');
+$pdf->Cell(55, 5, $conductor, 1, 0, 'L');
+$pdf->Cell(105, 5, 'Firma:', 1, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Escolta:', 0, 0, 'L');
+$pdf->Cell(35, 5, 'Escolta:', 1, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(50, 6, $ayudante, 0, 0, 'L');
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(20, 6, 'Firma:', 0, 1, 'L');
+$pdf->Cell(55, 5, $ayudante, 1, 0, 'L');
+$pdf->Cell(105, 5, 'Firma:', 1, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(35, 6, 'Hora Salida Planta', 0, 0, 'L');
+$pdf->Cell(35, 5, 'Hora Salida Planta:', 1, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, '', 0, 0, 'L');
+$pdf->Cell(55, 5, '', 1, 0, 'L');
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(35, 6, 'Hora Llegada Aeropuerto:', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, '', 0, 1, 'L');
+$pdf->Cell(52, 5, 'Hora Llegada Aeropuerto:', 1, 0, 'L');
+$pdf->Cell(53, 5, '', 1, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Precinto No.', 0, 0, 'L');
+$pdf->Cell(35, 5, 'Precinto No.', 1, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, $precinto, 0, 0, 'L');
+$pdf->Cell(55, 5, $precinto, 1, 0, 'L');
 $pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'PMC No.', 0, 0, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(30, 6, '', 0, 1, 'L');
-
-$pdf->Ln(5);
-
-// OBSERVACIONES
-$pdf->SetFont('Helvetica', 'B', 9);
-$pdf->Cell(25, 6, 'Observaciones:', 0, 1, 'L');
-$pdf->SetFont('Helvetica', '', 9);
-$pdf->MultiCell(0, 5, 'Una vez realizada la operacion, se hace su cierre correspondiente, garantizando el selle del vehiculo a la salida de la compania con precinto de seguridad.');
+$pdf->Cell(105, 5, 'PNC No.', 1, 1, 'L');
+$pdf->Cell(195, 7, 'Observaciones:', 1, 1, 'L');
+$pdf->Ln(3);
 
 $pdf->Output('I', 'Reporte_Despacho_' . $numero_factura . '.pdf');
