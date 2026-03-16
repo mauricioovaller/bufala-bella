@@ -1,37 +1,63 @@
 // src/components/Layout.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Home, Users, ShoppingCart, Package, Menu, X, LogOut, BarChart3, FileText, FlaskRound } from "lucide-react";
+import { Home, Users, ShoppingCart, Package, Menu, X, LogOut, BarChart3, FileText, FlaskRound, LayoutDashboard, Car, Factory, BookOpenCheck } from "lucide-react";
+import { getPermisos } from "../services/menuPrincipal/menuPrincipalService"; // Servicio para obtener permisos
 
+// Todas las opciones del menú (sin filtrar)
 const menuItems = [
   { to: "/", icon: <Home size={20} />, label: "Inicio" },
   { to: "/clientes", icon: <Users size={20} />, label: "Clientes" },
+  { to: "/conductores", icon: <Car size={20} />, label: "Conductores" },
+  { to: "/productos", icon: <Package size={20} />, label: "Productos" },
   { to: "/pedidos", icon: <ShoppingCart size={20} />, label: "Pedidos" },
   { to: "/samples", icon: <FlaskRound size={20} />, label: "Samples" },
-  { to: "/productos", icon: <Package size={20} />, label: "Productos" },
+  { to: "/produccion", icon: <Factory size={20} />, label: "Producción" },
   { to: "/consolidacion", icon: <BarChart3 size={20} />, label: "Consolidación" },
   { to: "/facturacion", icon: <FileText size={20} />, label: "Facturación" },
+  { to: "/complemento-facturas", icon: <BookOpenCheck size={20} />, label: "Complemento Facturación" },
+  { to: "/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
 ];
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
+  // Estados para permisos y carga
+  const [permisos, setPermisos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  // Cargar permisos al montar el componente
+  useEffect(() => {
+    async function cargarPermisos() {
+      try {
+        const rutasPermitidas = await getPermisos();
+        setPermisos(rutasPermitidas);
+      } catch (error) {
+        console.error("Error al obtener permisos:", error);
+        setPermisos([]); // En caso de error, asumimos que no tiene permisos
+      } finally {
+        setCargando(false);
+      }
+    }
+    cargarPermisos();
+  }, []);
+
+  // Filtrar las opciones del menú según los permisos obtenidos
+  const menuItemsPermitidos = cargando ? [] : menuItems.filter(item => 
+    permisos.includes(item.to)
+  );
+
   const handleLogout = () => {
-    // Limpiar sesión
     localStorage.clear();
     sessionStorage.clear();
-
-    // Redirigir a login externo
     window.location.href = "https://portal.datenbankensoluciones.com.co/";
   };
 
   return (
     <>
-      {/* Barra superior */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-800 to-slate-900 text-white shadow-lg border-b border-slate-700 px-4 sm:px-6 py-3 flex justify-between items-center">
-
-        {/* Logo y título */}
+        {/* Logo y título (sin cambios) */}
         <div className="flex items-center gap-3">
           <div className="bg-gradient-to-br from-blue-500 to-purple-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-white font-bold text-lg">SI</span>
@@ -46,73 +72,87 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Botón hamburguesa en móviles */}
+        {/* Mientras carga, mostramos un spinner */}
+        {cargando ? (
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            <span className="text-sm text-slate-300">Cargando menú...</span>
+          </div>
+        ) : (
+          <>
+            {/* Menú desktop (solo si hay opciones) */}
+            {menuItemsPermitidos.length > 0 && (
+              <nav className="hidden md:flex gap-1 items-center bg-slate-700/50 rounded-2xl p-1 backdrop-blur-sm overflow-x-auto flex-nowrap max-w-[calc(100vw-300px)]">
+                {menuItemsPermitidos.map((item) => {
+                  const isActive = location.pathname === item.to ||
+                    (item.to !== "/" && location.pathname.startsWith(item.to));
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+                        isActive
+                          ? "bg-white text-slate-900 shadow-lg transform scale-105"
+                          : "text-slate-300 hover:text-white hover:bg-slate-600/50"
+                      }`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+                <div className="w-px h-6 bg-slate-600 mx-2 flex-shrink-0"></div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap text-red-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 group"
+                >
+                  <LogOut size={18} className="group-hover:scale-110 transition-transform" />
+                  <span>Salir</span>
+                </button>
+              </nav>
+            )}
+            {/* Si no hay opciones permitidas, mostramos solo botón de salir */}
+            {menuItemsPermitidos.length === 0 && (
+              <div className="hidden md:flex items-center gap-2">
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-red-400 hover:text-white hover:bg-red-500/20 transition-all duration-200"
+                >
+                  <LogOut size={18} />
+                  <span>Salir</span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Botón de menú móvil (siempre visible, pero deshabilitado mientras carga) */}
         <button
           className="md:hidden text-white p-2 rounded-lg hover:bg-slate-700 transition-all duration-200"
           onClick={() => setMenuOpen(!menuOpen)}
+          disabled={cargando}
         >
           {menuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
-
-        {/* Menú en pantallas medianas/grandes - CORREGIDO */}
-        <nav className="hidden md:flex gap-1 items-center bg-slate-700/50 rounded-2xl p-1 backdrop-blur-sm">
-          {menuItems.map((item) => {
-            const isActive = location.pathname === item.to || 
-              (item.to !== "/" && location.pathname.startsWith(item.to));
-            
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? "bg-white text-slate-900 shadow-lg transform scale-105"
-                    : "text-slate-300 hover:text-white hover:bg-slate-600/50"
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-
-          {/* Separador visual */}
-          <div className="w-px h-6 bg-slate-600 mx-2"></div>
-
-          {/* Botón Salir */}
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-red-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 group"
-          >
-            <LogOut size={18} className="group-hover:scale-110 transition-transform" />
-            <span>Salir</span>
-          </button>
-        </nav>
       </header>
 
-      {/* Menú desplegable en móviles - CORREGIDO */}
-      {menuOpen && (
+      {/* Menú móvil (solo se muestra si no está cargando y hay opciones o queremos mostrar al menos el logout) */}
+      {menuOpen && !cargando && (
         <div className="md:hidden fixed inset-0 z-40 pt-16">
-          {/* Overlay con blur */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}
           />
-
-          {/* Panel del menú */}
-          <nav className="absolute top-0 right-0 w-80 h-full bg-slate-800 border-l border-slate-700 shadow-2xl">
-            {/* Header del menú móvil */}
+          <nav className="absolute top-0 right-0 w-80 h-full bg-slate-800 border-l border-slate-700 shadow-2xl overflow-y-auto">
             <div className="p-6 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Menú de Navegación</h2>
               <p className="text-slate-400 text-sm mt-1">Selecciona una opción</p>
             </div>
-
-            {/* Items del menú */}
             <div className="p-4 space-y-2">
-              {menuItems.map((item) => {
-                const isActive = location.pathname === item.to || 
+              {menuItemsPermitidos.map((item) => {
+                const isActive = location.pathname === item.to ||
                   (item.to !== "/" && location.pathname.startsWith(item.to));
-                
+
                 return (
                   <NavLink
                     key={item.to}
@@ -132,15 +172,13 @@ export default function Layout() {
                 );
               })}
             </div>
-
-            {/* Botón Salir en móviles */}
-            <div className="absolute bottom-6 left-6 right-6">
+            <div className="p-4 border-t border-slate-700">
               <button
                 onClick={() => {
                   setMenuOpen(false);
                   setTimeout(handleLogout, 300);
                 }}
-                className="flex items-center justify-center gap-3 w-full p-4 rounded-xl text-base font-medium text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg transition-all duration-200 transform hover:scale-105"
+                className="flex items-center justify-center gap-3 w-full p-4 rounded-xl text-base font-medium text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg transition-all duration-200"
               >
                 <LogOut size={20} />
                 <span>Cerrar Sesión</span>
@@ -150,14 +188,14 @@ export default function Layout() {
         </div>
       )}
 
-      {/* Espacio para el contenido principal */}
+      {/* Contenido principal */}
       <main className="pt-20 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="container mx-auto px-4 sm:px-6 py-6">
           <Outlet />
         </div>
       </main>
 
-      {/* Efectos de gradiente decorativos */}
+      {/* Elementos decorativos de fondo */}
       <div className="fixed top-0 left-0 w-72 h-72 bg-purple-300/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
       <div className="fixed bottom-0 right-0 w-96 h-96 bg-blue-300/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
     </>

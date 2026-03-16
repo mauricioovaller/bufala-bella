@@ -53,7 +53,7 @@ $sqlEncabezado = "SELECT
                 INNER JOIN Agencias age ON enc.IdAgencia = age.IdAgencia
                 LEFT JOIN Planillas pl ON enc.Id_Planilla = pl.Id_Planilla
                 LEFT JOIN Conductores cond ON pl.Id_Conductor = cond.Id_Conductor
-                LEFT JOIN Ayudantes ayud ON pl.Id_Ayudante = ayud.Id_Ayudante
+                LEFT JOIN Conductores ayud ON pl.Id_Ayudante = ayud.Id_Conductor
                 WHERE
                     enc.Id_EncabInvoice = ?
                 GROUP BY 

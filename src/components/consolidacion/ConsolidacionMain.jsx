@@ -7,9 +7,9 @@ import {
   generarReporteTransporte,
   obtenerEstadisticasConsolidacion,
   actualizarFechaSalidaPedido,
-  actualizarDatosEnLote
+  actualizarDatosEnLote,
+  obtenerPedidosPorFecha
 } from '../../services/consolidacionService';
-import { obtenerPedidosPorFecha } from '../../services/facturacionService';
 import ModalVisorPreliminar from "../ModalVisorPreliminar";
 import { getDatosSelect } from '../../services/pedidosService';
 
@@ -108,11 +108,11 @@ export default function ConsolidacionMain() {
     try {
       // Usar el servicio que ya tienes
       const datos = await getDatosSelect();
-      
+
       if (datos) {
         setAerolineas(datos.aerolineas || []);
         setAgencias(datos.agencias || []);
-        
+
         console.log('Aerolíneas cargadas:', datos.aerolineas?.length || 0);
         console.log('Agencias cargadas:', datos.agencias?.length || 0);
       }
@@ -171,13 +171,17 @@ export default function ConsolidacionMain() {
           id: pedido.id,
           numero: pedido.numero,
           cliente: pedido.cliente,
+          region: pedido.region,
           fechaSalida: pedido.fecha, // ← Usar pedido.fecha que viene del backend
           fecha: pedido.fecha,
           cajas: pedido.cajas,
           tms: pedido.tms,
           pesoNeto: pedido.pesoNeto,
           valor: pedido.valor,
-          ordenCompra: pedido.ordenCompra
+          ordenCompra: pedido.ordenCompra,
+          estibas: pedido.estibas,
+          facturaNo: pedido.facturaNo || '',  // 👈 NUEVO
+          tipoDato: pedido.tipo || 'PED'  // 👈 Para identificar si es PED o SMP
         }));
 
         setPedidos(pedidosFormateados);
@@ -191,6 +195,16 @@ export default function ConsolidacionMain() {
     } finally {
       setLoadingPedidos(false);
     }
+  };
+
+  // Función para verificar si hay pedidos con factura
+  const hayPedidosFacturados = () => {
+    return pedidosEnRango.some(pedido => pedido.facturaNo && pedido.facturaNo.trim() !== '');
+  };
+
+  // Función para verificar si un pedido específico tiene factura
+  const tieneFactura = (pedido) => {
+    return pedido.facturaNo && pedido.facturaNo.trim() !== '';
   };
 
   // Función para recargar pedidos después de una actualización
@@ -281,7 +295,13 @@ export default function ConsolidacionMain() {
   };
 
   // Funciones para gestión de fechas
-  const iniciarEdicionFecha = (pedidoId, fechaActual) => {
+  const iniciarEdicionFecha = (pedidoId, fechaActual, pedidoObjeto) => {
+    // Verificar si el pedido tiene factura
+    if (pedidoObjeto && tieneFactura(pedidoObjeto)) {
+      setErrorPedidos(`No se puede modificar el pedido ${pedidoObjeto.numero} porque ya tiene factura: ${pedidoObjeto.facturaNo}`);
+      return;
+    }
+
     setEditandoFecha(pedidoId);
     setNuevaFecha(fechaActual);
     setMensajeExito(null);
@@ -342,6 +362,11 @@ export default function ConsolidacionMain() {
 
   // 👇 NUEVA FUNCIÓN: Actualizar datos en lote
   const handleActualizarEnLote = async () => {
+    // Verificar si hay pedidos facturados
+    if (hayPedidosFacturados()) {
+      setErrorPedidos('No se pueden actualizar pedidos que ya tienen factura asignada');
+      return;
+    }
     if (!datosEnLote.aerolineaId || !datosEnLote.agenciaId) {
       setErrorPedidos('Aerolínea y Agencia son campos obligatorios');
       return;
@@ -352,7 +377,7 @@ export default function ConsolidacionMain() {
 
     try {
       const resultado = await actualizarDatosEnLote(filtros, datosEnLote);
-      
+
       setMensajeExito({
         tipo: 'success',
         mensaje: `Datos actualizados correctamente para ${resultado.pedidosActualizados} pedidos`,
@@ -361,7 +386,7 @@ export default function ConsolidacionMain() {
 
       // Recargar los pedidos para ver los cambios
       await recargarPedidos();
-      
+
       // Limpiar el formulario
       setDatosEnLote({
         guiaMaster: '',
@@ -369,7 +394,7 @@ export default function ConsolidacionMain() {
         aerolineaId: '',
         agenciaId: ''
       });
-      
+
       setMostrarGestionEnLote(false);
 
     } catch (err) {
@@ -537,18 +562,18 @@ export default function ConsolidacionMain() {
                   Mostrando {pedidosEnRango.length} de {pedidos.length} pedidos en el rango
                 </div>
               </div>
-              
+
               {/* 👇 NUEVO: Botón para gestión en lote */}
               <button
                 onClick={() => setMostrarGestionEnLote(!mostrarGestionEnLote)}
-                disabled={pedidosEnRango.length === 0}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  pedidosEnRango.length === 0
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : mostrarGestionEnLote
+                disabled={pedidosEnRango.length === 0 || hayPedidosFacturados()}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${pedidosEnRango.length === 0 || hayPedidosFacturados()
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : mostrarGestionEnLote
                     ? "bg-red-500 hover:bg-red-600 text-white"
                     : "bg-blue-500 hover:bg-blue-600 text-white"
-                }`}
+                  }`}
+                title={hayPedidosFacturados() ? "No disponible para pedidos facturados" : ""}
               >
                 {mostrarGestionEnLote ? "❌ Cancelar Lote" : "📦 Gestión en Lote"}
               </button>
@@ -560,7 +585,7 @@ export default function ConsolidacionMain() {
                 <h3 className="text-lg font-semibold text-blue-800 mb-3">
                   Actualización en Lote para {pedidosEnRango.length} Pedidos
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                   {/* Guía Master */}
                   <div className="space-y-1">
@@ -627,7 +652,7 @@ export default function ConsolidacionMain() {
                   <div className="text-sm text-blue-600">
                     Se aplicará a todos los {pedidosEnRango.length} pedidos del rango seleccionado
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <button
                       onClick={() => setMostrarGestionEnLote(false)}
@@ -637,12 +662,12 @@ export default function ConsolidacionMain() {
                     </button>
                     <button
                       onClick={handleActualizarEnLote}
-                      disabled={actualizandoEnLote || !datosEnLote.aerolineaId || !datosEnLote.agenciaId || loadingSelects}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        actualizandoEnLote || !datosEnLote.aerolineaId || !datosEnLote.agenciaId || loadingSelects
+                      disabled={actualizandoEnLote || !datosEnLote.aerolineaId || !datosEnLote.agenciaId || loadingSelects || hayPedidosFacturados()}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all ${actualizandoEnLote || !datosEnLote.aerolineaId || !datosEnLote.agenciaId || loadingSelects || hayPedidosFacturados()
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                           : "bg-green-500 hover:bg-green-600 text-white"
-                      }`}
+                        }`}
+                      title={hayPedidosFacturados() ? "No se puede aplicar a pedidos facturados" : ""}
                     >
                       {actualizandoEnLote ? (
                         <>
@@ -709,11 +734,18 @@ export default function ConsolidacionMain() {
                         : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
-                      <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 items-center">
+                      <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 items-center">
                         {/* Información del Pedido */}
                         <div className="lg:col-span-2">
-                          <p className="font-semibold text-gray-900">{pedido.numero}</p>
-                          <p className="text-sm text-gray-600">{pedido.cliente}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900">{pedido.numero}</p>
+                            {tieneFactura(pedido) && (
+                              <span className="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full">
+                                Fact: {pedido.facturaNo}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600">{pedido.cliente} - {pedido.region}</p>
                           <p className="text-xs text-gray-500">P.O: {pedido.ordenCompra}</p>
                         </div>
 
@@ -729,6 +761,13 @@ export default function ConsolidacionMain() {
                           <p className="text-sm text-gray-600">Peso/Valor</p>
                           <p className="font-medium text-gray-900">
                             {formatearNumero(pedido.pesoNeto)}kg / ${formatearNumero(pedido.valor)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-sm text-gray-600">Estibas</p>
+                          <p className="font-medium text-gray-900">
+                            {formatearNumero(pedido.estibas)}
                           </p>
                         </div>
 
@@ -787,9 +826,23 @@ export default function ConsolidacionMain() {
                                 {pedido.fechaSalida || 'No asignada'}
                               </span>
                               <button
-                                onClick={() => iniciarEdicionFecha(pedido.id, pedido.fechaSalida)}
-                                className="text-orange-500 hover:text-orange-700 text-sm transition-colors"
-                                title="Modificar fecha de salida"
+                                onClick={() => {
+                                  if (tieneFactura(pedido)) {
+                                    setErrorPedidos(`No se puede modificar el pedido ${pedido.numero} porque ya tiene factura: ${pedido.facturaNo}`);
+                                  } else {
+                                    iniciarEdicionFecha(pedido.id, pedido.fechaSalida, pedido);
+                                  }
+                                }}
+                                className={`text-sm transition-colors ${tieneFactura(pedido)
+                                  ? "text-gray-400 cursor-not-allowed"
+                                  : "text-orange-500 hover:text-orange-700"
+                                  }`}
+                                title={
+                                  tieneFactura(pedido)
+                                    ? `Facturado: ${pedido.facturaNo} - No editable`
+                                    : "Modificar fecha de salida"
+                                }
+                                disabled={tieneFactura(pedido)}
                               >
                                 ✏️
                               </button>
@@ -799,11 +852,17 @@ export default function ConsolidacionMain() {
 
                         {/* Estado */}
                         <div className="text-center">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${editandoFecha === pedido.id
-                            ? 'bg-orange-100 text-orange-800'
-                            : 'bg-green-100 text-green-800'
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${tieneFactura(pedido)
+                            ? 'bg-purple-100 text-purple-800'
+                            : editandoFecha === pedido.id
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-green-100 text-green-800'
                             }`}>
-                            {editandoFecha === pedido.id ? 'Editando' : 'Activo'}
+                            {tieneFactura(pedido)
+                              ? `Facturado`
+                              : editandoFecha === pedido.id
+                                ? 'Editando'
+                                : 'Activo'}
                           </span>
                         </div>
                       </div>
@@ -816,7 +875,7 @@ export default function ConsolidacionMain() {
             {/* Resumen */}
             {pedidosEnRango.length > 0 && (
               <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                   <div>
                     <p className="text-sm text-blue-600">Pedidos en Rango</p>
                     <p className="text-xl font-bold text-blue-700">{pedidosEnRango.length}</p>
@@ -831,6 +890,12 @@ export default function ConsolidacionMain() {
                     <p className="text-sm text-blue-600">Peso Total</p>
                     <p className="text-xl font-bold text-blue-700">
                       {formatearNumero(pedidosEnRango.reduce((sum, p) => sum + p.pesoNeto, 0))} kg
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-600">Estibas</p>
+                    <p className="text-xl font-bold text-blue-700">
+                      {formatearNumero(pedidosEnRango.reduce((sum, p) => sum + p.estibas, 0))}
                     </p>
                   </div>
                   <div>

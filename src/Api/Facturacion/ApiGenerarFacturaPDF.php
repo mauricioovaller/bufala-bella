@@ -36,6 +36,7 @@ $sqlEncabezado = "SELECT
                     age.NOMAGENCIA AS Agencia,
                     'FCA AEROPUERTO' AS Termino_Negociacion,
                     enc.CantidadEstibas,
+                    enc.TipoPedido,
                     ROUND(SUM(det.Kilogramos), 2) AS tot_kgm_netos,
                     ROUND(SUM(det.Kilogramos) * 2.6, 2) AS tot_kgm_brutos,
                     ROUND(SUM(det.Kilogramos * det.ValKilogramo), 2) AS total_valor
@@ -69,6 +70,7 @@ $stmtEncabezado->bind_result(
     $agencia,
     $termino_negociacion,
     $cantidad_estibas,
+    $tipo_pedido,
     $tot_kgm_netos,
     $tot_kgm_brutos,
     $total_valor
@@ -247,9 +249,9 @@ class PDF extends FPDF
         $this->SetX(90);
         $this->Cell(60, 4, 'Nit. 900.254.183-4', 0, 1, 'C');
         $this->SetX(90);
-        $this->Cell(60, 4, 'Resolucion No. 18764072143394  Vigente de Jun-04-2024 Hasta Dic-04-2025', 0, 1, 'C');
+        $this->Cell(60, 4, 'Resolucion No. 18764102570782  Vigente de Dic-04-2025 Hasta Jun-04-2027', 0, 1, 'C');
         $this->SetX(90);
-        $this->Cell(60, 4, 'Numeracion Autorizada FEX-1105 al FEX-5000', 0, 1, 'C');
+        $this->Cell(60, 4, 'Numeracion Autorizada FEX-2337 al FEX-5000', 0, 1, 'C');
 
         $this->Ln(3);
     }
@@ -359,8 +361,8 @@ foreach ($detalles as $detalle) {
     $pdf->Cell(15, 4, $detalle['codigo_fda'], 0, 0, 'C');
     $pdf->Cell(11, 4, number_format($detalle['kilogramos'], 2), 0, 0, 'R');
     $pdf->Cell(8, 4, number_format($detalle['embalaje'], 0), 0, 0, 'C');
-    $pdf->Cell(12, 4, number_format($detalle['unidades'], 0), 0, 0, 'R');
-    $pdf->Cell(11, 4, number_format($detalle['cajas'], 0), 0, 0, 'R');
+    $pdf->Cell(12, 4, number_format($detalle['unidades'], 2), 0, 0, 'R');
+    $pdf->Cell(11, 4, number_format($detalle['cajas'], 2), 0, 0, 'R');
 
     $x_despues_producto = $pdf->GetX();
     $y_despues_producto = $pdf->GetY();
@@ -390,8 +392,8 @@ $pdf->SetFont('Helvetica', 'B', 8);
 $pdf->Cell(37, 6, 'Total   ', 0, 0, 'R');
 $pdf->Cell(11, 6, number_format($tot_kgm_netos, 2), 0, 0, 'R');
 $pdf->Cell(8, 6, '', 0, 0, 'R');
-$pdf->Cell(12, 6, number_format($totUnidades, 0), 0, 0, 'R');
-$pdf->Cell(12, 6, number_format($totCajas, 0), 0, 0, 'R');
+$pdf->Cell(12, 6, number_format($totUnidades, 2), 0, 0, 'R');
+$pdf->Cell(12, 6, number_format($totCajas, 2), 0, 0, 'R');
 $pdf->Cell(98, 6, '', 0, 0, 'R');
 $pdf->Cell(20, 6, '$' . number_format($total_general, 2), 0, 1, 'R');
 $pdf->Cell(198, 0.5, '', 'TB', 1, 'C');
@@ -497,6 +499,32 @@ $pdf->SetFont('Helvetica', 'B', 8);
 $pdf->Cell(22, 4, '', 0, 0, 'R');
 $pdf->Cell(34, 4, 'Us $ TOTAL AMOUNT', 0, 0, 'R');
 $pdf->Cell(32, 4, utf8_decode($valor_en_letras), 0, 1, 'L');
+
+// Agregar espacio antes del mensaje (opcional)
+$pdf->Ln(4); // 4mm de espacio
+
+// Verificar la condición
+if ($tipo_pedido == 'sample') {
+    // Cambiar a fuente más grande y negrita
+    $pdf->SetFont('Helvetica', 'B', 12); // Tamaño 12 en negrita
+    
+    // Obtener el ancho de la página
+    $ancho_pagina = $pdf->GetPageWidth();
+    
+    // Calcular posición X para centrar horizontalmente
+    $mensaje = 'MUESTRA SIN VALOR COMERCIAL';
+    $ancho_texto = $pdf->GetStringWidth($mensaje);
+    $posicion_x = ($ancho_pagina - $ancho_texto) / 2;
+    
+    // Posicionar en X calculada (Y se mantiene automáticamente)
+    $pdf->SetX($posicion_x);
+    
+    // Escribir el mensaje centrado
+    $pdf->Cell($ancho_texto, 6, utf8_decode($mensaje), 0, 1, 'C');
+    
+    // Volver a la fuente original si es necesario
+    $pdf->SetFont('Helvetica', 'B', 8);
+}
 
 
 

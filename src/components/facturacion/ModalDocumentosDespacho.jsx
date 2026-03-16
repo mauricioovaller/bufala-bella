@@ -52,7 +52,7 @@ const ModalDocumentosDespacho = ({
             // 🔴 CORREGIDO: Usar las propiedades correctas del backend
             if (conductoresProp && conductoresProp.length > 0) {
                 console.log('🚚 Conductores cargados desde props:', conductoresProp);
-                
+
                 // CORRECCIÓN: Usar Id_Conductor y Nombre (con mayúsculas)
                 const conductoresConIds = conductoresProp.map((conductor, index) => ({
                     ...conductor,
@@ -64,25 +64,26 @@ const ModalDocumentosDespacho = ({
                     tipoVehiculo: conductor.tipoVehiculo || 'No especificado',
                     placa: conductor.placa || 'No especificado'
                 }));
-                
+
                 setConductores(conductoresConIds);
                 console.log('👥 Conductores procesados:', conductoresConIds);
-                
+
                 // Crear ayudantes a partir de los conductores
                 const ayudantesFromConductores = conductoresConIds.map(conductor => ({
-                    id: `${conductor.id}A`, // IDs con sufijo para evitar conflictos
+                    id: conductor.Id_Conductor || conductor.id, // IDs con sufijo para evitar conflictos
                     nombre: conductor.nombre,
                     documento: conductor.documento,
                     telefono: conductor.telefono,
                     tipoVehiculo: conductor.tipoVehiculo,
                     placa: conductor.placa
                 }));
-                
+
                 // Agregar opción "Sin Ayudante"
                 const opcionesAyudantes = [
                     ...ayudantesFromConductores,
                     {
-                        id: "sin-ayudante",
+                        id: "0",
+                        Id_Conductor: "0",
                         nombre: "Sin Ayudante",
                         documento: "N/A",
                         telefono: "N/A",
@@ -90,15 +91,15 @@ const ModalDocumentosDespacho = ({
                         placa: "N/A"
                     }
                 ];
-                
+
                 setAyudantes(opcionesAyudantes);
                 console.log('👥 Ayudantes cargados:', opcionesAyudantes);
-                
+
             } else {
                 console.log('⚠️ No hay conductores disponibles desde props, usando datos mock');
                 // Usar datos mock como respaldo
                 setConductores(conductoresMock);
-                
+
                 const ayudantesFromConductores = conductoresMock.map(conductor => ({
                     id: `${conductor.id}A`,
                     nombre: conductor.nombre,
@@ -107,7 +108,7 @@ const ModalDocumentosDespacho = ({
                     tipoVehiculo: conductor.tipoVehiculo,
                     placa: conductor.placa
                 }));
-                
+
                 const opcionesAyudantes = [
                     ...ayudantesFromConductores,
                     {
@@ -119,10 +120,10 @@ const ModalDocumentosDespacho = ({
                         placa: "N/A"
                     }
                 ];
-                
+
                 setAyudantes(opcionesAyudantes);
             }
-            
+
             setCargandoDatos(false);
         } catch (error) {
             console.error('Error cargando datos:', error);
@@ -150,6 +151,22 @@ const ModalDocumentosDespacho = ({
                 confirmButtonColor: '#3085d6',
             });
             return;
+        }
+
+        // 🔴 NUEVA VALIDACIÓN: Conductor y Ayudante no pueden ser la misma persona
+        if (ayudanteSeleccionado && ayudanteSeleccionado !== "0") {
+            const conductor = conductores.find(c => c.id === conductorSeleccionado);
+            const ayudante = ayudantes.find(a => a.id === ayudanteSeleccionado);
+
+            if (conductor && ayudante && conductor.nombre === ayudante.nombre) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Selección inválida',
+                    text: 'El conductor y el ayudante no pueden ser la misma persona',
+                    confirmButtonColor: '#3085d6',
+                });
+                return;
+            }
         }
 
         if (!precintoSeguridad) {
@@ -180,7 +197,7 @@ const ModalDocumentosDespacho = ({
 
             const configuracion = {
                 conductor: conductor,
-                ayudante: ayudante && ayudante.id !== "sin-ayudante" ? ayudante : null,
+                ayudante: ayudante && ayudante.id !== "0" ? ayudante : null,
                 precintoSeguridad: precintoSeguridad,
                 placaVehiculo: placaVehiculo, // 🔴 NUEVO
                 descripcionVehiculo: descripcionVehiculo // 🔴 NUEVO
@@ -191,30 +208,13 @@ const ModalDocumentosDespacho = ({
             // Llamar al handler del padre para guardar la configuración
             await onGuardarConfiguracion(configuracion);
 
-            // Éxito
-            Swal.fire({
-                icon: 'success',
-                title: '¡Configuración Guardada!',
-                html: `
-                    <div class="text-left">
-                        <p><strong>Conductor:</strong> ${conductor.nombre}</p>
-                        <p><strong>Ayudante:</strong> ${ayudante && ayudante.id !== "sin-ayudante" ? ayudante.nombre : 'No asignado'}</p>
-                        <p><strong>Precinto:</strong> ${precintoSeguridad}</p>
-                        <p><strong>Placa:</strong> ${placaVehiculo}</p>
-                        <p><strong>Vehículo:</strong> ${descripcionVehiculo}</p>
-                        <p><strong>Facturas:</strong> ${facturasSeleccionadas.length}</p>
-                    </div>
-                    <p class="mt-3 text-sm text-green-600">✅ Ahora puedes generar cualquier documento</p>
-                `,
-                confirmButtonColor: '#10b981',
-                confirmButtonText: 'Aceptar'
-            });
+            
 
             // Limpiar y cerrar
             setConductorSeleccionado('');
             setAyudanteSeleccionado('');
             setPrecintoSeguridad('');
-            onClose();
+            
 
         } catch (error) {
             console.error('Error guardando configuración:', error);
@@ -314,7 +314,7 @@ const ModalDocumentosDespacho = ({
                                     <option value="">Seleccionar conductor</option>
                                     {conductores.map((conductor) => (
                                         <option key={conductor.id} value={conductor.id}>
-                                            {conductor.nombre} - {conductor.documento} - {conductor.placa}
+                                            {conductor.nombre}
                                         </option>
                                     ))}
                                 </select>
@@ -378,7 +378,7 @@ const ModalDocumentosDespacho = ({
                                     <option value="">Seleccionar ayudante</option>
                                     {ayudantes.map((ayudante) => (
                                         <option key={ayudante.id} value={ayudante.id}>
-                                            {ayudante.nombre} - {ayudante.documento}
+                                            {ayudante.nombre}
                                         </option>
                                     ))}
                                 </select>
@@ -386,7 +386,7 @@ const ModalDocumentosDespacho = ({
                         </div>
 
                         {/* INFORMACIÓN DEL AYUDANTE SELECCIONADO */}
-                        {ayudanteSeleccionado && ayudantes.find(a => a.id === ayudanteSeleccionado)?.nombre !== "Sin Ayudante" && (
+                        {ayudanteSeleccionado && ayudantes.find(a => a.id === ayudanteSeleccionado)?.nombre !== "0" && (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                                 <h4 className="font-medium text-green-800 mb-3">Información del Ayudante</h4>
                                 <div className="grid grid-cols-2 gap-4 text-sm">

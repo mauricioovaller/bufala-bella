@@ -1,31 +1,28 @@
-// PRIMERO: Pedidos.jsx con nuevo diseño visual
+// src/pages/Pedidos.jsx
 import React, { useRef, useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import PedidoHeader from "../components/pedidos/PedidoHeader";
 import PedidoDetail from "../components/pedidos/PedidoDetail";
 import ModalSeleccionDocumento from "../components/ModalSeleccionDocumento";
 import ModalVisorPreliminar from "../components/ModalVisorPreliminar";
-import ModalImpresionMultiple from "../components/ModalImpresionMultiple"; // 👈 NUEVO
+import ModalImpresionMultiple from "../components/ModalImpresionMultiple";
 import {
   getDatosSelect,
   getClienteRegion,
+  validarPurchaseOrder,
   guardarPedido,
   getPedidos,
   getPedidoEspecifico,
   actualizarPedido,
   imprimirPedido,
-  imprimirPedidosMultiples, // 👈 NUEVO - agregar en services
+  imprimirPedidosMultiples,
+  getRangoPedidos,
 } from "../services/pedidosService";
 
-
 const comentariosPorCliente = {
-  "11": "Indicaciones Especiales: CON CODIGO DE BARRAS", // Cliente ID 11  
-  // AgregaR aquí los clientes que necesiten comentarios por defecto
+  "11": "Indicaciones Especiales: CON CODIGO DE BARRAS",
 };
 
-// --------------------------------------------------------------
-// Función para fecha actual en formato ISO (YYYY-MM-DD)
-// --------------------------------------------------------------
 function todayISODate() {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -33,15 +30,12 @@ function todayISODate() {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-// --------------------------------------------------------------
-// Función para sumar días a una fecha en formato ISO
-// --------------------------------------------------------------
 function sumarDias(fechaISO, dias) {
   if (!fechaISO) return "";
   const [year, month, day] = fechaISO.split("-").map(Number);
   const fecha = new Date(year, month - 1, day);
   fecha.setDate(fecha.getDate() + dias);
-  return fecha.toISOString().slice(0, 10); // siempre YYYY-MM-DD
+  return fecha.toISOString().slice(0, 10);
 }
 
 export default function Pedidos() {
@@ -67,7 +61,7 @@ export default function Pedidos() {
   });
 
   // --------------------------------------------------------------
-  // Días asociados al cliente (para cálculos automáticos de fechas)
+  // Días asociados al cliente
   // --------------------------------------------------------------
   const [diasCliente, setDiasCliente] = useState({
     salida: 0,
@@ -82,7 +76,7 @@ export default function Pedidos() {
   const [items, setItems] = useState([]);
 
   // --------------------------------------------------------------
-  // 👇 NUEVO: Estados para comentarios seleccionados
+  // Estados para comentarios seleccionados
   // --------------------------------------------------------------
   const [comentariosSeleccionados, setComentariosSeleccionados] = useState({
     incluirPrimario: true,
@@ -102,21 +96,15 @@ export default function Pedidos() {
     agencias: [],
   });
 
-  // Regiones dependientes del cliente seleccionado
   const [regiones, setRegiones] = useState([]);
-
-  // Estados de carga inicial
   const [loadingDatos, setLoadingDatos] = useState(true);
   const [errorDatos, setErrorDatos] = useState(null);
 
-  // Estados de carga inicial del modal de selección de documento
   const [mostrarSelectorDocumento, setMostrarSelectorDocumento] = useState(false);
-  
-  // 👇 NUEVO: Estado para modal de impresión múltiple
   const [mostrarImpresionMultiple, setMostrarImpresionMultiple] = useState(false);
 
   // --------------------------------------------------------------
-  // Estados para búsqueda y selección de pedidos - MEJORADOS
+  // Estados para búsqueda y selección de pedidos
   // --------------------------------------------------------------
   const [pedidos, setPedidos] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -130,6 +118,11 @@ export default function Pedidos() {
   const [mostrarModal, setMostrarModal] = useState(false);
 
   // --------------------------------------------------------------
+  // 👇 NUEVO: Estado para controlar el guardado (evita doble clic)
+  // --------------------------------------------------------------
+  const [isSaving, setIsSaving] = useState(false);
+
+  // --------------------------------------------------------------
   // Refs para validaciones
   // --------------------------------------------------------------
   const headerRefs = {
@@ -139,11 +132,12 @@ export default function Pedidos() {
     aerolineaId: useRef(null),
     agenciaId: useRef(null),
     noGuia: useRef(null),
+    purchaseOrder: useRef(null),
   };
   const itemRefs = useRef([]);
 
   // --------------------------------------------------------------
-  // Cargar datos iniciales (clientes, productos, etc.)
+  // Cargar datos iniciales
   // --------------------------------------------------------------
   useEffect(() => {
     async function cargarDatos() {
@@ -173,7 +167,6 @@ export default function Pedidos() {
   // Manejo de cambios en encabezado
   // --------------------------------------------------------------
   async function handleHeaderChange(field, value) {
-    // Cambio de cliente → cargar días y regiones
     if (field === "clienteId") {
       const clienteSel = datosSelect.clientes.find(
         (c) => String(c.Id_Cliente) === String(value)
@@ -187,7 +180,6 @@ export default function Pedidos() {
         };
         setDiasCliente(nuevosDias);
 
-        // Cargar regiones asociadas al cliente
         try {
           const res = await getClienteRegion(value);
           setRegiones(res.success ? res.regiones || [] : []);
@@ -199,17 +191,11 @@ export default function Pedidos() {
           setRegiones([]);
         }
 
-        // Lógica para comentarios automáticos
         let nuevoComentario = header.comentarios || "";
-
-        // Aplicar comentario por defecto si existe para este cliente
         const comentarioPorDefecto = comentariosPorCliente[String(value)];
         if (comentarioPorDefecto) {
-          // Verificar si el comentario automático ya está presente
           const comentarioYaExiste = nuevoComentario.includes(comentarioPorDefecto);
-
           if (!comentarioYaExiste) {
-            // Si ya hay comentarios, agregamos el nuevo con un separador
             if (nuevoComentario) {
               nuevoComentario += "\n\n---\n\n" + comentarioPorDefecto;
             } else {
@@ -218,43 +204,37 @@ export default function Pedidos() {
           }
         }
 
-        // 👇 SOLO actualizar el cliente y limpiar campos, SIN calcular fechas
         setHeader((p) => ({
           ...p,
           clienteId: value,
           regionId: "",
-          bodegaId: "", // 👈 Limpiar bodega al cambiar cliente
-          comentarios: nuevoComentario, // 👈 Aquí aplicamos el comentario automático
-          // ❌ QUITAR todos los cálculos automáticos de fechas
+          bodegaId: "",
+          comentarios: nuevoComentario,
         }));
         return;
       }
     }
 
-    // 👇 Cambio de región → cargar bodega automáticamente
     if (field === "regionId") {
       const regionSeleccionada = regiones.find(
         (r) => String(r.idClienteRegion) === String(value)
       );
-
       if (regionSeleccionada && regionSeleccionada.idBodega) {
-        // Cargar automáticamente la bodega asociada a la región
         setHeader((p) => ({
           ...p,
           regionId: value,
-          bodegaId: regionSeleccionada.idBodega // 👈 Cargar bodega automáticamente
+          bodegaId: regionSeleccionada.idBodega
         }));
       } else {
         setHeader((p) => ({
           ...p,
           regionId: value,
-          bodegaId: "" // 👈 Limpiar bodega si no hay asociada
+          bodegaId: ""
         }));
       }
       return;
     }
 
-    // 👇 NUEVO: Cambio de fechaSalida → recalcular otras fechas
     if (field === "fechaSalida") {
       setHeader((p) => ({
         ...p,
@@ -265,24 +245,27 @@ export default function Pedidos() {
         fechaDelivery: diasCliente.delivery
           ? sumarDias(value, diasCliente.delivery)
           : "",
-        fechaIngreso: value, // 👈 Misma fecha que salida
+        fechaIngreso: value,
       }));
       return;
     }
 
-    // 👇 Cambio de fechaOrden → SOLO actualizar ese campo, SIN cálculos
     if (field === "fechaOrden") {
       setHeader((p) => ({ ...p, fechaOrden: value }));
       return;
     }
 
-    // Otros cambios simples
+    if (field === "purchaseOrder") {
+      setHeader((p) => ({ ...p, purchaseOrder: value }));
+      if (value && value.trim() !== "") {
+        validarPurchaseOrderEnTiempoReal(value);
+      }
+      return;
+    }
+
     setHeader((p) => ({ ...p, [field]: value }));
   }
 
-  // --------------------------------------------------------------
-  // 👇 NUEVO: Manejo de cambios en comentarios seleccionados
-  // --------------------------------------------------------------
   function handleComentariosChange(field, value) {
     setComentariosSeleccionados(prev => ({
       ...prev,
@@ -290,17 +273,11 @@ export default function Pedidos() {
     }));
   }
 
-  // --------------------------------------------------------------
-  // Manejo de cambios en detalle
-  // --------------------------------------------------------------
   function handleItemsChange(newItems) {
     console.log("Datos recibidos del detalle:", newItems);
     setItems(newItems);
   }
 
-  // --------------------------------------------------------------
-  // Validaciones generales
-  // --------------------------------------------------------------
   function validateAll() {
     if (!header.fechaOrden) {
       headerRefs.fechaOrden.current?.focus();
@@ -339,7 +316,7 @@ export default function Pedidos() {
 
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      if (!it.producto || String(it.producto).trim() === "") { // 👈 Convertir a string
+      if (!it.producto || String(it.producto).trim() === "") {
         itemRefs.current[i]?.focus();
         Swal.fire(
           "Error",
@@ -348,7 +325,7 @@ export default function Pedidos() {
         );
         return false;
       }
-      if (!it.descripcion || String(it.descripcion).trim() === "") { // 👈 Convertir a string
+      if (!it.descripcion || String(it.descripcion).trim() === "") {
         itemRefs.current[i]?.focus();
         Swal.fire(
           "Error",
@@ -357,7 +334,7 @@ export default function Pedidos() {
         );
         return false;
       }
-      if (!it.embalaje || String(it.embalaje).trim() === "") { // 👈 Convertir a string
+      if (!it.embalaje || String(it.embalaje).trim() === "") {
         itemRefs.current[i]?.focus();
         Swal.fire(
           "Error",
@@ -389,37 +366,115 @@ export default function Pedidos() {
     return true;
   }
 
-  // --------------------------------------------------------------
-  // Guardar pedido (ahora decide si guardar nuevo o actualizar)
-  // --------------------------------------------------------------
-  async function handleSave() {
-    if (!validateAll()) return;
+  const validarPurchaseOrderUnica = async (purchaseOrder) => {
+    if (!purchaseOrder || purchaseOrder.trim() === "") {
+      return true;
+    }
 
     try {
-      // 👇 MODIFICADO: Incluir comentarios seleccionados en el encabezado
+      const res = await validarPurchaseOrder(purchaseOrder, header.id || 0);
+
+      if (res.success && res.existe) {
+        const result = await Swal.fire({
+          icon: 'warning',
+          title: 'Purchase Order Duplicada',
+          html: `
+          <div class="text-left">
+            <p class="mb-2">${res.mensaje}</p>
+            <p class="text-sm text-gray-600 mt-2">
+              ¿Desea continuar con el guardado de todas formas?
+            </p>
+          </div>
+        `,
+          showCancelButton: true,
+          confirmButtonText: 'Sí, Continuar',
+          cancelButtonText: 'No, Corregir',
+          confirmButtonColor: '#f97316',
+          cancelButtonColor: '#6b7280'
+        });
+        if (result.isConfirmed) {
+          return true;
+        } else {
+          headerRefs.purchaseOrder.current?.focus();
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Error validando Purchase Order:", error);
+      return true;
+    }
+  };
+
+  const validarPurchaseOrderEnTiempoReal = async (purchaseOrder) => {
+    if (!purchaseOrder || purchaseOrder.trim() === "") {
+      return;
+    }
+
+    setTimeout(async () => {
+      try {
+        const res = await validarPurchaseOrder(purchaseOrder, header.id || 0);
+        if (res.success && res.existe) {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Purchase Order Duplicada',
+            html: `
+            <div class="text-left">
+              <p class="mb-2">${res.mensaje}</p>
+              <p class="text-sm text-gray-600 mt-2">
+                Verifique si es correcto antes de guardar.
+              </p>
+            </div>
+          `,
+            confirmButtonText: 'Entendido',
+            confirmButtonColor: '#f97316',
+          });
+        }
+      } catch (error) {
+        console.error("Error validando Purchase Order:", error);
+      }
+    }, 1000);
+  };
+
+  // --------------------------------------------------------------
+  // Guardar pedido (ahora con protección contra doble clic)
+  // --------------------------------------------------------------
+  async function handleSave() {
+    if (isSaving) return; // 👈 Evita ejecución múltiple
+    setIsSaving(true);
+
+    try {
+      const poValido = await validarPurchaseOrderUnica(header.purchaseOrder);
+      if (!poValido) return;
+
+      if (!validateAll()) return;
+
+      const itemsConPesos = items.map(item => ({
+        ...item,
+        pesoNeto: item.pesoNeto || 0,
+        pesoBruto: item.pesoBruto || 0,
+        subtotal: item.subtotal || 0
+      }));
+
       const encabezado = {
         ...header,
-        comentariosSeleccionados: comentariosSeleccionados // 👈 Agregar esto
+        comentariosSeleccionados: comentariosSeleccionados
       };
 
-      // Si el pedido ya tiene ID (diferente de 0 o null/undefined), significa que ya existe en BD → ACTUALIZAR
       if (header.id && header.id !== 0) {
         const encabezadoConId = {
           ...encabezado,
           pedidoId: header.id,
         };
 
-        const res = await actualizarPedido(encabezadoConId, items);
+        const res = await actualizarPedido(encabezadoConId, itemsConPesos);
         if (res.success) {
           Swal.fire("¡Actualizado!", "Pedido actualizado correctamente.", "success");
-          // Opcional: refrescar el pedido desde backend
-          // handleSelectPedido(header.id);
         } else {
           Swal.fire("Error", res.message || "No se pudo actualizar.", "error");
         }
       } else {
-        // Si no tiene ID → GUARDAR NUEVO
-        const res = await guardarPedido(encabezado, items);
+        const res = await guardarPedido(encabezado, itemsConPesos);
         if (res.success) {
           const nuevoNumero = `PED-${String(res.idPedido).padStart(6, "0")}`;
           setHeader((p) => ({ ...p, id: res.idPedido, numero: nuevoNumero }));
@@ -430,45 +485,55 @@ export default function Pedidos() {
       }
     } catch (err) {
       Swal.fire("Error", "Ocurrió un error al procesar el pedido.", "error");
+    } finally {
+      setIsSaving(false); // 👈 Siempre restablece el estado
     }
   }
 
   // --------------------------------------------------------------
-  // Actualizar pedido
+  // Actualizar pedido (también con protección)
   // --------------------------------------------------------------
   async function handleUpdate() {
-    if (!header.id) {
-      Swal.fire("Aviso", "No hay pedido cargado para actualizar.", "info");
-      return;
-    }
-
-    if (!validateAll()) return;
+    if (isSaving) return;
+    setIsSaving(true);
 
     try {
-      // 👇 MODIFICADO: Incluir comentarios seleccionados
+      const poValido = await validarPurchaseOrderUnica(header.purchaseOrder);
+      if (!poValido) return;
+
+      if (!header.id) {
+        Swal.fire("Aviso", "No hay pedido cargado para actualizar.", "info");
+        return;
+      }
+
+      if (!validateAll()) return;
+
+      const itemsConPesos = items.map(item => ({
+        ...item,
+        pesoNeto: item.pesoNeto || 0,
+        pesoBruto: item.pesoBruto || 0,
+        subtotal: item.subtotal || 0
+      }));
+
       const encabezado = {
         ...header,
-        pedidoId: header.id,   // 👈 obligatorio para el backend
-        comentariosSeleccionados: comentariosSeleccionados // 👈 Agregar esto
+        pedidoId: header.id,
+        comentariosSeleccionados: comentariosSeleccionados
       };
 
-      const res = await actualizarPedido(encabezado, items);
+      const res = await actualizarPedido(encabezado, itemsConPesos);
       if (res.success) {
         Swal.fire("¡Actualizado!", "Pedido actualizado correctamente.", "success");
-        // refrescar el pedido desde backend
-        //handleSelectPedido(header.id);
       } else {
         Swal.fire("Error", res.message || "No se pudo actualizar.", "error");
       }
     } catch (err) {
       Swal.fire("Error", "Ocurrió un error al actualizar.", "error");
+    } finally {
+      setIsSaving(false);
     }
   }
 
-
-  // --------------------------------------------------------------
-  // Nuevo pedido
-  // --------------------------------------------------------------
   function handleNew() {
     setHeader({
       numero: `PED-000000`,
@@ -482,7 +547,7 @@ export default function Pedidos() {
       comentarios: "",
       purchaseOrder: "",
       cantidadEstibas: 1,
-      bodegaId: "", // 👈 Limpiar bodega también
+      bodegaId: "",
       aerolineaId: "107",
       agenciaId: "44",
       noGuia: "",
@@ -490,7 +555,6 @@ export default function Pedidos() {
     });
     setItems([]);
     setRegiones([]);
-    // 👇 NUEVO: Limpiar comentarios seleccionados
     setComentariosSeleccionados({
       incluirPrimario: true,
       incluirSecundario: true
@@ -498,11 +562,6 @@ export default function Pedidos() {
     itemRefs.current = [];
   }
 
-  // --------------------------------------------------------------
-  // 👇 FUNCIONES MEJORADAS para búsqueda de pedidos
-  // --------------------------------------------------------------
-
-  // Abrir modal y cargar pedidos
   async function handleOpenModal() {
     setShowModal(true);
     setCargandoPedidos(true);
@@ -523,27 +582,23 @@ export default function Pedidos() {
     }
   }
 
-  // Cerrar modal
   const cerrarModalBuscarPedidos = () => {
     setShowModal(false);
     setPedidos([]);
     setFiltroPedidos("");
   };
 
-  // Filtrar pedidos
   const pedidosFiltrados = pedidos.filter((p) => {
     if (!filtroPedidos) return true;
     const f = filtroPedidos.toString().trim().toLowerCase();
     return (
       String(p.idPedido).includes(f) ||
       (p.Nombre && p.Nombre.toLowerCase().includes(f)) ||
-      (p.FechaOrden && p.FechaOrden.toLowerCase().includes(f))
+      (p.FechaOrden && p.FechaOrden.toLowerCase().includes(f)) ||
+      (p.PurchaseOrder && p.PurchaseOrder.toLowerCase().includes(f))
     );
   });
 
-  // --------------------------------------------------------------
-  // Cargar pedido seleccionado (compatibilidad con varias formas de respuesta)
-  // --------------------------------------------------------------
   async function handleSelectPedido(id) {
     try {
       const res = await getPedidoEspecifico(id);
@@ -552,9 +607,6 @@ export default function Pedidos() {
         return;
       }
 
-      // Soportar varios formatos de respuesta:
-      // - { success: true, header: {...}, detalle: [...] }
-      // - { success: true, pedido: { header: {...}, detalle: [...] } }
       const apiHeader = res.header ?? res.pedido?.header ?? res.pedido ?? null;
       const apiDetalle = res.detalle ?? res.pedido?.detalle ?? res.pedido?.items ?? [];
 
@@ -563,7 +615,6 @@ export default function Pedidos() {
         return;
       }
 
-      // 1) Ajustar diasCliente si podemos encontrar el cliente en datosSelect
       const clienteIdStr = String(apiHeader.Id_Cliente ?? apiHeader.IdCliente ?? "");
       const clienteSel = datosSelect.clientes.find(
         (c) => String(c.Id_Cliente) === clienteIdStr
@@ -578,7 +629,6 @@ export default function Pedidos() {
         setDiasCliente(nuevosDias);
       }
 
-      // 2) Cargar regiones del cliente (para poblar el select de regiones)
       try {
         const regionesRes = await getClienteRegion(apiHeader.Id_Cliente);
         setRegiones(regionesRes.success ? regionesRes.regiones || [] : []);
@@ -587,7 +637,6 @@ export default function Pedidos() {
         setRegiones([]);
       }
 
-      // 3) Mapear el encabezado de la API a la forma que usa la UI
       const mappedHeader = {
         id: apiHeader.Id_EncabPedido ?? apiHeader.IdEncabPedido ?? apiHeader.id ?? null,
         numero:
@@ -612,33 +661,28 @@ export default function Pedidos() {
         guiaHija: apiHeader.Guia_Hija ?? apiHeader.GuiaHija ?? "",
       };
 
-      // 👇 NUEVO: Cargar comentarios seleccionados desde la API
       const comentariosCargados = {
         incluirPrimario: apiHeader.ComentarioPrimario === 1,
         incluirSecundario: apiHeader.ComentarioSecundario === 1
       };
 
-      // 4) Mapear detalle a los campos que usa PedidoDetail
       const mappedItems = (apiDetalle || []).map((d) => {
-        // Buscar información completa del producto y embalaje para recalcular
         const productoInfo = datosSelect.productos.find(
           p => String(p.Id_Producto) === String(d.Id_Producto ?? d.IdProducto ?? "")
         );
-
         const embalajeInfo = datosSelect.embalajes.find(
           e => String(e.Id_Embalaje) === String(d.Id_Embalaje ?? d.IdEmbalaje ?? "")
         );
-
         const cantidad = d.Cantidad ?? d.cantidad ?? 0;
         const precio = d.Precio ?? d.precio ?? 0;
         const pesoGr = productoInfo?.PesoGr ?? d.PesoGr ?? 0;
         const factorPesoBruto = productoInfo?.FactorPesoBruto ?? d.FactorPesoBruto ?? 0;
         const cantidadEmbalaje = embalajeInfo?.Cantidad ?? 0;
-
-        // Recalcular los campos como lo hace PedidoDetail
-        const pesoNeto = ((cantidad * cantidadEmbalaje * pesoGr) / 1000) || 0;
-        const pesoBruto = ((cantidad * cantidadEmbalaje * pesoGr * factorPesoBruto) / 1000) || 0;
-        const subtotal = pesoNeto * precio;
+        const pesoNetoCalculado = ((cantidad * cantidadEmbalaje * pesoGr) / 1000) || 0;
+        const pesoBrutoCalculado = ((cantidad * cantidadEmbalaje * pesoGr * factorPesoBruto) / 1000) || 0;
+        const pesoNeto = d.PesoNeto ?? pesoNetoCalculado;
+        const pesoBruto = d.PesoBruto ?? pesoBrutoCalculado;
+        const subtotal = d.ValorRegistro ?? (pesoNeto * precio) ?? 0;
 
         return {
           id: d.Id_DetPedido ?? d.IdDetPedido ?? d.id ?? null,
@@ -649,17 +693,15 @@ export default function Pedidos() {
           embalaje: d.Id_Embalaje ?? d.IdEmbalaje ?? "",
           cantidad: cantidad,
           precio: precio,
-          pesoNeto: pesoNeto,
-          pesoBruto: pesoBruto,
-          subtotal: subtotal,
+          pesoNeto: d.PesoNeto ?? pesoNeto,
+          pesoBruto: d.PesoBruto ?? pesoBruto,
+          subtotal: d.ValorRegistro ?? subtotal,
           cantidadEmbalaje: cantidadEmbalaje,
         };
       });
 
-      // 5) Aplicar al estado
       setHeader((p) => ({ ...p, ...mappedHeader }));
       setItems(mappedItems);
-      // 👇 NUEVO: Cargar comentarios seleccionados
       setComentariosSeleccionados(comentariosCargados);
       itemRefs.current = [];
 
@@ -671,9 +713,6 @@ export default function Pedidos() {
     }
   }
 
-  // --------------------------------------------------------------
-  // Otras acciones
-  // --------------------------------------------------------------
   function handleRefresh() {
     if (!header.id) {
       Swal.fire("Aviso", "Primero cargue o guarde un pedido.", "info");
@@ -682,23 +721,18 @@ export default function Pedidos() {
     handleSelectPedido(header.id);
   }
 
-  // --------------------------------------------------------------
-  // Función para manejar la impresión con selección de documento (INDIVIDUAL)
-  // --------------------------------------------------------------
   const handlePrint = async (tipoDocumento = null) => {
     if (!header.id) {
       Swal.fire("Aviso", "No hay pedido para imprimir.", "info");
       return;
     }
 
-    // Si no se especificó el tipo de documento, mostrar el selector
     if (!tipoDocumento) {
       setMostrarSelectorDocumento(true);
       return;
     }
 
     try {
-      // Mostrar loading
       Swal.fire({
         title: "Generando PDF...",
         text: `Generando ${getNombreDocumento(tipoDocumento)}`,
@@ -708,7 +742,6 @@ export default function Pedidos() {
         }
       });
 
-      // Detectar sistema operativo
       const ua = navigator.userAgent || navigator.vendor || window.opera;
       const esAndroid = /android/i.test(ua);
       const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
@@ -732,15 +765,12 @@ export default function Pedidos() {
         }
       }
 
-      // Generar el PDF con el tipo de documento especificado
       const blob = await imprimirPedido(header.id, tipoDocumento);
       const fileURL = URL.createObjectURL(blob);
 
-      // Cerrar loading
       Swal.close();
 
       if (esMovilOTablet) {
-        // Para móviles/tablets: abrir en nueva pestaña
         if (pestañaPreabierta) {
           pestañaPreabierta.location.href = fileURL;
         } else {
@@ -751,11 +781,8 @@ export default function Pedidos() {
           a.click();
           a.remove();
         }
-
-        // Limpiar URL después de 10 segundos
         setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
       } else {
-        // Para escritorio: mostrar en modal
         setUrlPDF(fileURL);
         setMostrarModal(true);
       }
@@ -771,79 +798,357 @@ export default function Pedidos() {
     }
   };
 
-  // --------------------------------------------------------------
-  // 👇 NUEVO: Función para impresión múltiple
-  // --------------------------------------------------------------
   const handlePrintMultiple = async (filtros) => {
     try {
-      // Mostrar loading
-      Swal.fire({
-        title: "Generando PDF Múltiple...",
-        text: `Generando ${filtros.pedidosEncontrados} pedidos`,
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
+      console.log("Filtros recibidos:", filtros);
 
-      // Detectar sistema operativo (misma lógica que handlePrint)
-      const ua = navigator.userAgent || navigator.vendor || window.opera;
-      const esAndroid = /android/i.test(ua);
-      const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-      const esWindows = /Win/i.test(ua);
-      const esMac = /Mac/i.test(ua);
+      const esModoUnSolo = filtros.formato === 'unSolo';
+      const esModoIndividuales = filtros.formato === 'individuales';
+      const esPorFechas = filtros.modo === 'porFechas';
+      const esPorNumeros = filtros.modo === 'porNumeros';
 
-      const esMovilOTablet = !esWindows && !esMac;
+      if (esPorFechas && esModoUnSolo) {
+        console.log("MODO: Por Fechas + Un solo documento");
+        Swal.fire({
+          title: "Generando PDF múltiple...",
+          text: `Generando ${filtros.pedidosEncontrados} pedidos`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
 
-      let pestañaPreabierta = null;
-      if (esMovilOTablet) {
-        try {
-          pestañaPreabierta = window.open("", "_blank");
-        } catch (e) {
-          pestañaPreabierta = null;
-        }
-      }
+        const blob = await imprimirPedidosMultiples(filtros);
+        const fileURL = URL.createObjectURL(blob);
 
-      // Generar el PDF múltiple
-      const blob = await imprimirPedidosMultiples(filtros);
-      const fileURL = URL.createObjectURL(blob);
+        Swal.close();
 
-      // Cerrar loading
-      Swal.close();
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        const esAndroid = /android/i.test(ua);
+        const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+        const esWindows = /Win/i.test(ua);
+        const esMac = /Mac/i.test(ua);
+        const esMovilOTablet = !esWindows && !esMac;
 
-      if (esMovilOTablet) {
-        // Para móviles/tablets: abrir en nueva pestaña
-        if (pestañaPreabierta) {
-          pestañaPreabierta.location.href = fileURL;
-        } else {
+        if (esMovilOTablet) {
           const a = document.createElement("a");
           a.href = fileURL;
           a.target = "_blank";
           document.body.appendChild(a);
           a.click();
           a.remove();
+          setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
+        } else {
+          setUrlPDF(fileURL);
+          setMostrarModal(true);
+        }
+      }
+      else if (esPorFechas && esModoIndividuales) {
+        console.log("MODO: Por Fechas + Documentos individuales");
+        Swal.fire({
+          title: "Buscando pedidos por fechas...",
+          text: `Buscando pedidos del ${filtros.fechaDesde} al ${filtros.fechaHasta}`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        try {
+          const resultado = await getRangoPedidos({
+            modo: 'porFechas',
+            fechaDesde: filtros.fechaDesde,
+            fechaHasta: filtros.fechaHasta,
+            bodegaId: filtros.bodegaId || '',
+            tipoDocumento: filtros.tipoDocumento
+          });
+
+          console.log("Resultado de búsqueda por fechas:", resultado);
+
+          Swal.close();
+
+          if (!resultado.success || resultado.total === 0) {
+            Swal.fire('Error', resultado.message || 'No se encontraron pedidos en el rango de fechas seleccionado', 'error');
+            return;
+          }
+
+          const confirmacion = await Swal.fire({
+            title: `¿Descargar ${resultado.total} archivos?`,
+            html: `
+            <div class="text-left">
+              <p>Se descargarán <strong>${resultado.total} archivos PDF</strong>.</p>
+              <p class="text-sm text-gray-600 mt-2">
+                El navegador pedirá confirmación para cada descarga.<br>
+                <strong>Recomendación:</strong> Permite todas las descargas.
+              </p>
+              <div class="mt-3 border-t pt-2">
+                <p class="text-xs font-semibold">Filtros aplicados:</p>
+                <p class="text-xs">• ${filtros.fechaDesde} a ${filtros.fechaHasta}</p>
+                ${filtros.bodegaId ? `<p class="text-xs">• Bodega: ${filtros.bodegaId}</p>` : ''}
+                <p class="text-xs">• Tipo: ${filtros.tipoDocumento}</p>
+                <p class="text-xs">• Formato: Documentos individuales</p>
+              </div>
+            </div>
+          `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: `Descargar ${resultado.total} archivos`,
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#10b981',
+            width: '450px'
+          });
+
+          if (!confirmacion.isConfirmed) return;
+
+          await descargarPDFsIndividuales(resultado.pedidos, filtros.tipoDocumento);
+
+        } catch (error) {
+          console.error("Error obteniendo pedidos por fechas:", error);
+          Swal.close();
+          Swal.fire('Error', `Error al buscar pedidos: ${error.message}`, 'error');
+          return;
+        }
+      }
+      else if (esPorNumeros && esModoUnSolo) {
+        console.log("MODO: Por Números + Un solo documento");
+        Swal.fire({
+          title: "Generando PDF único por rango...",
+          text: `Generando pedidos PED-${filtros.numeroDesde} a PED-${filtros.numeroHasta}`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const datosEnvio = {
+          ...filtros,
+          modo: 'porNumeros',
+          formato: 'unSolo'
+        };
+
+        const blob = await imprimirPedidosMultiples(datosEnvio);
+        const fileURL = URL.createObjectURL(blob);
+
+        Swal.close();
+
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        const esAndroid = /android/i.test(ua);
+        const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+        const esWindows = /Win/i.test(ua);
+        const esMac = /Mac/i.test(ua);
+        const esMovilOTablet = !esWindows && !esMac;
+
+        if (esMovilOTablet) {
+          const a = document.createElement("a");
+          a.href = fileURL;
+          a.target = "_blank";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
+        } else {
+          setUrlPDF(fileURL);
+          setMostrarModal(true);
+        }
+      }
+      else if (esPorNumeros && esModoIndividuales) {
+        console.log("MODO: Por Números + Documentos individuales");
+        Swal.fire({
+          title: "Buscando pedidos...",
+          text: "Obteniendo información del rango seleccionado",
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const resultado = await getRangoPedidos({
+          modo: 'porNumeros',
+          numeroDesde: filtros.numeroDesde,
+          numeroHasta: filtros.numeroHasta,
+          bodegaId: filtros.bodegaId || '',
+          tipoDocumento: filtros.tipoDocumento
+        });
+
+        Swal.close();
+
+        if (!resultado.success || resultado.total === 0) {
+          Swal.fire('Error', resultado.message || 'No se encontraron pedidos', 'error');
+          return;
         }
 
-        // Limpiar URL después de 10 segundos
-        setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
-      } else {
-        // Para escritorio: mostrar en modal
-        setUrlPDF(fileURL);
-        setMostrarModal(true);
+        const confirmacion = await Swal.fire({
+          title: `¿Descargar ${resultado.total} archivos?`,
+          html: `
+          <div class="text-left">
+            <p>Se descargarán <strong>${resultado.total} archivos PDF</strong>.</p>
+            <p class="text-sm text-gray-600 mt-2">
+              El navegador pedirá confirmación para cada descarga.<br>
+              <strong>Recomendación:</strong> Permite todas las descargas.
+            </p>
+            <div class="mt-3 border-t pt-2">
+              <p class="text-xs font-semibold">Filtros aplicados:</p>
+              <p class="text-xs">• PED-${filtros.numeroDesde} a PED-${filtros.numeroHasta}</p>
+              ${filtros.bodegaId ? `<p class="text-xs">• Bodega: ${filtros.bodegaId}</p>` : ''}
+              <p class="text-xs">• Tipo: ${filtros.tipoDocumento}</p>
+              <p class="text-xs">• Formato: Documentos individuales</p>
+            </div>
+          </div>
+        `,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: `Descargar ${resultado.total} archivos`,
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#10b981',
+          width: '450px'
+        });
+
+        if (!confirmacion.isConfirmed) return;
+
+        await descargarPDFsIndividuales(resultado.pedidos, filtros.tipoDocumento);
       }
 
     } catch (error) {
-      console.error("Error al imprimir múltiple:", error);
+      console.error("Error en handlePrintMultiple:", error);
       Swal.close();
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: `No se pudo generar el PDF múltiple. Verifica los filtros.`,
+        text: error.message || "Error al procesar la solicitud",
       });
     }
   };
 
-  // Función auxiliar para obtener nombres de documentos
+  const descargarPDFsIndividuales = async (pedidos, tipoDocumento) => {
+    let descargados = 0;
+    let errores = [];
+
+    Swal.fire({
+      title: "Descargando archivos...",
+      html: `
+    <div class="space-y-3">
+      <div class="flex justify-between">
+        <span>Progreso:</span>
+        <span class="font-bold">${descargados}/${pedidos.length}</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div id="progreso-bar" class="bg-green-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div id="archivo-actual" class="text-sm text-gray-700">
+        Preparando...
+      </div>
+      <div class="text-xs text-gray-500">
+        Formato: Cliente_Bodega_Fecha_Tipo.pdf
+      </div>
+    </div>
+  `,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      willOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    const descargarUnArchivo = async (pedido) => {
+      try {
+        if (document.getElementById('archivo-actual')) {
+          document.getElementById('archivo-actual').textContent =
+            `Descargando: PED-${pedido.id} - ${pedido.cliente ? pedido.cliente.substring(0, 30) : 'Sin cliente'}`;
+        }
+
+        const blob = await imprimirPedido(pedido.id, tipoDocumento);
+
+        const limpiarTexto = (texto) => {
+          if (!texto) return 'SinDato';
+          return texto
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .trim();
+        };
+
+        const prefijoMap = {
+          'pedido': 'Pedido_Buf',
+          'bol': 'BOL_BUF',
+          'listaempaque': 'ListaEmpaque_Buf',
+          'listaempaqueprecios': 'ListaEmpaquePrecios_Buf'
+        };
+
+        const prefijo = prefijoMap[tipoDocumento] || 'Documento_Buf';
+        const poLimpio = pedido.po ? limpiarTexto(pedido.po) : 'SinPO';
+        const clienteLimpio = pedido.cliente ? limpiarTexto(pedido.cliente) : 'SinCliente';
+        const regionLimpia = pedido.region ? limpiarTexto(pedido.region) : 'SinRegion';
+        const listaLimpia = pedido.id ? pedido.id.toString() : 'SinLista';
+
+        const nombreArchivo = `${prefijo}_${poLimpio}_${clienteLimpio}_${regionLimpia}_${listaLimpia}.pdf`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombreArchivo;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        descargados++;
+
+        if (document.getElementById('progreso-bar')) {
+          const porcentaje = (descargados / pedidos.length) * 100;
+          document.getElementById('progreso-bar').style.width = `${porcentaje}%`;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error(`Error descargando PED-${pedido.id}:`, error);
+        errores.push(`PED-${pedido.id}: ${error.message.substring(0, 50)}`);
+      }
+    };
+
+    for (const pedido of pedidos) {
+      await descargarUnArchivo(pedido);
+    }
+
+    Swal.close();
+
+    if (errores.length === 0) {
+      Swal.fire({
+        title: '✅ Descarga completada',
+        html: `
+      <div class="space-y-2">
+        <p>Se descargaron <strong>${descargados} archivos</strong> correctamente.</p>
+        <p class="text-sm text-gray-600">
+          Revisa tu carpeta de descargas.
+        </p>
+      </div>
+    `,
+        icon: 'success',
+        confirmButtonText: 'Aceptar'
+      });
+    } else {
+      Swal.fire({
+        title: '⚠️ Descarga parcial',
+        html: `
+      <div class="space-y-2">
+        <p>Se descargaron <strong>${descargados} de ${pedidos.length}</strong> archivos.</p>
+        <p class="text-sm text-red-600">
+          Errores: ${errores.length}
+        </p>
+        <div class="text-xs max-h-20 overflow-y-auto">
+          ${errores.slice(0, 3).map(e => `<div>• ${e}</div>`).join('')}
+          ${errores.length > 3 ? `<div>• ... y ${errores.length - 3} más</div>` : ''}
+        </div>
+      </div>
+    `,
+        icon: 'warning',
+        confirmButtonText: 'Entendido'
+      });
+    }
+  };
+
   const getNombreDocumento = (tipo) => {
     const nombres = {
       pedido: "Pedido",
@@ -854,20 +1159,15 @@ export default function Pedidos() {
     return nombres[tipo] || "Documento";
   };
 
-  // --------------------------------------------------------------
-  // Manejar selección de tipo de documento
-  // --------------------------------------------------------------
   const handleSeleccionarDocumento = (tipoDocumento) => {
     setMostrarSelectorDocumento(false);
     handlePrint(tipoDocumento);
   };
 
-  // 👇 NUEVO: Abrir modal de impresión múltiple
   const handleAbrirImpresionMultiple = () => {
     setMostrarImpresionMultiple(true);
   };
 
-  // Función para cerrar el modal y limpiar la URL
   const handleCloseModal = () => {
     setMostrarModal(false);
     if (urlPDF) {
@@ -876,17 +1176,13 @@ export default function Pedidos() {
     }
   };
 
-
-  // --------------------------------------------------------------
-  // Renderizado
-  // --------------------------------------------------------------
   if (loadingDatos)
     return <p className="text-center text-gray-500 py-4">Cargando datos iniciales...</p>;
   if (errorDatos) return <p className="text-red-600 text-center py-4">{errorDatos}</p>;
 
   return (
     <div className="space-y-6">
-      {/* Barra de acciones - NUEVO DISEÑO CON BOTÓN MÚLTIPLE */}
+      {/* Barra de acciones */}
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
         <h2 className="text-xl font-semibold mb-4 text-slate-700">Gestión de Pedidos</h2>
         <div className="flex flex-col sm:flex-row gap-2">
@@ -898,9 +1194,19 @@ export default function Pedidos() {
           </button>
           <button
             onClick={handleSave}
-            className="bg-orange-500 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-orange-600 transition font-medium flex-1"
+            disabled={isSaving} // 👈 Deshabilitado mientras se guarda
+            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${
+              isSaving
+                ? "bg-gray-400 text-white cursor-not-allowed"
+                : header.id && header.id !== 0
+                ? "bg-orange-500 text-white hover:bg-orange-600"
+                : "bg-orange-500 text-white hover:bg-orange-600"
+            }`}
           >
-            {header.id && header.id !== 0 ? "Actualizar Pedido" : "Guardar Pedido"}
+            {isSaving
+              ? (header.id && header.id !== 0 ? "Actualizando..." : "Guardando...")
+              : (header.id && header.id !== 0 ? "Actualizar Pedido" : "Guardar Pedido")
+            }
           </button>
           <button
             onClick={handleNew}
@@ -909,16 +1215,16 @@ export default function Pedidos() {
             Nuevo Pedido
           </button>
           <button
-            onClick={() => handlePrint()} // Sin parámetro para que muestre el selector
+            onClick={() => handlePrint()}
             disabled={!header.id}
-            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${header.id
-              ? "bg-purple-600 text-white hover:bg-purple-700"
-              : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${
+              header.id
+                ? "bg-purple-600 text-white hover:bg-purple-700"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }`}
           >
             Imprimir PDF
           </button>
-          {/* 👇 NUEVO BOTÓN IMPRIMIR MÚLTIPLE */}
           <button
             onClick={handleAbrirImpresionMultiple}
             className="bg-green-600 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-green-700 transition font-medium flex-1"
@@ -938,7 +1244,6 @@ export default function Pedidos() {
         aerolineas={datosSelect.aerolineas}
         agencias={datosSelect.agencias}
         inputRefs={headerRefs}
-        // 👇 NUEVO: Pasar los comentarios seleccionados
         comentariosSeleccionados={comentariosSeleccionados}
         onComentariosChange={handleComentariosChange}
       />
@@ -951,7 +1256,7 @@ export default function Pedidos() {
         embalajes={datosSelect.embalajes}
       />
 
-      {/* 👇 MODAL MEJORADO con filtro rápido */}
+      {/* Modal de búsqueda */}
       {showModal && (
         <div className="fixed inset-0 z-60 flex items-start justify-center p-4 pt-20 bg-black/50">
           <div className="bg-white w-full max-w-4xl rounded-xl shadow-lg p-4">
@@ -960,7 +1265,7 @@ export default function Pedidos() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                 <input
                   type="text"
-                  placeholder="Filtrar por ID, cliente o fecha..."
+                  placeholder="Filtrar por ID, cliente, fecha o P.O. ..."
                   className="border rounded px-3 py-2 flex-1 min-w-[200px]"
                   value={filtroPedidos}
                   onChange={(e) => setFiltroPedidos(e.target.value)}
@@ -982,7 +1287,7 @@ export default function Pedidos() {
               </div>
             ) : (
               <div className="overflow-auto max-h-96">
-                {/* Tabla para pantallas grandes */}
+                {/* Tabla para escritorio */}
                 <div className="hidden md:block">
                   <table className="w-full text-sm">
                     <thead className="text-left border-b bg-gray-50">
@@ -990,7 +1295,7 @@ export default function Pedidos() {
                         <th className="py-2 px-2 font-semibold">ID</th>
                         <th className="py-2 px-2 font-semibold">Cliente</th>
                         <th className="py-2 px-2 font-semibold">Fecha Orden</th>
-                        <th className="py-2 px-2 font-semibold">Purchase Order</th>
+                        <th className="py-2 px-2 font-semibold">P.O.</th>
                         <th className="py-2 px-2 font-semibold text-right">Acción</th>
                       </tr>
                     </thead>
@@ -1015,7 +1320,7 @@ export default function Pedidos() {
                   </table>
                 </div>
 
-                {/* Cards para pantallas móviles */}
+                {/* Cards para móviles */}
                 <div className="block md:hidden space-y-3">
                   {pedidosFiltrados.map((p) => (
                     <div
@@ -1026,7 +1331,7 @@ export default function Pedidos() {
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="font-semibold text-gray-700">ID:</span>
-                            <p className="text-gray-900 font-medium">{p.idPedido}</p>
+                            <p className="text-gray-900 font-medium">PED-{String(p.idPedido).padStart(6, "0")}</p>
                           </div>
                           <button
                             className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
@@ -1044,9 +1349,9 @@ export default function Pedidos() {
                           <p className="text-gray-900">{p.FechaOrden}</p>
                         </div>
                         {p.PurchaseOrder && (
-                          <div>
-                            <span className="font-semibold text-gray-700">PO:</span>
-                            <p className="text-gray-900">{p.PurchaseOrder}</p>
+                          <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                            <span className="font-semibold text-blue-700">Purchase Order:</span>
+                            <p className="text-blue-900 font-medium">{p.PurchaseOrder}</p>
                           </div>
                         )}
                       </div>
@@ -1059,7 +1364,7 @@ export default function Pedidos() {
         </div>
       )}
 
-      {/* Modal de selección de tipo de documento (INDIVIDUAL) */}
+      {/* Modal de selección de documento individual */}
       <ModalSeleccionDocumento
         isOpen={mostrarSelectorDocumento}
         onClose={() => setMostrarSelectorDocumento(false)}
@@ -1067,7 +1372,7 @@ export default function Pedidos() {
         pedidoId={header.id}
       />
 
-      {/* 👇 NUEVO: Modal de impresión múltiple */}
+      {/* Modal de impresión múltiple */}
       <ModalImpresionMultiple
         isOpen={mostrarImpresionMultiple}
         onClose={() => setMostrarImpresionMultiple(false)}
@@ -1075,7 +1380,7 @@ export default function Pedidos() {
         bodegas={datosSelect.bodegas}
       />
 
-      {/* Modal del visor de PDF */}
+      {/* Modal visor PDF */}
       {mostrarModal && urlPDF && (
         <ModalVisorPreliminar
           url={urlPDF}

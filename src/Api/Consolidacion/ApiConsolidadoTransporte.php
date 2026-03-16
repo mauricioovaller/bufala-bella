@@ -30,14 +30,27 @@ $sql = "SELECT
     DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
     DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
     SUM(det.Cantidad) AS CantidadCajas,
-    ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000), 2) AS PesoNeto,
-    '19:00:00' AS HoraCargue,  -- Hora por defecto
+    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
+    ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
+    enc.GuiaMaster,
+    enc.GuiaHija,
+    MAX(est.TotalEstibas) AS CantidadEstibas,
+    '07:00:00' AS HoraCargue,  -- Hora por defecto
     'Normal' AS TipoDato  -- Identificador para datos normales
 FROM EncabPedido enc
 INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido   
 INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
 INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-WHERE enc.{$campoFecha} BETWEEN ? AND ?
+INNER JOIN (
+    SELECT 
+        {$campoFecha},
+        SUM(CantidadEstibas) AS TotalEstibas
+    FROM EncabPedido
+    WHERE {$campoFecha} BETWEEN ? AND ?
+      AND Estado = 'Activo'
+    GROUP BY {$campoFecha}
+) est ON est.{$campoFecha} = enc.{$campoFecha}
+WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
 GROUP BY enc.{$campoFecha}
 
 UNION ALL
@@ -46,21 +59,34 @@ SELECT
     DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
     DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
     SUM(det.Cantidad) AS CantidadCajas,
-    ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000), 2) AS PesoNeto,
-    '19:00:00' AS HoraCargue,  -- Hora por defecto
+    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
+    ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
+    enc.GuiaMaster,
+    enc.GuiaHija,
+    MAX(est.TotalEstibas) AS CantidadEstibas,
+    '07:00:00' AS HoraCargue,  -- Hora por defecto
     'Sample' AS TipoDato  -- Identificador para datos sample
 FROM EncabPedidoSample enc
 INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido   
 INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
 INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-WHERE enc.{$campoFecha} BETWEEN ? AND ?
+INNER JOIN (
+    SELECT 
+        {$campoFecha},
+        SUM(CantidadEstibas) AS TotalEstibas
+    FROM EncabPedidoSample
+    WHERE {$campoFecha} BETWEEN ? AND ?
+      AND Estado = 'Activo'
+    GROUP BY {$campoFecha}
+) est ON est.{$campoFecha} = enc.{$campoFecha}
+WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
 GROUP BY enc.{$campoFecha}
 
 -- Agrupar por fecha para consolidar ambos tipos de datos
 ORDER BY FechaCorta ASC;";
 
 $stmt = $enlace->prepare($sql);
-$stmt->bind_param("ssss", $fechaInicio, $fechaFin, $fechaInicio, $fechaFin);
+$stmt->bind_param("ssssssss", $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin);
 $stmt->execute();
 
 // Bind de resultados
@@ -69,6 +95,10 @@ $stmt->bind_result(
     $fechaCorta,
     $cantidadCajas,
     $pesoNeto,
+    $pesoBruto,
+    $guiaMaster,
+    $guiaHija,
+    $cantidadEstibas,
     $horaCargue,
     $tipoDato
 );
@@ -77,29 +107,43 @@ $stmt->bind_result(
 $datosConsolidados = [];
 $totalCajas = 0;
 $totalPesoNeto = 0;
+$totalPesoBruto = 0;
+$totalEstibas = 0;
 
 while ($stmt->fetch()) {
-        
-    // 👇 CORRECCIÓN: Usar FechaCorta como clave única para evitar problemas de formato
     $claveUnica = $fechaCorta;
 
-    // Si ya existe esta fecha, sumamos los valores
     if (isset($datosConsolidados[$claveUnica])) {
+        // Sumar todos los valores
         $datosConsolidados[$claveUnica]['CantidadCajas'] += $cantidadCajas;
         $datosConsolidados[$claveUnica]['PesoNeto'] += $pesoNeto;
+        $datosConsolidados[$claveUnica]['PesoBruto'] += $pesoBruto;
+        $datosConsolidados[$claveUnica]['CantidadEstibas'] += $cantidadEstibas;
+
+        // Para Guías: mantener la del registro "Normal" o concatenar
+        if ($tipoDato === 'Normal') {
+            $datosConsolidados[$claveUnica]['GuiaMaster'] = $guiaMaster;
+            $datosConsolidados[$claveUnica]['GuiaHija'] = $guiaHija;
+        }
     } else {
-        // Si no existe, creamos el registro
         $datosConsolidados[$claveUnica] = [
             'FechaCompleta' => $fechaCompleta,
             'FechaCorta' => $fechaCorta,
             'CantidadCajas' => $cantidadCajas,
             'PesoNeto' => $pesoNeto,
+            'PesoBruto' => $pesoBruto,
+            'GuiaMaster' => $guiaMaster,
+            'GuiaHija' => $guiaHija,
+            'CantidadEstibas' => $cantidadEstibas,
             'HoraCargue' => $horaCargue
         ];
     }
-    
+
+    // Totales globales
     $totalCajas += $cantidadCajas;
     $totalPesoNeto += $pesoNeto;
+    $totalPesoBruto += $pesoBruto;
+    $totalEstibas += $cantidadEstibas;
 }
 
 
@@ -115,16 +159,18 @@ class PDFTransporte extends FPDF
 {
     private $totalCajas = 0;
     private $totalPesoNeto = 0;
+    private $totalPesoBruto = 0;
+    private $totalEstibas = 0;
 
     function Header()
     {
         // Logo
         $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 15, 15, 30);
-        
+
         // Título principal
         $this->SetFont('Arial', 'B', 16);
         $this->Cell(0, 10, utf8_decode('TRANSPORTE POR DÍA'), 0, 1, 'C');
-        
+
         // Información del rango de fechas
         $this->SetFont('Arial', 'I', 10);
         global $fechaInicio, $fechaFin;
@@ -143,18 +189,43 @@ class PDFTransporte extends FPDF
     {
         $this->SetFont('Arial', 'B', 10);
         $this->SetFillColor(180, 180, 180);
-        
-        $this->Cell(80, 8, utf8_decode('FECHA'), 1, 0, 'C', true);
-        $this->Cell(40, 8, utf8_decode('CANTIDAD CAJAS'), 1, 0, 'C', true);
-        $this->Cell(40, 8, utf8_decode('PESO NETO (KG)'), 1, 0, 'C', true);
-        $this->Cell(40, 8, utf8_decode('HORA EST. CARGUE'), 1, 1, 'C', true);
+
+        // Guardar posición inicial
+        $startX = $this->GetX();
+        $startY = $this->GetY();
+
+        // FECHA (ancho: 56)
+        $this->Cell(54, 8, utf8_decode('FECHA'), 1, 0, 'C', true);
+
+        // CANTIDAD CAJAS (ancho: 28) - Usar MultiCell para dos líneas
+        $this->SetXY($startX + 54, $startY);
+        $this->MultiCell(22, 4, utf8_decode('CANTIDAD' . "\n" . 'CAJAS'), 1, 'C', true);
+
+        // PESO NETO (KG) (ancho: 28)
+        $this->SetXY($startX + 54 + 22, $startY);
+        $this->MultiCell(23, 4, utf8_decode('PESO NETO' . "\n" . '(KG)'), 1, 'C', true);
+
+        // PESO BRUTO (KG) (ancho: 28)
+        $this->SetXY($startX + 54 + 22 + 23, $startY);
+        $this->MultiCell(26, 4, utf8_decode('PESO BRUTO' . "\n" . '(KG)'), 1, 'C', true);
+
+        // Restaurar posición Y para continuar en la misma línea
+        $this->SetXY($startX + 54 + 22 + 23 + 26, $startY);
+        // GUIA MASTER (ancho: 18)
+        $this->Cell(27, 8, utf8_decode('GUIA MASTER'), 1, 0, 'C', true);
+
+        // HORA EST. CARGUE (ancho: 40)
+        $this->Cell(27, 8, utf8_decode('GUIA HIJA'), 1, 0, 'C', true);
+
+        // CANTIDAD ESTIBAS (ancho: 40)
+        $this->Cell(18, 8, utf8_decode('PALLETS'), 1, 1, 'C', true);
     }
 
-    function agregarFila($fecha, $cajas, $pesoNeto, $horaCargue)
+    function agregarFila($fecha, $cajas, $pesoNeto, $pesoBruto, $guiaMaster, $guiaHija, $cantidadEstibas)
     {
         // DEBUG: Ver qué fila se está agregando
         error_log("PDF TRANSPORTE - Agregando: $fecha - $cajas cajas - $pesoNeto kg");
-        
+
         // Verificar si necesita nueva página
         if ($this->GetY() > 250) {
             $this->AddPage();
@@ -162,26 +233,34 @@ class PDFTransporte extends FPDF
         }
 
         $this->SetFont('Arial', '', 9);
-        
-        $this->Cell(80, 7, utf8_decode($fecha), 1);
-        $this->Cell(40, 7, number_format($cajas, 0), 1, 0, 'R');
-        $this->Cell(40, 7, number_format($pesoNeto, 2), 1, 0, 'R');
-        $this->Cell(40, 7, $horaCargue, 1, 1, 'C');
+
+        $this->Cell(54, 7, utf8_decode($fecha), 1);
+        $this->Cell(22, 7, number_format($cajas, 0), 1, 0, 'R');
+        $this->Cell(23, 7, number_format($pesoNeto, 2), 1, 0, 'R');
+        $this->Cell(26, 7, number_format($pesoBruto, 2), 1, 0, 'R');
+        $this->Cell(27, 7, utf8_decode($guiaMaster), 1, 0, 'C');
+        $this->Cell(27, 7, utf8_decode($guiaHija), 1, 0, 'C');
+        $this->Cell(18, 7, number_format((float)$cantidadEstibas, 0), 1, 1, 'R');
 
         // Acumular totales
         $this->totalCajas += $cajas;
         $this->totalPesoNeto += $pesoNeto;
+        $this->totalPesoBruto += $pesoBruto;
+        $this->totalEstibas += (float)$cantidadEstibas;
     }
 
     function agregarTotales()
     {
         $this->SetFont('Arial', 'B', 10);
         $this->SetFillColor(220, 220, 220);
-        
-        $this->Cell(80, 8, 'TOTALES:', 1, 0, 'R', true);
-        $this->Cell(40, 8, number_format($this->totalCajas, 0), 1, 0, 'R', true);
-        $this->Cell(40, 8, number_format($this->totalPesoNeto, 2), 1, 0, 'R', true);
-        $this->Cell(40, 8, '', 1, 1, 'C', true);
+
+        $this->Cell(54, 8, 'TOTALES:', 1, 0, 'R', true);
+        $this->Cell(22, 8, number_format($this->totalCajas, 0), 1, 0, 'R', true);
+        $this->Cell(23, 8, number_format($this->totalPesoNeto, 2), 1, 0, 'R', true);
+        $this->Cell(26, 8, number_format($this->totalPesoBruto, 2), 1, 0, 'R', true);
+        $this->Cell(27, 8, '', 1, 0, 'R', true);
+        $this->Cell(27, 8, '', 1, 0, 'R', true);
+        $this->Cell(18, 8, number_format($this->totalEstibas, 0), 1, 1, 'R', true);
     }
 }
 
@@ -206,7 +285,10 @@ foreach ($datosTransporte as $dato) {
         $dato['FechaCompleta'],
         $dato['CantidadCajas'],
         $dato['PesoNeto'],
-        $dato['HoraCargue']
+        $dato['PesoBruto'],
+        $dato['GuiaMaster'],
+        $dato['GuiaHija'],
+        $dato['CantidadEstibas']
     );
 }
 

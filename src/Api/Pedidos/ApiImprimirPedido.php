@@ -1,4 +1,5 @@
 <?php
+//src/Api/Pedidos/ApiImprimirPedido.php
 require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");  // Incluye la librería FPDF
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
 $enlace->set_charset("utf8mb4"); // 👈 importante

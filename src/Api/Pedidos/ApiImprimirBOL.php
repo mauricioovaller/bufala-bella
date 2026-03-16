@@ -1,4 +1,5 @@
 <?php
+//src/Api/Pedidos/ApiImprimirBOL.php
 require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
 $enlace->set_charset("utf8mb4"); // 👈 importante
@@ -23,7 +24,7 @@ $idPedido = intval($input['idPedido']);
 // Primero estableces el idioma para la sesión
 $enlace->query("SET lc_time_names = 'es_ES'");
 
-// 👇 MODIFICADO: Consultar datos del encabezado del pedido CON COMENTARIOS
+// 👇 MODIFICADO: Consultar datos del encabezado del pedido CON COMENTARIOS Y ID_CLIENTE
 $sqlEncabezado = "SELECT 
     enc.Id_EncabPedido AS NoListaEmpaque,
     DATE_FORMAT(enc.FechaOrden, '%W, %e de %M de %Y') AS FechaOrden,
@@ -59,7 +60,9 @@ $sqlEncabezado = "SELECT
      LIMIT 1) AS TextoComentarioPrimario,
     (SELECT ComentarioSecundario FROM Comentarios 
      WHERE Id_Cliente = enc.Id_Cliente AND Id_ClienteRegion = enc.Id_ClienteRegion 
-     LIMIT 1) AS TextoComentarioSecundario
+     LIMIT 1) AS TextoComentarioSecundario,
+    -- 👇 AGREGAR: ID del cliente para verificación
+    enc.Id_Cliente AS IdCliente
 FROM EncabPedido enc
 INNER JOIN Clientes cli ON enc.Id_Cliente = cli.Id_Cliente
 INNER JOIN ClientesRegion cliReg ON enc.Id_ClienteRegion = cliReg.Id_ClienteRegion
@@ -100,13 +103,19 @@ $stmtEncabezado->bind_result(
     $comentarioPrimarioSeleccionado,
     $comentarioSecundarioSeleccionado,
     $textoComentarioPrimario,
-    $textoComentarioSecundario
+    $textoComentarioSecundario,
+    $idCliente  // 👈 NUEVA VARIABLE
 );
 
 if (!$stmtEncabezado->fetch()) {
     die(json_encode(["error" => "Pedido no encontrado."]));
 }
 $stmtEncabezado->close();
+
+// 👇 DETERMINAR SI ES CLIENTE ESPECIAL
+// ID 11 POR EL ID REAL DEL CLIENTE QUE NECESITA LA COLUMNA
+$idClienteEspecial = 15; // ID corresponde a Sysco Food Services
+$mostrarColumnaPesoNeto = ($idCliente == $idClienteEspecial);
 
 // El resto del código del detalle se mantiene igual...
 $sqlDetalle = "SELECT 
@@ -356,34 +365,67 @@ $pdf->Cell(38, 5, 'Date of Delivery:', 'LB', 0,  'R');
 $pdf->Cell(20, 5, $fechaDeliveryFormateada, 'BR', 1,  'L');
 
 $pdf->Ln(5);
-// DETALLE DEL PEDIDO
 
-// Encabezado de la tabla de detalle
+// DETALLE DEL PEDIDO - MODIFICADO PARA CLIENTE ESPECIAL
+
+// Encabezado de la tabla de detalle - MODIFICADO
 $pdf->SetFont('Arial', 'B', 7);
-$pdf->Cell(30, 6, 'Producer', 1, 0, 'C');
-$pdf->Cell(115, 6, 'Product', 1, 0, 'C');
-$pdf->Cell(19, 6, 'Box Size', 1, 0, 'C');
-$pdf->Cell(19, 6, 'Cubes', 1, 0, 'C');
-$pdf->Cell(15, 6, 'Pieces', 1, 0, 'C');
+
+if ($mostrarColumnaPesoNeto) {
+    // Si es cliente especial: Mostrar columna adicional "Net Weight"
+    $pdf->Cell(30, 6, 'Producer', 1, 0, 'C');
+    $pdf->Cell(95, 6, 'Product', 1, 0, 'C'); // 👈 Reducido de 115 a 95
+    $pdf->Cell(19, 6, 'Box Size', 1, 0, 'C');
+    $pdf->Cell(19, 6, 'Cubes', 1, 0, 'C');
+    $pdf->Cell(15, 6, 'Pieces', 1, 0, 'C');
+    $pdf->Cell(20, 6, 'Net Weight', 1, 0, 'C'); // 👈 COLUMNA NUEVA
+} else {
+    // Para otros clientes: Tabla normal
+    $pdf->Cell(30, 6, 'Producer', 1, 0, 'C');
+    $pdf->Cell(115, 6, 'Product', 1, 0, 'C');
+    $pdf->Cell(19, 6, 'Box Size', 1, 0, 'C');
+    $pdf->Cell(19, 6, 'Cubes', 1, 0, 'C');
+    $pdf->Cell(15, 6, 'Pieces', 1, 0, 'C');
+}
 
 $pdf->Ln();
 
-// Detalle de productos
+// Detalle de productos - MODIFICADO
 $pdf->SetFont('Arial', '', 7);
 foreach ($detalles as $detalle) {
-    $pdf->Cell(30, 6, utf8_decode('BUF CREAMERY'), 1);
-    $pdf->Cell(115, 6, utf8_decode($detalle['descrip_pedido']), 1);
-    $pdf->Cell(19, 6, utf8_decode($detalle['box_size']), 1, 0, 'C');
-    $pdf->Cell(19, 6, utf8_decode($detalle['cubes']), 1, 0, 'C');
-    $pdf->Cell(15, 6, number_format($detalle['cajas'], 0), 1, 0, 'R');
+    if ($mostrarColumnaPesoNeto) {
+        // Para cliente especial
+        $pdf->Cell(30, 6, utf8_decode('BUF CREAMERY'), 1);
+        $pdf->Cell(95, 6, utf8_decode($detalle['descrip_pedido']), 1); // 👈 Reducido de 115 a 95
+        $pdf->Cell(19, 6, utf8_decode($detalle['box_size']), 1, 0, 'C');
+        $pdf->Cell(19, 6, utf8_decode($detalle['cubes']), 1, 0, 'C');
+        $pdf->Cell(15, 6, number_format($detalle['cajas'], 0), 1, 0, 'R');
+        $pdf->Cell(20, 6, number_format($detalle['peso_netoKg'], 2) . ' Kg', 1, 0, 'R'); // 👈 COLUMNA NUEVA
+    } else {
+        // Para otros clientes
+        $pdf->Cell(30, 6, utf8_decode('BUF CREAMERY'), 1);
+        $pdf->Cell(115, 6, utf8_decode($detalle['descrip_pedido']), 1);
+        $pdf->Cell(19, 6, utf8_decode($detalle['box_size']), 1, 0, 'C');
+        $pdf->Cell(19, 6, utf8_decode($detalle['cubes']), 1, 0, 'C');
+        $pdf->Cell(15, 6, number_format($detalle['cajas'], 0), 1, 0, 'R');
+    }
     $pdf->Ln();
 }
 
-// TOTALES
+// TOTALES - MODIFICADO para cliente especial
 $pdf->SetFont('Arial', 'B', 9);
-$pdf->Cell(164, 6, 'Total:', 1, 0, 'R');
-$pdf->Cell(19, 6, number_format($totalCubes, 3), 1, 0, 'R');
-$pdf->Cell(15, 6, number_format($totalCajas, 0), 1, 1, 'R');
+if ($mostrarColumnaPesoNeto) {
+    // Para cliente especial
+    $pdf->Cell(144, 6, 'Total:', 1, 0, 'R');
+    $pdf->Cell(19, 6, number_format($totalCubes, 3), 1, 0, 'R');
+    $pdf->Cell(15, 6, number_format($totalCajas, 0), 1, 0, 'R');
+    $pdf->Cell(20, 6, number_format($totalPesoNeto, 2) . ' Kg', 1, 1, 'R'); // 👈 TOTAL PESO NETO
+} else {
+    // Para otros clientes
+    $pdf->Cell(164, 6, 'Total:', 1, 0, 'R');
+    $pdf->Cell(19, 6, number_format($totalCubes, 3), 1, 0, 'R');
+    $pdf->Cell(15, 6, number_format($totalCajas, 0), 1, 1, 'R');
+}
 
 $pdf->Cell(183, 6, 'Total Stowage:', 1, 0, 'R');
 $pdf->Cell(15, 6, number_format($cantidadEstibas, 2), 1, 1, 'R');
@@ -405,8 +447,11 @@ $pdf->Cell(49, 15, 'Initials:', 1, 0, 'L');
 $pdf->Cell(1, 15, '', 0, 0, 'L');
 $pdf->Cell(49, 15, 'Temperature:', 1, 0, 'L');
 $pdf->Cell(1, 15, '', 0, 0, 'L');
-$pdf->Cell(49, 15, 'Driver:', 1, 0, 'L');
+$pdf->Cell(49, 15, 'Driver:', 1, 1, 'L');
+$pdf->SetFont('Arial', 'B', 8);
+$pdf->Cell(199, 5,'PED-00'. $noListaEmpaque, 0, 1, 'R');
 
 $pdf->Ln(3);
 
 $pdf->Output('I', 'Lista Empaque No' . $noListaEmpaque . '.pdf'); // 'I' para mostrar en navegador
+?>

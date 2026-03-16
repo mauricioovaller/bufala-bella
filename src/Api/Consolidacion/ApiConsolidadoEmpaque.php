@@ -33,7 +33,7 @@ $sql = "SELECT
     CONCAT(prd.DescripProducto, ' ', emb.Descripcion) AS Descripcion,
     SUM(det.Cantidad) AS Cajas,
     SUM(det.Cantidad * emb.Cantidad) AS TotalTM,
-    ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000), 2) AS KgNet,
+    ROUND(SUM(det.PesoNeto), 2) AS KgNet,
     ROUND(SUM(enc.CantidadEstibas * (det.Cantidad / total_pedido.TotalCajasPedido)), 2) AS CantidadEstibas,
     'Normal' AS TipoDato
 FROM EncabPedido enc
@@ -42,12 +42,14 @@ INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
 INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
 INNER JOIN (
     SELECT 
-        Id_EncabPedido,
-        SUM(Cantidad) AS TotalCajasPedido
-    FROM DetPedido
-    GROUP BY Id_EncabPedido
+        dp.Id_EncabPedido,
+        SUM(dp.Cantidad) AS TotalCajasPedido
+    FROM DetPedido dp
+    INNER JOIN EncabPedido ep ON dp.Id_EncabPedido = ep.Id_EncabPedido
+    WHERE ep.Estado = 'Activo'
+    GROUP BY dp.Id_EncabPedido
 ) total_pedido ON enc.Id_EncabPedido = total_pedido.Id_EncabPedido
-WHERE enc.{$campoFecha} BETWEEN ? AND ?
+WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
 GROUP BY enc.FechaSalida, prd.Codigo_Siesa, det.Id_Embalaje
 
 UNION ALL
@@ -59,7 +61,7 @@ SELECT
     CONCAT(prd.DescripProducto, ' ', emb.Descripcion) AS Descripcion,
     SUM(det.Cantidad) AS Cajas,
     SUM(det.Cantidad * emb.Cantidad) AS TotalTM,
-    ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000), 2) AS KgNet,
+    ROUND(SUM(det.PesoNeto), 2) AS KgNet,
     ROUND(SUM(enc.CantidadEstibas * (det.Cantidad / total_pedido.TotalCajasPedido)), 2) AS CantidadEstibas,
     'Sample' AS TipoDato
 FROM EncabPedidoSample enc
@@ -68,12 +70,14 @@ INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
 INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
 INNER JOIN (
     SELECT 
-        Id_EncabPedido,
-        SUM(Cantidad) AS TotalCajasPedido
-    FROM DetPedidoSample
-    GROUP BY Id_EncabPedido
+        ds.Id_EncabPedido,
+        SUM(ds.Cantidad) AS TotalCajasPedido
+    FROM DetPedidoSample ds
+    INNER JOIN EncabPedidoSample es ON ds.Id_EncabPedido = es.Id_EncabPedido
+    WHERE es.Estado = 'Activo'
+    GROUP BY ds.Id_EncabPedido
 ) total_pedido ON enc.Id_EncabPedido = total_pedido.Id_EncabPedido
-WHERE enc.{$campoFecha} BETWEEN ? AND ?
+WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
 GROUP BY enc.FechaSalida, prd.Codigo_Siesa, det.Id_Embalaje
 
 ORDER BY 1, Codigo_Siesa";
@@ -213,9 +217,9 @@ class PDFDespachos extends FPDF
         // Todas las celdas usando la función auxiliar
         $this->agregarCeldaDosLineas(17, $altura, 'CÓDIGO', 'SIESA');
         $this->Cell(79, $altura, utf8_decode('DESCRIPCIÓN'), 1, 0, 'C', true);
-        $this->agregarCeldaDosLineas(35, $altura, 'UNDS', 'TERMOFORMADOS');
-        $this->Cell(15, $altura, utf8_decode('CAJAS'), 1, 0, 'C', true);
-        $this->Cell(20, $altura, utf8_decode('KG NETOS'), 1, 0, 'C', true);
+        $this->agregarCeldaDosLineas(33, $altura, 'UNDS', 'TERMOFORMADOS');
+        $this->Cell(13, $altura, utf8_decode('CAJAS'), 1, 0, 'C', true);
+        $this->agregarCeldaDosLineas(24, $altura, 'KG' ,'ESCURRIDOS');
         $this->agregarCeldaDosLineas(20, $altura, 'TOTAL', "PALLET'S");
 
         // Salto de línea
@@ -259,9 +263,9 @@ class PDFDespachos extends FPDF
 
         $this->Cell(17, 6, utf8_decode($producto['Codigo_Siesa']), 1);
         $this->Cell(79, 6, utf8_decode($producto['Descripcion']), 1);
-        $this->Cell(35, 6, number_format($producto['TotalTM'], 0), 1, 0, 'R');
-        $this->Cell(15, 6, number_format($producto['Cajas'], 0), 1, 0, 'R');
-        $this->Cell(20, 6, number_format($producto['KgNet'], 2), 1, 0, 'R');
+        $this->Cell(33, 6, number_format($producto['TotalTM'], 0), 1, 0, 'R');
+        $this->Cell(13, 6, number_format($producto['Cajas'], 0), 1, 0, 'R');
+        $this->Cell(24, 6, number_format($producto['KgNet'], 2), 1, 0, 'R');
         $this->Cell(20, 6, number_format($producto['CantidadEstibas'], 2), 1, 1, 'R');
 
         // Acumular totales
@@ -277,9 +281,9 @@ class PDFDespachos extends FPDF
         $this->SetFillColor(220, 220, 220);
 
         $this->Cell(96, 8, 'TOTALES:', 1, 0, 'R', true);
-        $this->Cell(35, 8, number_format($this->totalesFecha['total_tm'], 0), 1, 0, 'R', true);
-        $this->Cell(15, 8, number_format($this->totalesFecha['total_cajas'], 0), 1, 0, 'R', true);
-        $this->Cell(20, 8, number_format($this->totalesFecha['total_kgnet'], 2), 1, 0, 'R', true);
+        $this->Cell(33, 8, number_format($this->totalesFecha['total_tm'], 0), 1, 0, 'R', true);
+        $this->Cell(13, 8, number_format($this->totalesFecha['total_cajas'], 0), 1, 0, 'R', true);
+        $this->Cell(24, 8, number_format($this->totalesFecha['total_kgnet'], 2), 1, 0, 'R', true);
         $this->Cell(20, 8, number_format($this->totalesFecha['total_estibas'], 2), 1, 1, 'R', true);
 
         $this->Ln(5);

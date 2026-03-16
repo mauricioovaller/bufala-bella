@@ -260,3 +260,46 @@ export const actualizarDatosEnLote = async (filtros, datosEnLote) => {
     throw new Error(error.message);
   }
 };
+
+export async function obtenerPedidosPorFecha(filtros) {
+  try {
+    const endpoint =
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Consolidacion/ApiObtenerPedidos.php";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+      }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerPedidosPorFecha:", error);
+    throw new Error(`No se pudieron cargar los pedidos: ${error.message}`);
+  }
+}

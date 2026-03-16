@@ -1,3 +1,4 @@
+//src/components/pedidos/PedidoHeader.jsx
 import React from "react";
 
 export default function PedidoHeader({

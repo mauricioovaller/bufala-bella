@@ -63,7 +63,7 @@ $stmtEnc->close();
 // ===================
 // Obtener detalle
 // ===================
-$sqlDet = "SELECT d.Id_DetPedido, d.Id_EncabPedido, d.Id_Producto, p.DescripProducto, p.DescripFactura, p.Codigo_Siesa, p.Codigo_FDA, p.PesoGr, p.FactorPesoBruto, d.Descripcion, d.Id_Embalaje, d.Cantidad, d.PrecioUnitario, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) / 1000),2) AS PesoNeto, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) * p.FactorPesoBruto / 1000),2) AS PesoBruto, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) / 1000) * d.PrecioUnitario,2) AS ValorRegistro
+$sqlDet = "SELECT d.Id_DetPedido, d.Id_EncabPedido, d.Id_Producto, p.DescripProducto, p.DescripFactura, p.Codigo_Siesa, p.Codigo_FDA, p.PesoGr, p.FactorPesoBruto, d.Descripcion, d.Id_Embalaje, d.Cantidad, d.PrecioUnitario, ROUND(d.PesoNeto,2) AS PesoNeto, ROUND(d.PesoBruto,2) AS PesoBruto, ROUND((d.PesoNeto * d.PrecioUnitario),2) AS ValorRegistro
              FROM DetPedidoSample d
              INNER JOIN Productos p ON d.Id_Producto = p.Id_Producto
              INNER JOIN Embalajes e ON d.Id_Embalaje = e.Id_Embalaje

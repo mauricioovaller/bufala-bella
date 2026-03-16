@@ -60,7 +60,7 @@ try {
         SUM(det.Cantidad * emb.Cantidad) AS TotalTM,
         (prd.PesoGr / 1000) AS PesoUnd,
         ROUND((emb.Cantidad * prd.PesoGr / 1000), 2) AS PesoCj,
-        ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS KgNet,
+        ROUND(SUM(det.PesoNeto),2) AS KgNet,
         ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr * prd.FactorPesoBruto / 1000),2) AS KgBrt,
         det.PrecioUnitario AS ValorKg,
         ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000 * det.PrecioUnitario),2) AS USD,
@@ -94,7 +94,8 @@ try {
             AND pt.Id_Embalaje = det.Id_Embalaje            
             LIMIT 1
         ) AS DescripFacExcel,
-        'Normal' AS TipoDato
+        'Normal' AS TipoDato,
+        enc.GuiaMaster
 
     FROM EncabPedido enc
     INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
@@ -107,13 +108,15 @@ try {
     -- SUBCONSULTA PARA OBTENER EL TOTAL DE CAJAS POR PEDIDO
     INNER JOIN (
         SELECT 
-            Id_EncabPedido,
-            SUM(Cantidad) AS TotalCajasPedido
+            DetPedido.Id_EncabPedido,
+            SUM(DetPedido.Cantidad) AS TotalCajasPedido
         FROM DetPedido
-        GROUP BY Id_EncabPedido
+        INNER JOIN EncabPedido ON DetPedido.Id_EncabPedido = EncabPedido.Id_EncabPedido
+        WHERE EncabPedido.Estado = 'Activo'
+        GROUP BY DetPedido.Id_EncabPedido
     ) total_pedido ON enc.Id_EncabPedido = total_pedido.Id_EncabPedido
 
-    WHERE enc.{$campoFecha} BETWEEN ? AND ?
+    WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
     GROUP BY enc.Id_EncabPedido, det.Id_Producto, det.Id_Embalaje
 
     UNION ALL
@@ -138,7 +141,7 @@ try {
         SUM(det.Cantidad * emb.Cantidad) AS TotalTM,
         (prd.PesoGr / 1000) AS PesoUnd,
         ROUND((emb.Cantidad * prd.PesoGr / 1000), 2) AS PesoCj,
-        ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS KgNet,
+        ROUND(SUM(det.PesoNeto),2) AS KgNet,
         ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr * prd.FactorPesoBruto / 1000),2) AS KgBrt,
         det.PrecioUnitario AS ValorKg,
         ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000 * det.PrecioUnitario),2) AS USD,
@@ -172,7 +175,8 @@ try {
             AND pt.Id_Embalaje = det.Id_Embalaje            
             LIMIT 1
         ) AS DescripFacExcel,
-        'Sample' AS TipoDato
+        'Sample' AS TipoDato,
+        enc.GuiaMaster
 
     FROM EncabPedidoSample enc
     INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
@@ -182,13 +186,15 @@ try {
     -- SUBCONSULTA PARA OBTENER EL TOTAL DE CAJAS POR PEDIDO
     INNER JOIN (
         SELECT 
-            Id_EncabPedido,
-            SUM(Cantidad) AS TotalCajasPedido
+            DetPedidoSample.Id_EncabPedido,
+            SUM(DetPedidoSample.Cantidad) AS TotalCajasPedido
         FROM DetPedidoSample
-        GROUP BY Id_EncabPedido
+        INNER JOIN EncabPedidoSample ON DetPedidoSample.Id_EncabPedido = EncabPedidoSample.Id_EncabPedido
+        WHERE EncabPedidoSample.Estado = 'Activo'
+        GROUP BY DetPedidoSample.Id_EncabPedido
     ) total_pedido ON enc.Id_EncabPedido = total_pedido.Id_EncabPedido
 
-    WHERE enc.{$campoFecha} BETWEEN ? AND ?
+    WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
     GROUP BY enc.Id_EncabPedido, det.Id_Producto, det.Id_Embalaje
 
     ORDER BY FechaETD, ListaEmpaque, Codigo_Siesa";
@@ -205,7 +211,7 @@ try {
         $Descripcion, $DescripFactura, $CajasOrden, $CajasDespachadas,
         $CantidadCaja, $TotalTM, $PesoUnd, $PesoCj, $KgNet, $KgBrt,
         $ValorKg, $USD, $CantidadEstibas, $FechaOrden, $FechaETD,
-        $FechaETA, $FechaETAF, $FechaQB, $DescripcionExcel, $DescripFacExcel, $TipoDato
+        $FechaETA, $FechaETAF, $FechaQB, $DescripcionExcel, $DescripFacExcel, $TipoDato, $GuiaMaster
     );
     
     // CREAR EL EXCEL
@@ -220,7 +226,7 @@ try {
         'Descripcion', 'DescripFactura', 'CajasOrden', 'CajasDespachadas', 
         'CantidadCaja', 'TotalTM', 'PesoUnd', 'PesoCj', 'KgNet', 'KgBrt', 
         'ValorKg', 'USD', 'CantidadEstibas', 'FechaOrden', 'FechaETD', 
-        'FechaETA', 'FechaETAF', 'FechaQB', 'DescripcionExcel', 'DescripFacExcel', 'TipoDato'
+        'FechaETA', 'FechaETAF', 'FechaQB', 'DescripcionExcel', 'DescripFacExcel', 'TipoDato', 'GuiaMaster'
     ];
 
     // Aplicar estilos a los encabezados
@@ -269,6 +275,7 @@ try {
         $sheet->setCellValue('AD' . $fila, $DescripcionExcel);
         $sheet->setCellValue('AE' . $fila, $DescripFacExcel);
         $sheet->setCellValue('AF' . $fila, $TipoDato);
+        $sheet->setCellValue('AG' . $fila, $GuiaMaster);
         
         $fila++;
         $contadorFilas++;

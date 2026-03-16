@@ -13,7 +13,7 @@ const DashboardDocumentosDespacho = ({
   onReversarDocumentos
 }) => {
   const [generandoDocumento, setGenerandoDocumento] = useState('');
-  
+
   // Estados para el visor de PDF - IGUAL QUE Pedidos.jsx
   const [urlPDF, setUrlPDF] = useState(null);
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -71,7 +71,26 @@ const DashboardDocumentosDespacho = ({
         }
 
         console.log('📋 ID de planilla a usar:', idPlanilla);
-        blob = await generarCartaResponsabilidad(tipoDocumento, idPlanilla);
+
+        // 🔴 CORREGIDO: Manejar correctamente la respuesta del SweetAlert
+        const result = await Swal.fire({
+          title: '¿Incluir firma?',
+          text: 'Selecciona si deseas incluir la firma en el documento',
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: '✅ Con Firma',
+          cancelButtonText: '❌ Sin Firma',
+          confirmButtonColor: '#3085d6',
+          cancelButtonColor: '#d33',
+          reverseButtons: true
+        });
+
+        // 🔴 CORRECCIÓN: result.isConfirmed es true cuando se confirma, false cuando se cancela
+        const conFirma = result.isConfirmed;
+
+        console.log('🖊️ Opción de firma seleccionada:', conFirma ? 'CON FIRMA' : 'SIN FIRMA');
+
+        blob = await generarCartaResponsabilidad(tipoDocumento, idPlanilla, conFirma);
 
       }
       // Para Reporte de Despacho

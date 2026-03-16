@@ -35,8 +35,8 @@ $sqlPedidos = "SELECT
             enc.GuiaHija,
             SUM(det.Cantidad) AS cajas,
             SUM(det.Cantidad * emb.Cantidad) AS tms,
-            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr /1000 ),2) AS pesoNeto,
-            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr /1000 * det.PrecioUnitario),2) AS valor,
+            ROUND(SUM(det.PesoNeto),2) AS pesoNeto,
+            ROUND(SUM(det.PesoNeto * det.PrecioUnitario),2) AS valor,
             enc.CantidadEstibas AS estibas,
             'PED' AS tipo  -- 👈 Identificador para pedidos regulares
         FROM EncabPedido enc
@@ -44,7 +44,7 @@ $sqlPedidos = "SELECT
         INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.FechaSalida BETWEEN ? AND ? AND NULLIF(FacturaNo, '') IS NULL
+        WHERE enc.FechaSalida BETWEEN ? AND ? AND enc.Estado = 'Activo' AND NULLIF(FacturaNo, '') IS NULL
         GROUP BY enc.Id_EncabPedido";
 
 // CONSULTA UNIFICADA - SAMPLES
@@ -60,15 +60,15 @@ $sqlSamples = "SELECT
             enc.GuiaHija,
             ROUND(SUM(det.Cantidad), 2) AS cajas,
             SUM(det.Cantidad * emb.Cantidad) AS tms,
-            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr /1000 ),2) AS pesoNeto,
-            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr /1000 * det.PrecioUnitario),2) AS valor,
+            ROUND(SUM(det.PesoNeto ),2) AS pesoNeto,
+            ROUND(SUM(det.PesoNeto * det.PrecioUnitario),2) AS valor,
             enc.CantidadEstibas AS estibas,
             'SMP' AS tipo  -- 👈 Identificador para samples
         FROM EncabPedidoSample enc
         INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.FechaSalida BETWEEN ? AND ? AND NULLIF(FacturaNo, '') IS NULL
+        WHERE enc.FechaSalida BETWEEN ? AND ? AND enc.Estado = 'Activo' AND NULLIF(FacturaNo, '') IS NULL
         GROUP BY enc.Id_EncabPedido";
 
 // COMBINAR AMBAS CONSULTAS CON UNION

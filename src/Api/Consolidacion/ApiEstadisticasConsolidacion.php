@@ -38,11 +38,11 @@ $sql = "SELECT
     (
         SELECT COUNT(DISTINCT Id_EncabPedido) 
         FROM EncabPedido 
-        WHERE $tipoFecha BETWEEN ? AND ?
+        WHERE $tipoFecha BETWEEN ? AND ? AND Estado = 'Activo'
     ) + (
         SELECT COUNT(DISTINCT Id_EncabPedido) 
         FROM EncabPedidoSample 
-        WHERE $tipoFecha BETWEEN ? AND ?
+        WHERE $tipoFecha BETWEEN ? AND ? AND Estado = 'Activo'
     ) as totalPedidos,
     
     -- Sumar cajas de ambas tablas (4 parámetros)
@@ -50,29 +50,29 @@ $sql = "SELECT
         SELECT COALESCE(SUM(det.Cantidad), 0)
         FROM EncabPedido enc
         INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
-        WHERE enc.$tipoFecha BETWEEN ? AND ?
+        WHERE enc.$tipoFecha BETWEEN ? AND ? AND enc.Estado = 'Activo'
     ) + (
         SELECT COALESCE(SUM(det.Cantidad), 0)
         FROM EncabPedidoSample enc
         INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
-        WHERE enc.$tipoFecha BETWEEN ? AND ?
+        WHERE enc.$tipoFecha BETWEEN ? AND ? AND enc.Estado = 'Activo'
     ) AS Cajas,
     
     -- Sumar peso neto de ambas tablas (4 parámetros)
     (
-        SELECT COALESCE(ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000), 2), 0)
+        SELECT COALESCE(ROUND(SUM(det.PesoNeto), 2), 0)
         FROM EncabPedido enc
         INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.$tipoFecha BETWEEN ? AND ?
+        WHERE enc.$tipoFecha BETWEEN ? AND ? AND enc.Estado = 'Activo'
     ) + (
-        SELECT COALESCE(ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000), 2), 0)
+        SELECT COALESCE(ROUND(SUM(det.PesoNeto), 2), 0)
         FROM EncabPedidoSample enc
         INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.$tipoFecha BETWEEN ? AND ?
+        WHERE enc.$tipoFecha BETWEEN ? AND ? AND enc.Estado = 'Activo'
     ) AS PesoNeto,
     
     -- Sumar valor USD de ambas tablas (4 parámetros)
@@ -82,25 +82,25 @@ $sql = "SELECT
         INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.$tipoFecha BETWEEN ? AND ?
+        WHERE enc.$tipoFecha BETWEEN ? AND ? AND enc.Estado = 'Activo'
     ) + (
         SELECT COALESCE(ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000 * det.PrecioUnitario), 2), 0)
         FROM EncabPedidoSample enc
         INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
         INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
         INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-        WHERE enc.$tipoFecha BETWEEN ? AND ?
+        WHERE enc.$tipoFecha BETWEEN ? AND ? AND enc.Estado = 'Activo'
     ) AS USD,
     
     -- Sumar estibas de ambas tablas (2 parámetros)
     (
         SELECT COALESCE(SUM(CantidadEstibas), 0)
         FROM EncabPedido 
-        WHERE $tipoFecha BETWEEN ? AND ?
+        WHERE $tipoFecha BETWEEN ? AND ? AND Estado = 'Activo'
     ) + (
         SELECT COALESCE(SUM(CantidadEstibas), 0)
         FROM EncabPedidoSample 
-        WHERE $tipoFecha BETWEEN ? AND ?
+        WHERE .$tipoFecha BETWEEN ? AND ? AND .Estado = 'Activo'
     ) AS Estibas";
 
 try {

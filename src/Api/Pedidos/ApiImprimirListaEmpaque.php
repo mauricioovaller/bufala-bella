@@ -1,4 +1,5 @@
 <?php
+//src/Api/Pedidos/ApiImprimirListaEmpaque.php
 require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");  // Incluye la librería FPDF
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
 $enlace->set_charset("utf8mb4"); // 👈 importante
@@ -114,9 +115,9 @@ $sqlDetalle = "SELECT
                 (prod.PesoGr / 1000) AS PesoUnd,
                 (emb.Cantidad * prod.PesoGr / 1000) AS PesoCaja,
                 prod.FactorPesoBruto,
-                (det.Cantidad * emb.Cantidad * prod.PesoGr / 1000) AS PesoNetoKg,
-                (det.Cantidad * emb.Cantidad * prod.PesoGr * prod.FactorPesoBruto / 1000) AS PesoBrutoKg,
-                ((det.Cantidad * emb.Cantidad * prod.PesoGr / 1000) * det.PrecioUnitario) AS Subtotal
+                (det.PesoNeto) AS PesoNetoKg,
+                (det.PesoBruto) AS PesoBrutoKg,
+                (det.PesoNeto * det.PrecioUnitario) AS Subtotal
                FROM DetPedido det
                INNER JOIN Productos prod ON det.Id_Producto = prod.Id_Producto
                INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje

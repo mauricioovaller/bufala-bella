@@ -1,3 +1,4 @@
+//src/components/pedidos/PedidoDetail.jsx
 import React, { useEffect } from "react";
 
 // Mapeo de embalajes por defecto según el Id_Producto
@@ -34,7 +35,7 @@ export default function PedidoDetail({
       // Si ya tenemos todos los datos calculados, no recalcular
       if (item.pesoNeto !== undefined && item.pesoNeto !== 0 &&
         item.pesoBruto !== undefined && item.pesoBruto !== 0) {
-        return item;
+        return item; // Mantener valores existentes
       }
 
       // Buscar información actualizada del producto
@@ -156,17 +157,21 @@ export default function PedidoDetail({
         item.embalaje = "";
         item.cantidadEmbalaje = 0;
       }
-    } else if (["cantidad", "precio"].includes(field)) {
+    } else if (["cantidad", "precio", "pesoNeto", "pesoBruto"].includes(field)) {
       item[field] = Number(value || 0);
     } else {
       item[field] = value;
     }
 
     // Calcular subtotal y peso
-    item.pesoNeto =
-      ((item.cantidad || 0) * (item.cantidadEmbalaje || 0) * (item.pesoGr || 0)) / 1000;
-    item.pesoBruto =
-      ((item.cantidad || 0) * (item.cantidadEmbalaje || 0) * (item.pesoGr || 0) * (item.factorPesoBruto || 0)) / 1000;
+    // 👇 IMPORTANTE: Solo recalcular si NO estamos editando manualmente los pesos
+    if (field !== "pesoNeto" && field !== "pesoBruto") {
+      // Calcular subtotal y peso automáticamente
+      item.pesoNeto =
+        ((item.cantidad || 0) * (item.cantidadEmbalaje || 0) * (item.pesoGr || 0)) / 1000;
+      item.pesoBruto =
+        ((item.cantidad || 0) * (item.cantidadEmbalaje || 0) * (item.pesoGr || 0) * (item.factorPesoBruto || 0)) / 1000;
+    }
     item.subtotal = item.pesoNeto * (item.precio || 0);
 
     onChangeItems(copy);
@@ -296,13 +301,25 @@ export default function PedidoDetail({
                   </td>
 
                   {/* Peso Neto */}
-                  <td className="p-2 text-right text-gray-700 font-medium">
-                    {it.pesoNeto.toFixed(2)}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={it.pesoNeto || 0}
+                      onChange={(e) => updateItem(idx, "pesoNeto", parseFloat(e.target.value) || 0)}
+                      className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
                   </td>
 
                   {/* Peso Bruto */}
-                  <td className="p-2 text-right text-gray-700 font-medium">
-                    {it.pesoBruto.toFixed(2)}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={it.pesoBruto || 0}
+                      onChange={(e) => updateItem(idx, "pesoBruto", parseFloat(e.target.value) || 0)}
+                      className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
                   </td>
 
                   {/* Subtotal */}

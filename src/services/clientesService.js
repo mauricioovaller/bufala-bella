@@ -1,3 +1,4 @@
+//src/services/clientesService.js
 const BASE_URL = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Clientes";
 
 // Listar todos los bodegas

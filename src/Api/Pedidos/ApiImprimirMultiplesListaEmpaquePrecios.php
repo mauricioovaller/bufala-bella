@@ -1,4 +1,5 @@
 <?php
+//src/Api/Pedidos/ApiImprimirMultiplesListaEmpaquePrecios.php
 require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
 $enlace->set_charset("utf8mb4");
@@ -14,23 +15,53 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $input = json_decode(file_get_contents("php://input"), true);
 
 // Verificar filtros
-if (!isset($input['fechaDesde']) || !isset($input['fechaHasta']) || !isset($input['tipoDocumento'])) {
-    die(json_encode(["error" => "Filtros requeridos: fechaDesde, fechaHasta, tipoDocumento"]));
+if (!isset($input['tipoDocumento'])) {
+    die(json_encode(["error" => "Filtro requerido: tipoDocumento"]));
 }
 
-$fechaDesde = $input['fechaDesde'];
-$fechaHasta = $input['fechaHasta'];
+// 👇 NUEVO: Obtener modo
+$modo = $input['modo'] ?? 'porFechas'; // 'porFechas' o 'porNumeros'
 $bodegaId = $input['bodegaId'] ?? '';
 $tipoDocumento = $input['tipoDocumento'];
 
-// Consultar pedidos según filtros
-$sqlPedidos = "SELECT ep.Id_EncabPedido 
-               FROM EncabPedido ep
-               WHERE ep.FechaSalida BETWEEN ? AND ?";
-               
-$params = [$fechaDesde, $fechaHasta];
-$types = "ss";
+// 👇 MODIFICADO: Consultar pedidos según el MODO
+if ($modo === 'porFechas') {
+    // Modo por fechas (comportamiento original)
+    if (!isset($input['fechaDesde']) || !isset($input['fechaHasta'])) {
+        die(json_encode(["error" => "Para modo por fechas se requieren: fechaDesde, fechaHasta"]));
+    }
+    
+    $fechaDesde = $input['fechaDesde'];
+    $fechaHasta = $input['fechaHasta'];
+    
+    $sqlPedidos = "SELECT ep.Id_EncabPedido 
+                   FROM EncabPedido ep
+                   WHERE (ep.FechaSalida BETWEEN ? AND ?) AND ep.Estado = 'Activo'";
+                   
+    $params = [$fechaDesde, $fechaHasta];
+    $types = "ss";
+    
+} else if ($modo === 'porNumeros') {
+    // Modo por números (NUEVO)
+    if (!isset($input['numeroDesde']) || !isset($input['numeroHasta'])) {
+        die(json_encode(["error" => "Para modo por números se requieren: numeroDesde, numeroHasta"]));
+    }
+    
+    $numeroDesde = intval($input['numeroDesde']);
+    $numeroHasta = intval($input['numeroHasta']);
+    
+    $sqlPedidos = "SELECT ep.Id_EncabPedido 
+                   FROM EncabPedido ep
+                   WHERE (ep.Id_EncabPedido BETWEEN ? AND ?) AND ep.Estado = 'Activo'";
+                   
+    $params = [$numeroDesde, $numeroHasta];
+    $types = "ii";
+    
+} else {
+    die(json_encode(["error" => "Modo no válido. Use 'porFechas' o 'porNumeros'"]));
+}
 
+// 👇 MANTENER: Filtro por bodega (común para ambos modos)
 if (!empty($bodegaId)) {
     $sqlPedidos .= " AND ep.Id_Bodega = ?";
     $params[] = $bodegaId;
@@ -231,7 +262,7 @@ class PDF extends FPDF
                           LEFT JOIN Bodegas bod ON enc.Id_Bodega = bod.Id_Bodega
                           LEFT JOIN Agencias age ON enc.IdAgencia = age.IdAgencia
                           LEFT JOIN Aerolineas aer ON enc.IdAerolinea = aer.IdAerolinea
-                          WHERE enc.Id_EncabPedido = ?";
+                          WHERE enc.Id_EncabPedido = ? AND enc.Estado = 'Activo'";
 
         $stmtEncabezado = $enlace->prepare($sqlEncabezado);
         $stmtEncabezado->bind_param("i", $idPedido);
@@ -293,13 +324,14 @@ class PDF extends FPDF
                         (prod.PesoGr / 1000) AS PesoUnd,
                         (emb.Cantidad * prod.PesoGr / 1000) AS PesoCaja,
                         prod.FactorPesoBruto,
-                        (det.Cantidad * emb.Cantidad * prod.PesoGr / 1000) AS PesoNetoKg,
-                        (det.Cantidad * emb.Cantidad * prod.PesoGr * prod.FactorPesoBruto / 1000) AS PesoBrutoKg,
-                        ((det.Cantidad * emb.Cantidad * prod.PesoGr / 1000) * det.PrecioUnitario) AS Subtotal
-                       FROM DetPedido det
+                        (det.PesoNeto) AS PesoNetoKg,
+                        (det.PesoBruto) AS PesoBrutoKg,
+                        (det.PesoNeto * det.PrecioUnitario) AS Subtotal
+                       FROM DetPedido det                       
+                       INNER JOIN EncabPedido enc ON det.Id_EncabPedido = enc.Id_EncabPedido
                        INNER JOIN Productos prod ON det.Id_Producto = prod.Id_Producto
                        INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-                       WHERE det.Id_EncabPedido = ?
+                       WHERE det.Id_EncabPedido = ? AND enc.Estado = 'Activo'
                        ORDER BY det.Id_DetPedido";
 
         $stmtDetalle = $enlace->prepare($sqlDetalle);

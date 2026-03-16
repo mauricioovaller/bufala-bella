@@ -265,7 +265,7 @@ export default function PedidosSample() {
     if (!header.clienteTexto || String(header.clienteTexto).trim() === "") {
       Swal.fire("Error", "El cliente/destinatario es obligatorio.", "warning");
       return false;
-    }    
+    }
 
     if (
       header.cantidadEstibas !== undefined &&
@@ -343,6 +343,13 @@ export default function PedidosSample() {
     if (!validateAll()) return;
 
     try {
+      // 👇 AQUÍ EL CAMBIO: Asegurar que items tengan pesos
+      const itemsConPesos = items.map(item => ({
+        ...item,
+        pesoNeto: item.pesoNeto || 0,
+        pesoBruto: item.pesoBruto || 0,
+        subtotal: item.subtotal || 0
+      }));
       // Si el sample ya tiene ID (diferente de 0 o null/undefined), significa que ya existe en BD → ACTUALIZAR
       if (header.id && header.id !== 0) {
         const encabezado = {
@@ -350,7 +357,7 @@ export default function PedidosSample() {
           sampleId: header.id,
         };
 
-        const res = await actualizarSample(encabezado, items);
+        const res = await actualizarSample(encabezado, itemsConPesos);
         if (res.success) {
           Swal.fire("¡Actualizado!", "Sample actualizado correctamente.", "success");
           // Opcional: refrescar el sample desde backend
@@ -360,7 +367,7 @@ export default function PedidosSample() {
         }
       } else {
         // Si no tiene ID → GUARDAR NUEVO
-        const res = await guardarSample(header, items);
+        const res = await guardarSample(header, itemsConPesos);
         if (res.success) {
           const nuevoNumero = `SAMP-${String(res.idPedido).padStart(6, "0")}`;
           setHeader((p) => ({ ...p, id: res.idPedido, numero: nuevoNumero }));
@@ -386,12 +393,20 @@ export default function PedidosSample() {
     if (!validateAll()) return;
 
     try {
+      // 👇 AQUÍ EL CAMBIO: Asegurar que items tengan pesos
+      const itemsConPesos = items.map(item => ({
+        ...item,
+        pesoNeto: item.pesoNeto || 0,
+        pesoBruto: item.pesoBruto || 0,
+        subtotal: item.subtotal || 0
+      }));
+
       const encabezado = {
         ...header,
         pedidoId: header.id,   // 👈 obligatorio para el backend
       };
 
-      const res = await actualizarSample(encabezado, items);
+      const res = await actualizarSample(encabezado, itemsConPesos);
       if (res.success) {
         Swal.fire("¡Actualizado!", "Sample actualizado correctamente.", "success");
         // refrescar el sample desde backend
@@ -566,9 +581,27 @@ export default function PedidosSample() {
         const cantidadEmbalaje = embalajeInfo?.Cantidad ?? 0;
 
         // Recalcular los campos como lo hace PedidoDetail
-        const pesoNeto = ((cantidad * cantidadEmbalaje * pesoGr) / 1000) || 0;
-        const pesoBruto = ((cantidad * cantidadEmbalaje * pesoGr * factorPesoBruto) / 1000) || 0;
-        const subtotal = pesoNeto * precio;
+        // 👇 VALORES DEL BACKEND (si existen)
+        const pesoNetoBackend = d.PesoNeto;
+        const pesoBrutoBackend = d.PesoBruto;
+        const valorRegistroBackend = d.ValorRegistro;
+
+        // 👇 VALORES CALCULADOS (como referencia)
+        const pesoNetoCalc = ((cantidad * cantidadEmbalaje * pesoGr) / 1000) || 0;
+        const pesoBrutoCalc = ((cantidad * cantidadEmbalaje * pesoGr * factorPesoBruto) / 1000) || 0;
+
+        // 👇 DECIDIR QUÉ VALORES USAR: primero los del backend, sino los calculados
+        const pesoNetoFinal = (pesoNetoBackend !== undefined && pesoNetoBackend !== null)
+          ? pesoNetoBackend
+          : pesoNetoCalc;
+
+        const pesoBrutoFinal = (pesoBrutoBackend !== undefined && pesoBrutoBackend !== null)
+          ? pesoBrutoBackend
+          : pesoBrutoCalc;
+
+        const subtotalFinal = (valorRegistroBackend !== undefined && valorRegistroBackend !== null)
+          ? valorRegistroBackend
+          : (pesoNetoFinal * precio);
 
         return {
           id: d.Id_DetSample ?? d.IdDetSample ?? d.id ?? null,
@@ -579,9 +612,9 @@ export default function PedidosSample() {
           embalaje: d.Id_Embalaje ?? d.IdEmbalaje ?? "",
           cantidad: cantidad,
           precio: precio,
-          pesoNeto: pesoNeto,
-          pesoBruto: pesoBruto,
-          subtotal: subtotal,
+          pesoNeto: pesoNetoFinal,
+          pesoBruto: pesoBrutoFinal,
+          subtotal: subtotalFinal,
           cantidadEmbalaje: cantidadEmbalaje,
         };
       });
@@ -803,8 +836,8 @@ export default function PedidosSample() {
                   value={filtroSamples}
                   onChange={(e) => setFiltroSamples(e.target.value)}
                 />
-                <button 
-                  onClick={cerrarModalBuscarSamples} 
+                <button
+                  onClick={cerrarModalBuscarSamples}
                   className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 transition"
                 >
                   Cerrar

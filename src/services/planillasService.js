@@ -68,29 +68,30 @@ export async function generarDocumentoPlanilla(tipoDocumento, idPlanilla) {
   }
 }
 
-// Función para generar Carta de Responsabilidad (Aerolínea/Policía)
-export const generarCartaResponsabilidad = async (tipoCarta, idPlanilla) => {
+// Función para generar Carta de Responsabilidad (Aerolínea/Policía) - ACTUALIZADA
+export const generarCartaResponsabilidad = async (
+  tipoCarta,
+  idPlanilla,
+  conFirma = true
+) => {
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/ApiGenerarPlanillasPDF.php`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tipo_carta: tipoCarta,
-          id_planilla: idPlanilla,
-        }),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/ApiGenerarPlanillasPDF.php`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tipo_carta: tipoCarta,
+        id_planilla: idPlanilla,
+        con_firma: conFirma, // 🔴 NUEVO parámetro
+      }),
+    });
 
     if (!response.ok) {
       throw new Error("Error en la generación de la carta");
     }
 
     return await response.blob();
-
   } catch (error) {
     console.error("Error generando carta de responsabilidad:", error);
     return {
@@ -99,7 +100,6 @@ export const generarCartaResponsabilidad = async (tipoCarta, idPlanilla) => {
     };
   }
 };
-
 // Función para generar Reporte de Despacho
 export const generarReporteDespacho = async (idFactura) => {
   try {
@@ -118,7 +118,6 @@ export const generarReporteDespacho = async (idFactura) => {
     }
 
     return await response.blob();
-
   } catch (error) {
     console.error("Error generando reporte de despacho:", error);
     return {
@@ -146,7 +145,6 @@ export const generarPlanVallejo = async (idFactura) => {
     }
 
     return await response.blob();
-    
   } catch (error) {
     console.error("Error generando Plan Vallejo:", error);
     return {

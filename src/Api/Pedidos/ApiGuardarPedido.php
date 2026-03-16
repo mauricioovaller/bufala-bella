@@ -1,4 +1,5 @@
 <?php
+//src/Api/Pedidos/ApiGuardarPedido.php
 header("Content-Type: application/json");
 
 // Solo POST permitido
@@ -116,8 +117,8 @@ try {
 
     // Insertar detalle (sin cambios)
     $sqlDet = "INSERT INTO DetPedido 
-        (Id_EncabPedido, Id_Producto, Descripcion, Id_Embalaje, Cantidad, PrecioUnitario) 
-        VALUES (?, ?, ?, ?, ?, ?)";
+        (Id_EncabPedido, Id_Producto, Descripcion, Id_Embalaje, Cantidad, PesoNeto, PesoBruto, PrecioUnitario) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     $stmtDet = $enlace->prepare($sqlDet);
 
     foreach ($detalle as $item) {
@@ -125,13 +126,15 @@ try {
         $descripcion = limpiar_descripcion($item["descripcion"] ?? ""); // 👈 Usar limpiar_descripcion
         $idEmbalaje = validar_entero($item["embalaje"] ?? null);
         $cantidad = validar_flotante($item["cantidad"] ?? null);
+        $pesoNeto = validar_flotante($item["pesoNeto"] ?? null);
+        $pesoBruto = validar_flotante($item["pesoBruto"] ?? null);
         $precio = validar_flotante($item["precio"] ?? null);
 
         if (!$idProducto || !$descripcion || !$idEmbalaje || !$cantidad || !$precio) {
             throw new Exception("Datos inválidos en detalle");
         }
 
-        $stmtDet->bind_param("iisidd", $idEncabPedido, $idProducto, $descripcion, $idEmbalaje, $cantidad, $precio);
+        $stmtDet->bind_param("iisidddd", $idEncabPedido, $idProducto, $descripcion, $idEmbalaje, $cantidad, $pesoNeto, $pesoBruto, $precio);
         $stmtDet->execute();
 
         if ($stmtDet->affected_rows <= 0) {

@@ -27,6 +27,9 @@ if (!isset($input['id_planilla']) || empty($input['id_planilla'])) {
     die("ID de planilla no válido.");
 }
 
+// 🔴 NUEVO: Parámetro opcional para firma (por defecto true - con firma)
+$con_firma = isset($input['con_firma']) ? (bool)$input['con_firma'] : true;
+
 $tipo_carta = $input['tipo_carta'];
 $id_planilla = intval($input['id_planilla']);
 
@@ -36,7 +39,7 @@ function mesEnEspanol($fecha)
     if (empty($fecha)) {
         return 'Fecha no disponible';
     }
-    
+
     $meses = [
         '01' => 'Enero',
         '02' => 'Febrero',
@@ -182,10 +185,13 @@ class PDF extends FPDF
         $this->Cell(53, 4, '', 0, 0, 'C');
         $this->Cell(65, 4, 'Movil. (57) 321 242 45 52', 0, 1, 'C');
 
-        // Agregar imagen de firma
-        $firmaPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/firma.jpg";
-        if (file_exists($firmaPath)) {
-            $this->Image($firmaPath, 10, $this->GetY() - 50, 50);
+        // 🔴 MODIFICADO: Agregar imagen de firma solo si $con_firma es true
+        global $con_firma;
+        if ($con_firma) {
+            $firmaPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/firma.jpg";
+            if (file_exists($firmaPath)) {
+                $this->Image($firmaPath, 10, $this->GetY() - 50, 50);
+            }
         }
     }
 }

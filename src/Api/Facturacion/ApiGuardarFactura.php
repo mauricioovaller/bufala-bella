@@ -1,4 +1,5 @@
 <?php
+//src/Api/Facturacion/ApiGuardarFactura.php
 header("Content-Type: application/json");
 
 // Solo POST permitido
@@ -101,7 +102,7 @@ try {
         $sqlDetalle = "SELECT      
             prd.Codigo_Siesa,
             prd.Codigo_FDA,
-            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS Kilogramos,
+            ROUND(SUM(det.PesoNeto),2) AS Kilogramos,
             det.Id_Embalaje,
             SUM(det.Cantidad * emb.Cantidad) AS CantidadEmbalaje,
             SUM(det.Cantidad) AS Cajas,
@@ -119,7 +120,7 @@ try {
         $sqlDetalle = "SELECT      
             prd.Codigo_Siesa,
             prd.Codigo_FDA,
-            ROUND(SUM(det.Cantidad * emb.Cantidad * prd.PesoGr / 1000),2) AS Kilogramos,
+            ROUND(SUM(det.PesoNeto),2) AS Kilogramos,
             det.Id_Embalaje,
             SUM(det.Cantidad * emb.Cantidad) AS CantidadEmbalaje,
             SUM(det.Cantidad) AS Cajas,
@@ -188,7 +189,7 @@ try {
     $item = 1;
     foreach ($detallesFactura as $detalle) {
         $stmtDet->bind_param(
-            "iissdiidsds",
+            "iissdiddsds",
             $numeroFactura,
             $item,
             $detalle['Codigo_Siesa'],

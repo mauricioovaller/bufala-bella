@@ -256,24 +256,27 @@ export default function FacturacionMain() {
 
             setConfiguracionDocumentos(configuracion);
             setPlanillaCreada(planillaConEstructura); // 🔴 Usar la estructura corregida
-            setPasoDocumentos('dashboard');
-            setModalConfiguracionAbierto(false);
+            setPasoDocumentos('dashboard');            
 
             Swal.fire({
                 icon: 'success',
                 title: '¡Planilla Creada!',
                 html: `
-            <div class="text-left">
-                <p><strong>Planilla:</strong> #${resultado.idPlanilla}</p>
-                <p><strong>Conductor:</strong> ${configuracion.conductor.nombre}</p>
-                <p><strong>Vehículo:</strong> ${configuracion.placaVehiculo}</p>
-                <p><strong>Facturas:</strong> ${resultado.facturas}</p>
-                <p><strong>Total Piezas:</strong> ${resultado.totalPiezas}</p>
-            </div>
-            <p class="mt-3 text-sm text-green-600">✅ Ahora puedes generar los documentos</p>
-        `,
+                        <div class="text-left">
+                            <p><strong>N° Planilla:</strong> #${resultado.idPlanilla}</p>
+                            <p><strong>Conductor:</strong> ${configuracion.conductor.nombre}</p>
+                            <p><strong>Ayudante:</strong> ${configuracion.ayudante ? configuracion.ayudante.nombre : 'No asignado'}</p>
+                            <p><strong>Vehículo:</strong> ${configuracion.placaVehiculo} - ${configuracion.descripcionVehiculo}</p>
+                            <p><strong>Precinto:</strong> ${configuracion.precintoSeguridad}</p>
+                            <p><strong>Facturas:</strong> ${resultado.facturas}</p>
+                            <p><strong>Total Piezas:</strong> ${resultado.totalPiezas}</p>
+                        </div>
+                        <p class="mt-3 text-sm text-green-600">✅ Planilla #${resultado.idPlanilla} guardada correctamente</p>
+                    `,
                 confirmButtonColor: '#10b981',
             });
+
+            setModalConfiguracionAbierto(false);
 
         } catch (error) {
             console.error('Error creando planilla:', error);
