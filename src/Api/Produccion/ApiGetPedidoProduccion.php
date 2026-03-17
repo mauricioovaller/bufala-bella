@@ -1,33 +1,25 @@
 <?php
 header("Content-Type: application/json");
-
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     echo json_encode(["success" => false, "message" => "Método no permitido"]);
     exit;
 }
-
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
-
 if ($enlace->connect_error) {
     echo json_encode(["success" => false, "message" => "Error de conexión: " . $enlace->connect_error]);
     exit;
 }
-
 $json = file_get_contents("php://input");
 $data = json_decode($json, true);
-
 $idPedido = isset($data['idPedido']) ? intval($data['idPedido']) : 0;
 $tipo = $data['tipo'] ?? 'normal'; // 'normal' o 'sample'
-
 if (!$idPedido) {
     echo json_encode(["success" => false, "message" => "ID de pedido no válido"]);
     exit;
 }
-
 // Determinar tablas según tipo
 $tablaEnc = ($tipo === 'sample') ? 'EncabPedidoSample' : 'EncabPedido';
 $tablaDet = ($tipo === 'sample') ? 'DetPedidoSample' : 'DetPedido';
-
 try {
     // Obtener encabezado
     $sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, PurchaseOrder, FechaOrden FROM $tablaEnc WHERE Id_EncabPedido = ?";
@@ -53,7 +45,7 @@ try {
     $stmtCli->fetch();
     $stmtCli->close();
     
-    // Obtener detalle con responsable y lotes
+    // Obtener detalle con responsable, lotes y cantidades
     $sqlDet = "SELECT 
         d.Id_DetPedido,
         d.Id_Producto,
@@ -66,7 +58,10 @@ try {
         d.Lote3,
         l1.CodigoLote AS Lote1Codigo,
         l2.CodigoLote AS Lote2Codigo,
-        l3.CodigoLote AS Lote3Codigo
+        l3.CodigoLote AS Lote3Codigo,
+        d.CantidadLote1,
+        d.CantidadLote2,
+        d.CantidadLote3
     FROM $tablaDet d
     INNER JOIN Productos p ON d.Id_Producto = p.Id_Producto
     LEFT JOIN Responsables r ON d.Id_Responsable = r.Id_Responsable
@@ -92,7 +87,10 @@ try {
         $lote3,
         $lote1Codigo,
         $lote2Codigo,
-        $lote3Codigo
+        $lote3Codigo,
+        $cantidadLote1,
+        $cantidadLote2,
+        $cantidadLote3
     );
     
     $items = [];
@@ -108,6 +106,11 @@ try {
                 'lote1' => ['id' => $lote1, 'codigo' => $lote1Codigo],
                 'lote2' => ['id' => $lote2, 'codigo' => $lote2Codigo],
                 'lote3' => ['id' => $lote3, 'codigo' => $lote3Codigo]
+            ],
+            'cantidades' => [
+                intval($cantidadLote1),
+                intval($cantidadLote2),
+                intval($cantidadLote3)
             ]
         ];
     }
@@ -130,6 +133,5 @@ try {
 } catch (Exception $e) {
     echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
 }
-
 $enlace->close();
 ?>
