@@ -176,6 +176,15 @@ export default function ProduccionPedidos() {
     const editado = itemsEditados[item.idDet] || {};
     const lotes = editado.lotes || ["", "", ""];
     const cantidades = editado.cantidades || [0, 0, 0];
+    const responsable = editado.idResponsable;
+
+    // Validar que haya al menos un lote asignado
+    const hayAlgunLote = lotes.some((lote) => lote && lote !== "");
+
+    // Si hay algún lote, DEBE estar seleccionado un responsable
+    if (hayAlgunLote && !responsable) {
+      errores.push(`Debe seleccionar un Responsable para asignar lotes`);
+    }
 
     for (let i = 0; i < 3; i++) {
       const loteAsignado = lotes[i] && lotes[i] !== "";
@@ -279,7 +288,7 @@ export default function ProduccionPedidos() {
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
         <h2 className="text-xl font-semibold mb-4 text-slate-700">
-          Producción: Asignar Responsable, Lotes y Cantidades
+          Despachos: Asignar Responsable, Lotes y Cantidades
         </h2>
         {/* Filtros de búsqueda por fecha */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -419,7 +428,7 @@ export default function ProduccionPedidos() {
                 onClick={handleGuardar}
                 className="bg-orange-500 text-white rounded-lg px-4 py-2 hover:bg-orange-600 transition font-medium"
               >
-                Guardar Producción
+                Guardar Despachos
               </button>
             </div>
             {/* Vista escritorio/tablet: tabla de ítems */}
