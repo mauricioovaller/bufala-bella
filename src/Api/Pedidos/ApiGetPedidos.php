@@ -14,9 +14,10 @@ if ($enlace->connect_error) {
 }
 
 // Consulta solo lo necesario para listar
-$sql = "SELECT e.Id_EncabPedido AS idPedido, e.FechaOrden, e.PurchaseOrder, c.Nombre
+$sql = "SELECT e.Id_EncabPedido AS idPedido, e.FechaOrden, e.PurchaseOrder, c.Nombre, r.Region
         FROM EncabPedido e
         INNER JOIN Clientes c ON e.Id_Cliente = c.Id_Cliente
+        INNER JOIN ClientesRegion r ON e.Id_ClienteRegion = r.Id_ClienteRegion
         WHERE e.Estado = 'Activo'
         ORDER BY e.Id_EncabPedido DESC";
 

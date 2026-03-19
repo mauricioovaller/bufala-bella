@@ -1,5 +1,7 @@
 //src/components/pedidos/PedidoDetail.jsx
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import ModalVisorProduccion from "./ModalVisorProduccion";
+import { getPedidoProduccion } from "../../services/produccion/produccionService";
 
 // Mapeo de embalajes por defecto según el Id_Producto
 const embalajesPorDefecto = {
@@ -23,7 +25,51 @@ export default function PedidoDetail({
   productos = [],
   embalajes = [],
   itemRefsRef,
+  idPedido,
+  tipoPedido = "normal",
 }) {
+  // Estado para modal de producción
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [productionData, setProductionData] = useState(null);
+  const [loadingProduction, setLoadingProduction] = useState(false);
+
+  // Función para obtener datos de producción
+  const fetchProductionData = async (detId) => {
+    try {
+      setLoadingProduction(true);
+      const result = await getPedidoProduccion({
+        idPedido: idPedido,
+        tipo: tipoPedido,
+      });
+
+      if (result.success && result.pedido.items) {
+        // Encontrar el item específico por su ID
+        const item = result.pedido.items.find((i) => i.idDet === detId);
+        if (item) {
+          setProductionData({
+            responsable: item.responsable || "No asignado",
+            lotes: item.lotes,
+            cantidades: item.cantidades,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching production data:", error);
+    } finally {
+      setLoadingProduction(false);
+    }
+  };
+
+  // Función para abrir el modal
+  const openProductionModal = (item) => {
+    setSelectedItem(item);
+    // Usar el id del item que viene en la estructura del pedido
+    // Si no existe, usaremos el índice del item
+    const detId = item.detId || item.id;
+    fetchProductionData(detId);
+    setModalOpen(true);
+  };
 
   // Efecto para recalcular campos cuando cambian items, productos o embalajes
   useEffect(() => {
@@ -327,16 +373,26 @@ export default function PedidoDetail({
                     {formatCurrency(it.subtotal.toFixed(2))}
                   </td>
 
-                  {/* Acciones */}
-                  <td className="p-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => removeItem(idx)}
-                      className="text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+                   {/* Acciones */}
+                   <td className="p-2 text-center">
+                     <div className="flex justify-center gap-1">
+                       <button
+                         type="button"
+                         onClick={() => openProductionModal(it)}
+                         className="text-blue-600 hover:text-blue-800 text-xs font-medium bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition"
+                         title="Ver información de producción"
+                       >
+                         👁️
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => removeItem(idx)}
+                         className="text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition"
+                       >
+                         Eliminar
+                       </button>
+                     </div>
+                   </td>
                 </tr>
               ))}
             </tbody>
@@ -440,11 +496,19 @@ export default function PedidoDetail({
               </div>
             </div>
 
-            <div className="mt-3 text-right">
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => openProductionModal(it)}
+                className="flex-1 text-blue-600 hover:text-blue-800 text-xs font-medium bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded transition"
+                title="Ver información de producción"
+              >
+                👁️ Ver Producción
+              </button>
               <button
                 type="button"
                 onClick={() => removeItem(idx)}
-                className="text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-3 py-2 rounded transition w-full"
+                className="flex-1 text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-3 py-2 rounded transition"
               >
                 Eliminar Producto
               </button>
@@ -458,6 +522,18 @@ export default function PedidoDetail({
           </div>
         )}
       </div>
+
+      {/* Modal de Producción */}
+      <ModalVisorProduccion
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedItem(null);
+          setProductionData(null);
+        }}
+        item={selectedItem}
+        productionData={productionData}
+      />
     </section>
   );
 }

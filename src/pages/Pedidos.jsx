@@ -1195,13 +1195,12 @@ export default function Pedidos() {
           <button
             onClick={handleSave}
             disabled={isSaving} // 👈 Deshabilitado mientras se guarda
-            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${
-              isSaving
-                ? "bg-gray-400 text-white cursor-not-allowed"
-                : header.id && header.id !== 0
+            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${isSaving
+              ? "bg-gray-400 text-white cursor-not-allowed"
+              : header.id && header.id !== 0
                 ? "bg-orange-500 text-white hover:bg-orange-600"
                 : "bg-orange-500 text-white hover:bg-orange-600"
-            }`}
+              }`}
           >
             {isSaving
               ? (header.id && header.id !== 0 ? "Actualizando..." : "Guardando...")
@@ -1217,11 +1216,10 @@ export default function Pedidos() {
           <button
             onClick={() => handlePrint()}
             disabled={!header.id}
-            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${
-              header.id
-                ? "bg-purple-600 text-white hover:bg-purple-700"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-            }`}
+            className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${header.id
+              ? "bg-purple-600 text-white hover:bg-purple-700"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
           >
             Imprimir PDF
           </button>
@@ -1254,6 +1252,8 @@ export default function Pedidos() {
         itemRefsRef={itemRefs}
         productos={datosSelect.productos}
         embalajes={datosSelect.embalajes}
+        idPedido={header.id || 0}
+        tipoPedido="normal"
       />
 
       {/* Modal de búsqueda */}
@@ -1296,6 +1296,7 @@ export default function Pedidos() {
                         <th className="py-2 px-2 font-semibold">Cliente</th>
                         <th className="py-2 px-2 font-semibold">Fecha Orden</th>
                         <th className="py-2 px-2 font-semibold">P.O.</th>
+                        <th className="py-2 px-2 font-semibold">Región</th>
                         <th className="py-2 px-2 font-semibold text-right">Acción</th>
                       </tr>
                     </thead>
@@ -1306,6 +1307,7 @@ export default function Pedidos() {
                           <td className="py-2 px-2">{p.Nombre}</td>
                           <td className="py-2 px-2">{p.FechaOrden}</td>
                           <td className="py-2 px-2">{p.PurchaseOrder || "-"}</td>
+                          <td className="py-2 px-2">{p.Region}</td>
                           <td className="py-2 px-2 text-right">
                             <button
                               className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
@@ -1354,6 +1356,10 @@ export default function Pedidos() {
                             <p className="text-blue-900 font-medium">{p.PurchaseOrder}</p>
                           </div>
                         )}
+                        <div>
+                          <span className="font-semibold text-gray-700">Región</span>
+                          <p className="text-gray-900">{p.Region}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1378,6 +1384,7 @@ export default function Pedidos() {
         onClose={() => setMostrarImpresionMultiple(false)}
         onImprimir={handlePrintMultiple}
         bodegas={datosSelect.bodegas}
+        tipoOrden="pedidos"
       />
 
       {/* Modal visor PDF */}

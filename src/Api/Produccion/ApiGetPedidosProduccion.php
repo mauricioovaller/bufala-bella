@@ -28,17 +28,17 @@ if (!$fechaDesde || !$fechaHasta) {
 
 // Determinar tablas según tipo
 $tablaEnc = ($tipo === 'sample') ? 'EncabPedidoSample' : 'EncabPedido';
-$campoFecha = 'FechaOrden'; // Puedes cambiarlo si necesitas otra fecha
+$campoFecha = 'FechaSalida'; // Puedes cambiarlo si necesitas otra fecha
 
 $sql = "SELECT 
     Id_EncabPedido AS idPedido,
     Id_Cliente,
     (SELECT Nombre FROM Clientes WHERE Id_Cliente = e.Id_Cliente) AS cliente,
     PurchaseOrder AS po,
-    FechaOrden AS fecha
+    FechaSalida AS fecha
 FROM $tablaEnc e
 WHERE $campoFecha BETWEEN ? AND ?
-ORDER BY $campoFecha DESC";
+ORDER BY $campoFecha DESC, Id_EncabPedido ";
 
 $stmt = $enlace->prepare($sql);
 $stmt->bind_param("ss", $fechaDesde, $fechaHasta);

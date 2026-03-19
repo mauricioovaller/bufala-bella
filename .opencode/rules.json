@@ -1,0 +1,9 @@
+{
+  "ruleset": [
+    {
+      "permission": "edit",
+      "pattern": "**/*",
+      "action": "allow"
+    }
+  ]
+}

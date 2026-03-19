@@ -180,10 +180,25 @@ export default function ProduccionPedidos() {
 
     // Validar que haya al menos un lote asignado
     const hayAlgunLote = lotes.some((lote) => lote && lote !== "");
+    
+    // Contar lotes con cantidad asignada (pareados correctamente)
+    let lotesConCantidad = 0;
+    for (let i = 0; i < 3; i++) {
+      const loteAsignado = lotes[i] && lotes[i] !== "";
+      const cantidadAsignada = cantidades[i] && cantidades[i] > 0;
+      if (loteAsignado && cantidadAsignada) {
+        lotesConCantidad++;
+      }
+    }
 
     // Si hay algún lote, DEBE estar seleccionado un responsable
     if (hayAlgunLote && !responsable) {
       errores.push(`Debe seleccionar un Responsable para asignar lotes`);
+    }
+
+    // Si hay responsable, DEBE haber al menos un lote con cantidad asignada
+    if (responsable && lotesConCantidad === 0) {
+      errores.push(`Debe asignar al menos un Lote con su respectiva Cantidad`);
     }
 
     for (let i = 0; i < 3; i++) {

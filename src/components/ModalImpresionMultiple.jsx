@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import { contarPedidosPorFiltro } from '../services/pedidosService';
+import { contarPedidosPorFiltro as contarPedidosService } from '../services/pedidosService';
+import { getRangeSamples as contarSamplesService } from '../services/pedidosSampleService';
 
-const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
+const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas, tipoOrden = 'pedidos' }) => {
+  // Seleccionar el servicio correcto según el tipo de orden
+  const contarPedidosPorFiltro = tipoOrden === 'samples' ? contarSamplesService : contarPedidosService;
   // Estado para seleccionar modo
   const [modoGeneracion, setModoGeneracion] = useState('porFechas'); // 'porFechas' o 'porNumeros'
   
@@ -58,17 +61,18 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
     if (modoGeneracion !== 'porNumeros') return true;
 
     const { numeroDesde, numeroHasta } = filtros;
+    const tipoLabel = tipoOrden === 'samples' ? 'samples' : 'pedidos';
 
     // Validar que ambos campos estén completos
     if (!numeroDesde || !numeroHasta) {
-      Swal.fire('Error', 'Debe ingresar ambos números de pedido', 'warning');
+      Swal.fire('Error', `Debe ingresar ambos números de ${tipoLabel}`, 'warning');
       return false;
     }
 
     // Validar formato (solo números)
     const regex = /^\d+$/;
     if (!regex.test(numeroDesde) || !regex.test(numeroHasta)) {
-      Swal.fire('Error', 'Solo se permiten números en el rango de pedidos', 'warning');
+      Swal.fire('Error', `Solo se permiten números en el rango de ${tipoLabel}`, 'warning');
       return false;
     }
 
@@ -78,7 +82,7 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
 
     // Validar que sean números válidos
     if (isNaN(desdeNum) || isNaN(hastaNum)) {
-      Swal.fire('Error', 'Números de pedido inválidos', 'warning');
+      Swal.fire('Error', `Números de ${tipoLabel} inválidos`, 'warning');
       return false;
     }
 
@@ -91,7 +95,7 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
     // Validar límite de 50 pedidos
     const cantidadPedidos = hastaNum - desdeNum + 1;
     if (cantidadPedidos > 50) {
-      Swal.fire('Error', `El límite máximo es de 50 pedidos. Seleccionó ${cantidadPedidos} pedidos.`, 'warning');
+      Swal.fire('Error', `El límite máximo es de 50 ${tipoLabel}. Seleccionó ${cantidadPedidos} ${tipoLabel}.`, 'warning');
       return false;
     }
 
@@ -136,24 +140,26 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
         })
       };
 
-      // 👇 LLAMADA REAL A LA API - MODIFICARÉ ESTA FUNCIÓN MÁS ADELANTE
+      // 👇 LLAMADA REAL A LA API
       const resultado = await contarPedidosPorFiltro(parametrosBusqueda);
+      
+      const tipoLabel = tipoOrden === 'samples' ? 'samples' : 'pedidos';
 
       if (resultado.success) {
         setPedidosEncontrados(resultado.total);
 
         if (resultado.total === 0) {
-          Swal.fire('Info', 'No se encontraron pedidos con esos filtros', 'info');
+          Swal.fire('Info', `No se encontraron ${tipoLabel} con esos filtros`, 'info');
         } else {
-          Swal.fire('Éxito', `Se encontraron ${resultado.total} pedidos`, 'success');
+          Swal.fire('Éxito', `Se encontraron ${resultado.total} ${tipoLabel}`, 'success');
         }
       } else {
-        Swal.fire('Error', resultado.message || 'Error al buscar pedidos', 'error');
+        Swal.fire('Error', resultado.message || `Error al buscar ${tipoLabel}`, 'error');
         setPedidosEncontrados(0);
       }
     } catch (error) {
-      console.error('Error al contar pedidos:', error);
-      Swal.fire('Error', 'Error de conexión al buscar pedidos', 'error');
+      console.error(`Error al contar ${tipoLabel}:`, error);
+      Swal.fire('Error', `Error de conexión al buscar ${tipoLabel}`, 'error');
       setPedidosEncontrados(0);
     } finally {
       setCargando(false);
@@ -171,8 +177,10 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
     // Validar formato seleccionado primero
     if (!validarFormatoSeleccionado()) return;
     
+    const tipoLabel = tipoOrden === 'samples' ? 'samples' : 'pedidos';
+    
     if (pedidosEncontrados === 0) {
-      Swal.fire('Error', 'No hay pedidos para generar', 'warning');
+      Swal.fire('Error', `No hay ${tipoLabel} para generar`, 'warning');
       return;
     }
 
@@ -215,10 +223,12 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
         {/* Header */}
         <div className="border-b p-4">
           <h2 className="text-xl font-semibold text-gray-800">
-            Imprimir Múltiples Pedidos
+            {tipoOrden === 'samples' ? 'Imprimir Múltiples Samples' : 'Imprimir Múltiples Pedidos'}
           </h2>
           <p className="text-sm text-gray-600 mt-1">
-            Genera documentos para varios pedidos a la vez
+            {tipoOrden === 'samples' 
+              ? 'Genera documentos para varios samples a la vez' 
+              : 'Genera documentos para varios pedidos a la vez'}
           </p>
         </div>
 
@@ -355,10 +365,10 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número Desde (PED-)*
+                    Número Desde ({tipoOrden === 'samples' ? 'SAMPLE-' : 'PED-'})*
                   </label>
                   <div className="flex items-center">
-                    <span className="bg-gray-100 border border-r-0 rounded-l-lg px-3 py-2 text-gray-600">PED-</span>
+                    <span className="bg-gray-100 border border-r-0 rounded-l-lg px-3 py-2 text-gray-600">{tipoOrden === 'samples' ? 'SAMPLE-' : 'PED-'}</span>
                     <input
                       type="text"
                       value={filtros.numeroDesde}
@@ -371,10 +381,10 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número Hasta (PED-)*
+                    Número Hasta ({tipoOrden === 'samples' ? 'SAMPLE-' : 'PED-'})*
                   </label>
                   <div className="flex items-center">
-                    <span className="bg-gray-100 border border-r-0 rounded-l-lg px-3 py-2 text-gray-600">PED-</span>
+                    <span className="bg-gray-100 border border-r-0 rounded-l-lg px-3 py-2 text-gray-600">{tipoOrden === 'samples' ? 'SAMPLE-' : 'PED-'}</span>
                     <input
                       type="text"
                       value={filtros.numeroHasta}
@@ -453,7 +463,7 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
                   ? 'text-purple-800' 
                   : 'text-teal-800'
               }`}>
-                Pedidos encontrados:
+                {tipoOrden === 'samples' ? 'Samples encontrados:' : 'Pedidos encontrados:'}
               </span>
               <span className={`text-lg font-bold ${
                 formatoSalida === 'unSolo' 
@@ -482,7 +492,7 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
                   </>
                 ) : (
                   <>
-                    • PED-{filtros.numeroDesde || '000'} a PED-{filtros.numeroHasta || '000'}<br />
+                    • {tipoOrden === 'samples' ? 'SAMPLE-' : 'PED-'}{filtros.numeroDesde || '000'} a {tipoOrden === 'samples' ? 'SAMPLE-' : 'PED-'}{filtros.numeroHasta || '000'}<br />
                   </>
                 )}
                 • {filtros.bodegaId ? `Bodega: ${bodegas.find(b => b.Id_Bodega == filtros.bodegaId)?.NombreBodega || filtros.bodegaId}` : 'Todas las bodegas'}<br />
@@ -500,7 +510,7 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
                   : 'bg-teal-600 hover:bg-teal-700'
               }`}
             >
-              {cargando ? 'Buscando...' : 'Buscar Pedidos'}
+              {cargando ? 'Buscando...' : (tipoOrden === 'samples' ? 'Buscar Samples' : 'Buscar Pedidos')}
             </button>
           </div>
         </div>
@@ -524,7 +534,7 @@ const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas }) => {
           >
             {cargando ? 'Generando...' : `Generar ${
               formatoSalida === 'unSolo' ? 'PDF único' : 'PDFs individuales'
-            } (${pedidosEncontrados})`}
+            } (${pedidosEncontrados} ${tipoOrden === 'samples' ? 'samples' : 'pedidos'})`}
           </button>
         </div>
       </div>

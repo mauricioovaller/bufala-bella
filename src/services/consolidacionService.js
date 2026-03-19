@@ -261,6 +261,63 @@ export const actualizarDatosEnLote = async (filtros, datosEnLote) => {
   }
 };
 
+// Nuevo servicio para Excel de Transporte
+export async function generarExcelTransporte(filtros) {
+  try {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Consolidacion/ApiGenerarExcelTransporte.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fechaDesde: filtros.fechaDesde,
+          fechaHasta: filtros.fechaHasta,
+          tipoFecha: filtros.tipoFecha
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null);
+      throw new Error(errorData?.error || `Error HTTP: ${res.status}`);
+    }
+
+    // Manejar la descarga del archivo Excel
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Obtener nombre del archivo del header
+    const contentDisposition = res.headers.get('Content-Disposition');
+    let fileName = 'Transporte_Consolidado.xlsx';
+    
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (fileNameMatch && fileNameMatch.length === 2) {
+        fileName = fileNameMatch[1];
+      }
+    }
+    
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    return { 
+      success: true, 
+      message: "Archivo Excel de transporte generado y descargado correctamente" 
+    };
+
+  } catch (err) {
+    console.error("Error al generar Excel de transporte:", err);
+    throw new Error(err.message || "Error al generar el archivo Excel de transporte");
+  }
+}
+
 export async function obtenerPedidosPorFecha(filtros) {
   try {
     const endpoint =
@@ -301,5 +358,207 @@ export async function obtenerPedidosPorFecha(filtros) {
   } catch (error) {
     console.error("Error en obtenerPedidosPorFecha:", error);
     throw new Error(`No se pudieron cargar los pedidos: ${error.message}`);
+  }
+}
+
+// ============================================================================
+// SERVICIOS PARA COSTOS DE TRANSPORTE DIARIO
+// ============================================================================
+
+export async function obtenerCostosTransporte(filtros) {
+  try {
+    const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporte/ApiGetCostosTransporte.php";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+      }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerCostosTransporte:", error);
+    throw new Error(`No se pudieron cargar los costos de transporte: ${error.message}`);
+  }
+}
+
+export async function obtenerCostoTransporte(id) {
+  try {
+    const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporte/ApiGetCostoTransporte.php";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerCostoTransporte:", error);
+    throw new Error(`No se pudo cargar el costo de transporte: ${error.message}`);
+  }
+}
+
+export async function guardarCostoTransporte(datos) {
+  try {
+    const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporte/ApiGuardarCostoTransporte.php";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(datos),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en guardarCostoTransporte:", error);
+    throw new Error(`No se pudo guardar el costo de transporte: ${error.message}`);
+  }
+}
+
+export async function modificarCostoTransporte(id, datos) {
+  try {
+    const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporte/ApiModificarCostoTransporte.php";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id, ...datos }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en modificarCostoTransporte:", error);
+    throw new Error(`No se pudo modificar el costo de transporte: ${error.message}`);
+  }
+}
+
+export async function eliminarCostoTransporte(id) {
+  try {
+    const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporte/ApiEliminarCostoTransporte.php";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en eliminarCostoTransporte:", error);
+    throw new Error(`No se pudo eliminar el costo de transporte: ${error.message}`);
   }
 }

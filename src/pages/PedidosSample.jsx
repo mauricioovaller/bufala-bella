@@ -5,6 +5,7 @@ import PedidoHeaderSample from "../components/pedidosSample/PedidoHeaderSample";
 import PedidoDetail from "../components/pedidos/PedidoDetail";
 import ModalSeleccionDocumento from "../components/ModalSeleccionDocumento";
 import ModalVisorPreliminar from "../components/ModalVisorPreliminar";
+import ModalImpresionMultiple from "../components/ModalImpresionMultiple";
 import {
   getDatosSelect,
   getClienteRegion,
@@ -13,6 +14,8 @@ import {
   getSampleEspecifico,
   actualizarSample,
   imprimirSample,
+  imprimirSamplesMultiples,
+  getRangeSamples,
 } from "../services/pedidosSampleService";
 
 // --------------------------------------------------------------
@@ -99,19 +102,18 @@ export default function PedidosSample() {
   // Estados de carga inicial del modal de selección de documento
   const [mostrarSelectorDocumento, setMostrarSelectorDocumento] = useState(false);
 
-  // --------------------------------------------------------------
   // Estados para búsqueda y selección de samples - MEJORADOS
-  // --------------------------------------------------------------
   const [samples, setSamples] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [cargandoSamples, setCargandoSamples] = useState(false);
   const [filtroSamples, setFiltroSamples] = useState("");
 
-  // --------------------------------------------------------------
   // Estados para el visor de PDF
-  // --------------------------------------------------------------
   const [urlPDF, setUrlPDF] = useState(null);
   const [mostrarModal, setMostrarModal] = useState(false);
+
+  // Estados para impresión múltiple
+  const [mostrarImpresionMultiple, setMostrarImpresionMultiple] = useState(false);
 
   // --------------------------------------------------------------
   // Refs para validaciones
@@ -758,6 +760,373 @@ export default function PedidosSample() {
     }
   };
 
+  // 👇 NUEVA FUNCIÓN: Abrir modal de impresión múltiple
+  const handleAbrirImpresionMultiple = () => {
+    setMostrarImpresionMultiple(true);
+  };
+
+  // 👇 NUEVA FUNCIÓN: Manejar impresión múltiple
+  const handlePrintMultiple = async (filtros) => {
+    try {
+      console.log("Filtros recibidos:", filtros);
+
+      const esModoUnSolo = filtros.formato === 'unSolo';
+      const esModoIndividuales = filtros.formato === 'individuales';
+      const esPorFechas = filtros.modo === 'porFechas';
+      const esPorNumeros = filtros.modo === 'porNumeros';
+
+      if (esPorFechas && esModoUnSolo) {
+        console.log("MODO: Por Fechas + Un solo documento");
+        Swal.fire({
+          title: "Generando PDF múltiple...",
+          text: `Generando ${filtros.pedidosEncontrados} samples`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const blob = await imprimirSamplesMultiples(filtros);
+        const fileURL = URL.createObjectURL(blob);
+
+        Swal.close();
+
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        const esAndroid = /android/i.test(ua);
+        const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+        const esWindows = /Win/i.test(ua);
+        const esMac = /Mac/i.test(ua);
+        const esMovilOTablet = !esWindows && !esMac;
+
+        if (esMovilOTablet) {
+          const a = document.createElement("a");
+          a.href = fileURL;
+          a.target = "_blank";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
+        } else {
+          setUrlPDF(fileURL);
+          setMostrarModal(true);
+        }
+      }
+      else if (esPorFechas && esModoIndividuales) {
+        console.log("MODO: Por Fechas + Documentos individuales");
+        Swal.fire({
+          title: "Buscando samples por fechas...",
+          text: `Buscando samples del ${filtros.fechaDesde} al ${filtros.fechaHasta}`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        try {
+          const resultado = await getRangeSamples({
+            modo: 'porFechas',
+            fechaDesde: filtros.fechaDesde,
+            fechaHasta: filtros.fechaHasta,
+            bodegaId: filtros.bodegaId || '',
+            tipoDocumento: filtros.tipoDocumento
+          });
+
+          console.log("Resultado de búsqueda por fechas:", resultado);
+
+          Swal.close();
+
+          if (!resultado.success || resultado.total === 0) {
+            Swal.fire('Error', resultado.message || 'No se encontraron samples en el rango de fechas seleccionado', 'error');
+            return;
+          }
+
+          const confirmacion = await Swal.fire({
+            title: `¿Descargar ${resultado.total} archivos?`,
+            html: `
+            <div class="text-left">
+              <p>Se descargarán <strong>${resultado.total} archivos PDF</strong>.</p>
+              <p class="text-sm text-gray-600 mt-2">
+                El navegador pedirá confirmación para cada descarga.<br>
+                <strong>Recomendación:</strong> Permite todas las descargas.
+              </p>
+              <div class="mt-3 border-t pt-2">
+                <p class="text-xs font-semibold">Filtros aplicados:</p>
+                <p class="text-xs">• ${filtros.fechaDesde} a ${filtros.fechaHasta}</p>
+                ${filtros.bodegaId ? `<p class="text-xs">• Bodega: ${filtros.bodegaId}</p>` : ''}
+                <p class="text-xs">• Tipo: ${filtros.tipoDocumento}</p>
+                <p class="text-xs">• Formato: Documentos individuales</p>
+              </div>
+            </div>
+          `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: `Descargar ${resultado.total} archivos`,
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#10b981',
+            width: '450px'
+          });
+
+          if (!confirmacion.isConfirmed) return;
+
+          await descargarPDFsIndividuales(resultado.pedidos, filtros.tipoDocumento);
+
+        } catch (error) {
+          console.error("Error obteniendo samples por fechas:", error);
+          Swal.close();
+          Swal.fire('Error', `Error al buscar samples: ${error.message}`, 'error');
+          return;
+        }
+      }
+      else if (esPorNumeros && esModoUnSolo) {
+        console.log("MODO: Por Números + Un solo documento");
+        Swal.fire({
+          title: "Generando PDF único por rango...",
+          text: `Generando samples SAMP-${String(filtros.numeroDesde).padStart(6, '0')} a SAMP-${String(filtros.numeroHasta).padStart(6, '0')}`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const datosEnvio = {
+          ...filtros,
+          modo: 'porNumeros',
+          formato: 'unSolo'
+        };
+
+        const blob = await imprimirSamplesMultiples(datosEnvio);
+        const fileURL = URL.createObjectURL(blob);
+
+        Swal.close();
+
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        const esAndroid = /android/i.test(ua);
+        const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+        const esWindows = /Win/i.test(ua);
+        const esMac = /Mac/i.test(ua);
+        const esMovilOTablet = !esWindows && !esMac;
+
+        if (esMovilOTablet) {
+          const a = document.createElement("a");
+          a.href = fileURL;
+          a.target = "_blank";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
+        } else {
+          setUrlPDF(fileURL);
+          setMostrarModal(true);
+        }
+      }
+      else if (esPorNumeros && esModoIndividuales) {
+        console.log("MODO: Por Números + Documentos individuales");
+        Swal.fire({
+          title: "Buscando samples...",
+          text: "Obteniendo información del rango seleccionado",
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const resultado = await getRangeSamples({
+          modo: 'porNumeros',
+          numeroDesde: filtros.numeroDesde,
+          numeroHasta: filtros.numeroHasta,
+          bodegaId: filtros.bodegaId || '',
+          tipoDocumento: filtros.tipoDocumento
+        });
+
+        Swal.close();
+
+        if (!resultado.success || resultado.total === 0) {
+          Swal.fire('Error', resultado.message || 'No se encontraron samples', 'error');
+          return;
+        }
+
+        const confirmacion = await Swal.fire({
+          title: `¿Descargar ${resultado.total} archivos?`,
+          html: `
+          <div class="text-left">
+            <p>Se descargarán <strong>${resultado.total} archivos PDF</strong>.</p>
+            <p class="text-sm text-gray-600 mt-2">
+              El navegador pedirá confirmación para cada descarga.<br>
+              <strong>Recomendación:</strong> Permite todas las descargas.
+            </p>
+            <div class="mt-3 border-t pt-2">
+              <p class="text-xs font-semibold">Filtros aplicados:</p>
+              <p class="text-xs">• SAMP-${String(filtros.numeroDesde).padStart(6, '0')} a SAMP-${String(filtros.numeroHasta).padStart(6, '0')}</p>
+              ${filtros.bodegaId ? `<p class="text-xs">• Bodega: ${filtros.bodegaId}</p>` : ''}
+              <p class="text-xs">• Tipo: ${filtros.tipoDocumento}</p>
+              <p class="text-xs">• Formato: Documentos individuales</p>
+            </div>
+          </div>
+        `,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: `Descargar ${resultado.total} archivos`,
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#10b981',
+          width: '450px'
+        });
+
+        if (!confirmacion.isConfirmed) return;
+
+        await descargarPDFsIndividuales(resultado.pedidos, filtros.tipoDocumento);
+      }
+
+    } catch (error) {
+      console.error("Error en handlePrintMultiple:", error);
+      Swal.close();
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "Error al procesar la solicitud",
+      });
+    }
+  };
+
+  // 👇 NUEVA FUNCIÓN: Descargar PDFs individuales con barra de progreso
+  const descargarPDFsIndividuales = async (samples, tipoDocumento) => {
+    let descargados = 0;
+    let errores = [];
+
+    Swal.fire({
+      title: "Descargando archivos...",
+      html: `
+    <div class="space-y-3">
+      <div class="flex justify-between">
+        <span>Progreso:</span>
+        <span class="font-bold">${descargados}/${samples.length}</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div id="progreso-bar" class="bg-green-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div id="archivo-actual" class="text-sm text-gray-700">
+        Preparando...
+      </div>
+      <div class="text-xs text-gray-500">
+        Formato: Cliente_Bodega_Fecha_Tipo.pdf
+      </div>
+    </div>
+  `,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      willOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    const descargarUnArchivo = async (sample) => {
+      try {
+        if (document.getElementById('archivo-actual')) {
+          document.getElementById('archivo-actual').textContent =
+            `Descargando: SAMP-${String(sample.id).padStart(6, '0')} - ${sample.cliente ? sample.cliente.substring(0, 30) : 'Sin cliente'}`;
+        }
+
+        const blob = await imprimirSample(sample.id, tipoDocumento);
+
+        const limpiarTexto = (texto) => {
+          if (!texto) return 'SinDato';
+          return texto
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .trim();
+        };
+
+        const prefijoMap = {
+          'pedido': 'Sample_Buf',
+          'bol': 'BOL_BUF',
+          'listaempaque': 'ListaEmpaque_Buf',
+          'listaempaqueprecios': 'ListaEmpaquePrecios_Buf'
+        };
+
+        const prefijo = prefijoMap[tipoDocumento] || 'Documento_Buf';
+        const poLimpio = sample.po ? limpiarTexto(sample.po) : 'SinPO';
+        const clienteLimpio = sample.cliente ? limpiarTexto(sample.cliente) : 'SinCliente';
+        const regionLimpia = sample.region ? limpiarTexto(sample.region) : 'SinRegion';
+        const sampleLimpia = sample.id ? sample.id.toString() : 'SinSample';
+
+        const nombreArchivo = `${prefijo}_${poLimpio}_${clienteLimpio}_${regionLimpia}_${sampleLimpia}.pdf`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombreArchivo;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        descargados++;
+
+        if (document.getElementById('progreso-bar')) {
+          const porcentaje = (descargados / samples.length) * 100;
+          document.getElementById('progreso-bar').style.width = porcentaje + '%';
+        }
+
+        if (document.getElementById('archivo-actual')) {
+          document.getElementById('archivo-actual').textContent =
+            `Completado: SAMP-${String(sample.id).padStart(6, '0')} ✓`;
+        }
+
+      } catch (error) {
+        console.error(`Error descargando sample ${sample.id}:`, error);
+        errores.push({ sample: sample.id, error: error.message });
+        descargados++;
+
+        if (document.getElementById('progreso-bar')) {
+          const porcentaje = (descargados / samples.length) * 100;
+          document.getElementById('progreso-bar').style.width = porcentaje + '%';
+        }
+      }
+    };
+
+    // Descargar archivos secuencialmente con delays
+    for (const sample of samples) {
+      await descargarUnArchivo(sample);
+      // Delay entre descargas para no saturar el navegador
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    Swal.close();
+
+    if (errores.length === 0) {
+      Swal.fire({
+        icon: 'success',
+        title: `¡Descarga completada!`,
+        html: `
+        <div class="text-left">
+          <p>Se descargaron correctamente <strong>${descargados}</strong> archivos.</p>
+          <p class="text-sm text-gray-600 mt-2">
+            Los archivos están en tu carpeta de descargas.
+          </p>
+        </div>
+      `,
+        confirmButtonColor: '#10b981'
+      });
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Descarga parcial',
+        html: `
+        <div class="text-left">
+          <p>Se descargaron <strong>${descargados - errores.length}</strong> de <strong>${samples.length}</strong> archivos.</p>
+          <p class="text-sm text-red-600 mt-2 font-semibold">Errores encontrados (${errores.length}):</p>
+          <ul class="text-sm text-gray-700 mt-1 ml-4">
+            ${errores.map(e => `<li>• Sample ${e.sample}: ${e.error}</li>`).join('')}
+          </ul>
+        </div>
+      `,
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
+
   // --------------------------------------------------------------
   // Renderizado
   // --------------------------------------------------------------
@@ -798,6 +1167,12 @@ export default function PedidosSample() {
               }`}
           >
             Imprimir PDF
+          </button>
+          <button
+            onClick={handleAbrirImpresionMultiple}
+            className="bg-green-600 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-green-700 transition font-medium flex-1"
+          >
+            Imprimir Múltiple
           </button>
         </div>
       </div>
@@ -936,6 +1311,15 @@ export default function PedidosSample() {
         onClose={() => setMostrarSelectorDocumento(false)}
         onSeleccionar={handleSeleccionarDocumento}
         sampleId={header.id}
+      />
+
+      {/* Modal de impresión múltiple */}
+      <ModalImpresionMultiple
+        isOpen={mostrarImpresionMultiple}
+        onClose={() => setMostrarImpresionMultiple(false)}
+        onImprimir={handlePrintMultiple}
+        bodegas={datosSelect.bodegas}
+        tipoOrden="samples"
       />
 
       {/* Modal del visor de PDF */}

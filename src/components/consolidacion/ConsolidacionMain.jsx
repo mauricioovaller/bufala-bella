@@ -1,17 +1,23 @@
 // src/components/consolidacion/ConsolidacionMain.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   generarExcelConsolidacion,
   generarReporteProduccion,
   generarReporteEmpaque,
   generarReporteTransporte,
+  generarExcelTransporte,
   obtenerEstadisticasConsolidacion,
   actualizarFechaSalidaPedido,
   actualizarDatosEnLote,
-  obtenerPedidosPorFecha
+  obtenerPedidosPorFecha,
+  obtenerCostosTransporte,
+  guardarCostoTransporte,
+  modificarCostoTransporte,
+  eliminarCostoTransporte
 } from '../../services/consolidacionService';
 import ModalVisorPreliminar from "../ModalVisorPreliminar";
 import { getDatosSelect } from '../../services/pedidosService';
+import Swal from 'sweetalert2';
 
 export default function ConsolidacionMain() {
   const [filtros, setFiltros] = useState({
@@ -57,6 +63,21 @@ export default function ConsolidacionMain() {
     agenciaId: '44'
   });
   const [actualizandoEnLote, setActualizandoEnLote] = useState(false);
+
+  // 👇 NUEVOS ESTADOS PARA COSTOS DE TRANSPORTE
+  const [mostrarCostosTransporte, setMostrarCostosTransporte] = useState(false);
+  const [costosTransporte, setCostosTransporte] = useState([]);
+  const [loadingCostos, setLoadingCostos] = useState(false);
+  const [errorCostos, setErrorCostos] = useState(null);
+  const [modalCostoAbierto, setModalCostoAbierto] = useState(false);
+  const [costoEditando, setCostoEditando] = useState(null);
+  const [guardandoCosto, setGuardandoCosto] = useState(false);
+  const [formCosto, setFormCosto] = useState({
+    Fecha: '',
+    CantidadCamiones: 1,
+    ValorFlete: '',
+    Observaciones: ''
+  });
 
   // Estados para aerolíneas y agencias
   const [aerolineas, setAerolineas] = useState([]);
@@ -197,6 +218,193 @@ export default function ConsolidacionMain() {
     }
   };
 
+  // ============================================================================
+  // FUNCIONES PARA COSTOS DE TRANSPORTE
+  // ============================================================================
+
+  // Función para cargar costos de transporte
+  const cargarCostosTransporte = useCallback(async () => {
+    if (!filtros.fechaDesde || !filtros.fechaHasta) {
+      setErrorCostos('Por favor selecciona un rango de fechas válido');
+      return;
+    }
+
+    setLoadingCostos(true);
+    setErrorCostos(null);
+
+    try {
+      const resultado = await obtenerCostosTransporte(filtros);
+
+      if (resultado.costos && resultado.costos.length > 0) {
+        setCostosTransporte(resultado.costos);
+      } else {
+        setCostosTransporte([]);
+      }
+    } catch (err) {
+      setErrorCostos(err.message);
+      setCostosTransporte([]);
+    } finally {
+      setLoadingCostos(false);
+    }
+  }, [filtros]);
+
+  // Función para abrir modal de costo (nuevo o edición)
+  const abrirModalCosto = (costo = null) => {
+    if (costo) {
+      // Modo edición
+      setCostoEditando(costo.id);
+      setFormCosto({
+        Fecha: costo.Fecha,
+        CantidadCamiones: costo.CantidadCamiones,
+        ValorFlete: costo.ValorFlete,
+        Observaciones: costo.Observaciones || ''
+      });
+    } else {
+      // Modo nuevo
+      setCostoEditando(null);
+      setFormCosto({
+        Fecha: '',
+        CantidadCamiones: 1,
+        ValorFlete: '',
+        Observaciones: ''
+      });
+    }
+    setModalCostoAbierto(true);
+  };
+
+  // Función para cerrar modal
+  const cerrarModalCosto = () => {
+    setModalCostoAbierto(false);
+    setCostoEditando(null);
+    setFormCosto({
+      Fecha: '',
+      CantidadCamiones: 1,
+      ValorFlete: '',
+      Observaciones: ''
+    });
+  };
+
+  // Función para guardar costo (crear o actualizar)
+  const guardarCosto = async () => {
+    // Validaciones
+    if (!formCosto.Fecha) {
+      setErrorCostos('La fecha es obligatoria');
+      return;
+    }
+    if (!formCosto.CantidadCamiones || formCosto.CantidadCamiones <= 0) {
+      setErrorCostos('La cantidad de camiones debe ser mayor a 0');
+      return;
+    }
+    if (!formCosto.ValorFlete || formCosto.ValorFlete <= 0) {
+      setErrorCostos('El valor del flete debe ser mayor a 0');
+      return;
+    }
+
+    setGuardandoCosto(true);
+    setErrorCostos(null);
+
+    try {
+      if (costoEditando) {
+        // Actualizar
+        await modificarCostoTransporte(costoEditando, {
+          CantidadCamiones: formCosto.CantidadCamiones,
+          ValorFlete: formCosto.ValorFlete,
+          Observaciones: formCosto.Observaciones
+        });
+      } else {
+        // Crear nuevo
+        await guardarCostoTransporte({
+          Fecha: formCosto.Fecha,
+          CantidadCamiones: formCosto.CantidadCamiones,
+          ValorFlete: formCosto.ValorFlete,
+          Observaciones: formCosto.Observaciones,
+          UsuarioRegistro: 'Sistema'
+        });
+      }
+
+      // Recargar lista
+      await cargarCostosTransporte();
+      cerrarModalCosto();
+      
+      // Mostrar mensaje de éxito
+      Swal.fire({
+        icon: 'success',
+        title: costoEditando ? '¡Actualizado!' : '¡Guardado!',
+        text: costoEditando 
+          ? 'Costo de transporte actualizado correctamente.' 
+          : 'Costo de transporte guardado correctamente.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (err) {
+      setErrorCostos(err.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || 'No se pudo guardar el costo.',
+        confirmButtonColor: '#dc2626'
+      });
+    } finally {
+      setGuardandoCosto(false);
+    }
+  };
+
+  // Función para eliminar costo
+  const eliminarCosto = async (costo) => {
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: '¿Eliminar costo?',
+      html: `<div class="text-left">
+        <p class="mb-2">¿Estás seguro de eliminar el costo del <strong>${costo.Fecha}</strong>?</p>
+        <p class="text-sm text-gray-600">Esta acción no se puede deshacer.</p>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280'
+    });
+
+    if (!confirmacion.isConfirmed) {
+      return;
+    }
+
+    setLoadingCostos(true);
+    setErrorCostos(null);
+
+    try {
+      await eliminarCostoTransporte(costo.id);
+      // Recargar lista
+      await cargarCostosTransporte();
+      
+      // Mostrar mensaje de éxito
+      Swal.fire({
+        icon: 'success',
+        title: '¡Eliminado!',
+        text: `Costo del ${costo.Fecha} eliminado correctamente.`,
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (err) {
+      setErrorCostos(err.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || 'No se pudo eliminar el costo.',
+        confirmButtonColor: '#dc2626'
+      });
+    } finally {
+      setLoadingCostos(false);
+    }
+  };
+
+
+
+  // Función para formatear número
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('es-CO').format(valor);
+  };
+
   // Función para verificar si hay pedidos con factura
   const hayPedidosFacturados = () => {
     return pedidosEnRango.some(pedido => pedido.facturaNo && pedido.facturaNo.trim() !== '');
@@ -226,6 +434,13 @@ export default function ConsolidacionMain() {
       cargarPedidos();
     }
   }, [mostrarGestionFechas, filtros.fechaDesde, filtros.fechaHasta]);
+
+  // Cargar costos de transporte cuando se active la sección
+  useEffect(() => {
+    if (mostrarCostosTransporte && filtros.fechaDesde && filtros.fechaHasta) {
+      cargarCostosTransporte();
+    }
+  }, [mostrarCostosTransporte, filtros.fechaDesde, filtros.fechaHasta, cargarCostosTransporte]);
 
   // Cargar aerolíneas y agencias al montar el componente
   useEffect(() => {
@@ -289,6 +504,23 @@ export default function ConsolidacionMain() {
     } catch (err) {
       console.error('Error generando reporte:', err);
       setError(err.message || `Error al generar el reporte de ${reporte.titulo}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Nueva función para generar Excel de Transporte
+  const handleGenerarExcelTransporte = async () => {
+    if (!validarFiltros()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await generarExcelTransporte(filtros);
+    } catch (err) {
+      console.error('Error generando Excel de transporte:', err);
+      setError(err.message || 'Error al generar el archivo Excel de transporte');
     } finally {
       setLoading(false);
     }
@@ -413,11 +645,6 @@ export default function ConsolidacionMain() {
     }
   };
 
-  // Función para formatear números
-  const formatearNumero = (numero) => {
-    return new Intl.NumberFormat('es-CO').format(numero);
-  };
-
   // Función para formatear dinero
   const formatearDinero = (monto) => {
     return new Intl.NumberFormat('en-US', {
@@ -461,7 +688,7 @@ export default function ConsolidacionMain() {
             <h2 className="text-xl font-semibold text-gray-800">Filtros de Consolidación</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {/* Tipo de Fecha */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
@@ -529,6 +756,25 @@ export default function ConsolidacionMain() {
                 {mostrarGestionFechas ? "❌ Ocultar Gestión" : "📅 Gestionar Fechas"}
               </button>
             </div>
+
+            {/* Botón Costos de Transporte */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Costos de Transporte
+              </label>
+              <button
+                onClick={() => setMostrarCostosTransporte(!mostrarCostosTransporte)}
+                disabled={!filtros.fechaDesde || !filtros.fechaHasta}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${!filtros.fechaDesde || !filtros.fechaHasta
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : mostrarCostosTransporte
+                    ? "bg-red-500 hover:bg-red-600 text-white"
+                    : "bg-green-500 hover:bg-green-600 text-white"
+                  }`}
+              >
+                {mostrarCostosTransporte ? "❌ Ocultar Costos" : "📦 Costos de Transporte"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -548,6 +794,147 @@ export default function ConsolidacionMain() {
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-2"></div>
               <p className="text-blue-700">Generando reporte, por favor espera...</p>
             </div>
+          </div>
+        )}
+
+        {/* SECCIÓN DE COSTOS DE TRANSPORTE DIARIO */}
+        {mostrarCostosTransporte && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="w-1 h-8 bg-green-500 rounded-full mr-3"></div>
+                <h2 className="text-xl font-semibold text-gray-800">Costos de Transporte Diario</h2>
+                <div className="ml-4 text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                  {costosTransporte.length} costos en el rango
+                </div>
+              </div>
+
+              <button
+                onClick={() => abrirModalCosto()}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all"
+              >
+                + Nuevo Costo
+              </button>
+            </div>
+
+            {errorCostos && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                <div className="flex items-center">
+                  <div className="text-red-500 mr-2">⚠️</div>
+                   <p className="text-red-700">{errorCostos}</p>
+                </div>
+              </div>
+            )}
+
+            {loadingCostos ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto"></div>
+                <p className="text-gray-600 mt-2">Cargando costos de transporte...</p>
+              </div>
+            ) : costosTransporte.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No se encontraron costos de transporte para las fechas seleccionadas
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Vista de escritorio - Tabla */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Fecha</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Cantidad Camiones</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Valor Flete</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Costo por Kg</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Observaciones</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costosTransporte.map((costo) => (
+                         <tr key={costo.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4">{costo.Fecha}</td>
+                          <td className="py-3 px-4">{formatearNumero(costo.CantidadCamiones)}</td>
+                          <td className="py-3 px-4">${formatearNumero(costo.ValorFlete)}</td>
+                          <td className="py-3 px-4">
+                            {costo.CostoPorKg 
+                              ? `$${parseFloat(costo.CostoPorKg).toFixed(2)}` 
+                              : 'N/A'}
+                          </td>
+                          <td className="py-3 px-4 max-w-xs truncate" title={costo.Observaciones}>
+                            {costo.Observaciones || '-'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => abrirModalCosto(costo)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => eliminarCosto(costo)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Vista móvil - Tarjetas */}
+                <div className="lg:hidden space-y-3">
+                  {costosTransporte.map((costo) => (
+                     <div key={costo.id} className="border border-gray-200 rounded-xl p-4 bg-white">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs text-gray-600">Fecha</p>
+                          <p className="font-medium">{costo.Fecha}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Camiones</p>
+                          <p className="font-medium">{formatearNumero(costo.CantidadCamiones)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Valor Flete</p>
+                          <p className="font-medium">${formatearNumero(costo.ValorFlete)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Costo/Kg</p>
+                          <p className="font-medium">
+                            {costo.CostoPorKg 
+                              ? `$${parseFloat(costo.CostoPorKg).toFixed(2)}` 
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-xs text-gray-600">Observaciones</p>
+                        <p className="text-sm">{costo.Observaciones || '-'}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => abrirModalCosto(costo)}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-medium"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => eliminarCosto(costo)}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -942,14 +1329,14 @@ export default function ConsolidacionMain() {
                           Próximamente
                         </span>
                       )}
-                      {reporte.tipo === "pdf" && reporte.disponible && (
-                        <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-medium">
-                          PDF
-                        </span>
-                      )}
-                      {reporte.tipo === "excel" && reporte.disponible && (
-                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-                          Excel
+                      {reporte.disponible && (
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${reporte.id === 'transporte'
+                            ? 'bg-gradient-to-r from-red-100 to-green-100 text-gray-800'
+                            : reporte.tipo === "pdf"
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                          {reporte.id === 'transporte' ? 'PDF + Excel' : reporte.tipo === "pdf" ? 'PDF' : 'Excel'}
                         </span>
                       )}
                     </div>
@@ -958,17 +1345,44 @@ export default function ConsolidacionMain() {
                       {reporte.descripcion}
                     </p>
 
-                    <button
-                      onClick={() => handleGenerarReporte(reporte.id)}
-                      disabled={!reporte.disponible || loading}
-                      className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
-                        ? `${reporte.color} text-white shadow-sm hover:shadow-md`
-                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        }`}
-                    >
-                      {loading ? "Generando..." :
-                        reporte.disponible ? "Generar Reporte" : "Disponible Próximamente"}
-                    </button>
+                    {reporte.id === 'transporte' ? (
+                      <div className="space-y-3">
+                        <button
+                          onClick={() => handleGenerarReporte(reporte.id)}
+                          disabled={!reporte.disponible || loading}
+                          className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
+                            ? `${reporte.color} text-white shadow-sm hover:shadow-md`
+                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            }`}
+                        >
+                          {loading ? "Generando..." :
+                            reporte.disponible ? "📊 Generar Reporte PDF" : "Disponible Próximamente"}
+                        </button>
+                        <button
+                          onClick={handleGenerarExcelTransporte}
+                          disabled={!reporte.disponible || loading}
+                          className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
+                            ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-md'
+                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            }`}
+                        >
+                          {loading ? "Generando..." :
+                            reporte.disponible ? "📥 Descargar Excel" : "Disponible Próximamente"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerarReporte(reporte.id)}
+                        disabled={!reporte.disponible || loading}
+                        className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
+                          ? `${reporte.color} text-white shadow-sm hover:shadow-md`
+                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          }`}
+                      >
+                        {loading ? "Generando..." :
+                          reporte.disponible ? "Generar Reporte" : "Disponible Próximamente"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1070,6 +1484,116 @@ export default function ConsolidacionMain() {
           onClose={handleCloseModal}
           titulo={`Reporte de ${reporteActual}`}
         />
+      )}
+
+      {/* Modal para Costos de Transporte */}
+      {modalCostoAbierto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
+            <div className="bg-green-500 text-white p-4">
+              <h2 className="text-xl font-semibold">
+                 {costoEditando ? 'Editar Costo' : 'Nuevo Costo de Transporte'}
+              </h2>
+            </div>
+            
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formCosto.Fecha || ''}
+                    onChange={(e) => setFormCosto(prev => ({ ...prev, Fecha: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    La fecha debe existir en facturas (EncabInvoice)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cantidad de Camiones <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formCosto.CantidadCamiones || ''}
+                    onChange={(e) => setFormCosto(prev => ({ ...prev, CantidadCamiones: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor del Flete ($) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formCosto.ValorFlete || ''}
+                    onChange={(e) => setFormCosto(prev => ({ ...prev, ValorFlete: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observaciones
+                  </label>
+                  <textarea
+                    value={formCosto.Observaciones || ''}
+                    onChange={(e) => setFormCosto(prev => ({ ...prev, Observaciones: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    rows="3"
+                    placeholder="Notas adicionales..."
+                  />
+                </div>
+              </div>
+
+               {errorCostos && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
+                  <div className="flex items-center">
+                    <div className="text-red-500 mr-2">⚠️</div>
+                     <p className="text-red-700 text-sm">{errorCostos}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={cerrarModalCosto}
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarCosto}
+                  disabled={guardandoCosto}
+                  className={`flex-1 py-2 rounded-lg font-medium transition ${guardandoCosto
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-500 hover:bg-green-600 text-white'
+                    }`}
+                >
+                  {guardandoCosto ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
+                    </>
+                  ) : (
+                    'Guardar Costo'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

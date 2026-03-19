@@ -36,7 +36,9 @@ $sql = "SELECT
     enc.GuiaHija,
     MAX(est.TotalEstibas) AS CantidadEstibas,
     '07:00:00' AS HoraCargue,  -- Hora por defecto
-    'Normal' AS TipoDato  -- Identificador para datos normales
+    'Normal' AS TipoDato,  -- Identificador para datos normales
+    COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'normal'), '') AS Facturas,
+    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'normal'), '') AS Precintos
 FROM EncabPedido enc
 INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido   
 INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
@@ -65,7 +67,9 @@ SELECT
     enc.GuiaHija,
     MAX(est.TotalEstibas) AS CantidadEstibas,
     '07:00:00' AS HoraCargue,  -- Hora por defecto
-    'Sample' AS TipoDato  -- Identificador para datos sample
+    'Sample' AS TipoDato,  -- Identificador para datos sample
+    COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'sample'), '') AS Facturas,
+    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'sample'), '') AS Precintos
 FROM EncabPedidoSample enc
 INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido   
 INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
@@ -100,7 +104,9 @@ $stmt->bind_result(
     $guiaHija,
     $cantidadEstibas,
     $horaCargue,
-    $tipoDato
+    $tipoDato,
+    $facturas,
+    $precintos
 );
 
 // Obtener todos los datos y consolidar por fecha
@@ -125,6 +131,34 @@ while ($stmt->fetch()) {
             $datosConsolidados[$claveUnica]['GuiaMaster'] = $guiaMaster;
             $datosConsolidados[$claveUnica]['GuiaHija'] = $guiaHija;
         }
+
+        // Combinar Facturas y Precintos
+        if (!empty($facturas)) {
+            $existingFacturas = $datosConsolidados[$claveUnica]['Facturas'] ?? '';
+            if (!empty($existingFacturas)) {
+                // Combinar y eliminar duplicados
+                $combined = array_unique(array_merge(
+                    explode('-', $existingFacturas),
+                    explode('-', $facturas)
+                ));
+                $datosConsolidados[$claveUnica]['Facturas'] = implode('-', array_filter($combined));
+            } else {
+                $datosConsolidados[$claveUnica]['Facturas'] = $facturas;
+            }
+        }
+
+        if (!empty($precintos)) {
+            $existingPrecintos = $datosConsolidados[$claveUnica]['Precintos'] ?? '';
+            if (!empty($existingPrecintos)) {
+                $combined = array_unique(array_merge(
+                    explode('-', $existingPrecintos),
+                    explode('-', $precintos)
+                ));
+                $datosConsolidados[$claveUnica]['Precintos'] = implode('-', array_filter($combined));
+            } else {
+                $datosConsolidados[$claveUnica]['Precintos'] = $precintos;
+            }
+        }
     } else {
         $datosConsolidados[$claveUnica] = [
             'FechaCompleta' => $fechaCompleta,
@@ -135,7 +169,9 @@ while ($stmt->fetch()) {
             'GuiaMaster' => $guiaMaster,
             'GuiaHija' => $guiaHija,
             'CantidadEstibas' => $cantidadEstibas,
-            'HoraCargue' => $horaCargue
+            'HoraCargue' => $horaCargue,
+            'Facturas' => $facturas,
+            'Precintos' => $precintos
         ];
     }
 
@@ -165,7 +201,7 @@ class PDFTransporte extends FPDF
     function Header()
     {
         // Logo
-        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 15, 15, 30);
+        $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 10, 10, 10);
 
         // Título principal
         $this->SetFont('Arial', 'B', 16);
@@ -187,41 +223,50 @@ class PDFTransporte extends FPDF
 
     function agregarEncabezadoColumnas()
     {
-        $this->SetFont('Arial', 'B', 10);
+        $this->SetFont('Arial', 'B', 8);
         $this->SetFillColor(180, 180, 180);
 
         // Guardar posición inicial
         $startX = $this->GetX();
         $startY = $this->GetY();
 
-        // FECHA (ancho: 56)
-        $this->Cell(54, 8, utf8_decode('FECHA'), 1, 0, 'C', true);
+        // FECHA (ancho: 35)
+        $this->Cell(40, 8, utf8_decode('FECHA'), 1, 0, 'C', true);
 
-        // CANTIDAD CAJAS (ancho: 28) - Usar MultiCell para dos líneas
-        $this->SetXY($startX + 54, $startY);
-        $this->MultiCell(22, 4, utf8_decode('CANTIDAD' . "\n" . 'CAJAS'), 1, 'C', true);
+        // CANTIDAD CAJAS (ancho: 15)
+        $this->SetXY($startX + 40, $startY);
+        $this->MultiCell(17, 4, utf8_decode('CANTIDAD' . "\n" . 'CAJAS'), 1, 'C', true);
 
-        // PESO NETO (KG) (ancho: 28)
-        $this->SetXY($startX + 54 + 22, $startY);
-        $this->MultiCell(23, 4, utf8_decode('PESO NETO' . "\n" . '(KG)'), 1, 'C', true);
+        // PESO NETO (KG) (ancho: 18)
+        $this->SetXY($startX + 40 + 17, $startY);
+        $this->MultiCell(20, 4, utf8_decode('PESO NETO' . "\n" . '(KG)'), 1, 'C', true);
 
-        // PESO BRUTO (KG) (ancho: 28)
-        $this->SetXY($startX + 54 + 22 + 23, $startY);
-        $this->MultiCell(26, 4, utf8_decode('PESO BRUTO' . "\n" . '(KG)'), 1, 'C', true);
+        // PESO BRUTO (KG) (ancho: 20)
+        $this->SetXY($startX + 40 + 17 + 20, $startY);
+        $this->MultiCell(22, 4, utf8_decode('PESO BRUTO' . "\n" . '(KG)'), 1, 'C', true);
 
-        // Restaurar posición Y para continuar en la misma línea
-        $this->SetXY($startX + 54 + 22 + 23 + 26, $startY);
         // GUIA MASTER (ancho: 18)
-        $this->Cell(27, 8, utf8_decode('GUIA MASTER'), 1, 0, 'C', true);
+        $this->SetXY($startX + 40 + 17 + 20 + 22, $startY);
+        $this->Cell(22, 8, utf8_decode('GUIA' . "\n" . 'MASTER'), 1, 0, 'C', true);
 
-        // HORA EST. CARGUE (ancho: 40)
-        $this->Cell(27, 8, utf8_decode('GUIA HIJA'), 1, 0, 'C', true);
+        // GUIA HIJA (ancho: 18)
+        $this->SetXY($startX + 40 + 17 + 20 + 22 + 22, $startY);
+        $this->Cell(22, 8, utf8_decode('GUIA' . "\n" . 'HIJA'), 1, 0, 'C', true);
 
-        // CANTIDAD ESTIBAS (ancho: 40)
-        $this->Cell(18, 8, utf8_decode('PALLETS'), 1, 1, 'C', true);
+        // PALLETS (ancho: 12)
+        $this->SetXY($startX + 40 + 17 + 20 + 22 + 22 +22, $startY);
+        $this->Cell(14, 8, utf8_decode('PALLETS'), 1, 0, 'C', true);
+
+        // FACTURAS (ancho: 22)
+        $this->SetXY($startX + 40 + 17 + 20 + 22 + 22 + 22 + 14, $startY);
+        $this->Cell(22, 8, utf8_decode('FACTURAS'), 1, 0, 'C', true);
+
+        // PRECINTO (ancho: 18)
+        $this->SetXY($startX + 40 + 17 + 20 + 22 + 22 + 22 + 14 + 22, $startY);
+        $this->Cell(18, 8, utf8_decode('PRECINTO'), 1, 1, 'C', true);
     }
 
-    function agregarFila($fecha, $cajas, $pesoNeto, $pesoBruto, $guiaMaster, $guiaHija, $cantidadEstibas)
+    function agregarFila($fecha, $cajas, $pesoNeto, $pesoBruto, $guiaMaster, $guiaHija, $cantidadEstibas, $facturas, $precintos)
     {
         // DEBUG: Ver qué fila se está agregando
         error_log("PDF TRANSPORTE - Agregando: $fecha - $cajas cajas - $pesoNeto kg");
@@ -232,15 +277,17 @@ class PDFTransporte extends FPDF
             $this->agregarEncabezadoColumnas();
         }
 
-        $this->SetFont('Arial', '', 9);
-
-        $this->Cell(54, 7, utf8_decode($fecha), 1);
-        $this->Cell(22, 7, number_format($cajas, 0), 1, 0, 'R');
-        $this->Cell(23, 7, number_format($pesoNeto, 2), 1, 0, 'R');
-        $this->Cell(26, 7, number_format($pesoBruto, 2), 1, 0, 'R');
-        $this->Cell(27, 7, utf8_decode($guiaMaster), 1, 0, 'C');
-        $this->Cell(27, 7, utf8_decode($guiaHija), 1, 0, 'C');
-        $this->Cell(18, 7, number_format((float)$cantidadEstibas, 0), 1, 1, 'R');
+        $this->SetFont('Arial', '', 6.5);
+        $this->Cell(40, 7, utf8_decode($fecha), 1);
+        $this->SetFont('Arial', '', 8);
+        $this->Cell(17, 7, number_format($cajas, 0), 1, 0, 'R');
+        $this->Cell(20, 7, number_format($pesoNeto, 2), 1, 0, 'R');
+        $this->Cell(22, 7, number_format($pesoBruto, 2), 1, 0, 'R');
+        $this->Cell(22, 7, utf8_decode($guiaMaster), 1, 0, 'C');
+        $this->Cell(22, 7, utf8_decode($guiaHija), 1, 0, 'C');
+        $this->Cell(14, 7, number_format((float)$cantidadEstibas, 0), 1, 0, 'R');
+        $this->Cell(22, 7, utf8_decode($facturas), 1, 0, 'C');
+        $this->Cell(18, 7, utf8_decode($precintos), 1, 1, 'C');
 
         // Acumular totales
         $this->totalCajas += $cajas;
@@ -254,13 +301,15 @@ class PDFTransporte extends FPDF
         $this->SetFont('Arial', 'B', 10);
         $this->SetFillColor(220, 220, 220);
 
-        $this->Cell(54, 8, 'TOTALES:', 1, 0, 'R', true);
-        $this->Cell(22, 8, number_format($this->totalCajas, 0), 1, 0, 'R', true);
-        $this->Cell(23, 8, number_format($this->totalPesoNeto, 2), 1, 0, 'R', true);
-        $this->Cell(26, 8, number_format($this->totalPesoBruto, 2), 1, 0, 'R', true);
-        $this->Cell(27, 8, '', 1, 0, 'R', true);
-        $this->Cell(27, 8, '', 1, 0, 'R', true);
-        $this->Cell(18, 8, number_format($this->totalEstibas, 0), 1, 1, 'R', true);
+        $this->Cell(40, 8, 'TOTALES:', 1, 0, 'R', true);
+        $this->Cell(17, 8, number_format($this->totalCajas, 0), 1, 0, 'R', true);
+        $this->Cell(20, 8, number_format($this->totalPesoNeto, 2), 1, 0, 'R', true);
+        $this->Cell(22, 8, number_format($this->totalPesoBruto, 2), 1, 0, 'R', true);
+        $this->Cell(22, 8, '', 1, 0, 'R', true);
+        $this->Cell(22, 8, '', 1, 0, 'R', true);
+        $this->Cell(14, 8, number_format($this->totalEstibas, 0), 1, 0, 'R', true);
+        $this->Cell(22, 8, '', 1, 0, 'R', true);
+        $this->Cell(18, 8, '', 1, 1, 'R', true);
     }
 }
 
@@ -288,7 +337,9 @@ foreach ($datosTransporte as $dato) {
         $dato['PesoBruto'],
         $dato['GuiaMaster'],
         $dato['GuiaHija'],
-        $dato['CantidadEstibas']
+        $dato['CantidadEstibas'],
+        $dato['Facturas'],
+        $dato['Precintos']
     );
 }
 
