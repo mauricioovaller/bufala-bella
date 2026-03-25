@@ -201,6 +201,7 @@ export default function ConsolidacionMain() {
           valor: pedido.valor,
           ordenCompra: pedido.ordenCompra,
           estibas: pedido.estibas,
+          estibasPagas: pedido.estibasPagas, // 👈 NUEVO
           facturaNo: pedido.facturaNo || '',  // 👈 NUEVO
           tipoDato: pedido.tipo || 'PED'  // 👈 Para identificar si es PED o SMP
         }));
@@ -1121,7 +1122,7 @@ export default function ConsolidacionMain() {
                         : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
-                      <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 items-center">
+                      <div className="grid grid-cols-1 lg:grid-cols-8 gap-4 items-center">
                         {/* Información del Pedido */}
                         <div className="lg:col-span-2">
                           <div className="flex items-center gap-2">
@@ -1157,6 +1158,13 @@ export default function ConsolidacionMain() {
                             {formatearNumero(pedido.estibas)}
                           </p>
                         </div>
+
+                        <div>
+                          <p className="text-sm text-gray-600">Estibas Pagas</p>
+                          <p className="font-medium text-gray-900">
+                            {formatearNumero(pedido.estibasPagas)}
+                          </p>
+                        </div>                        
 
                         {/* Fecha de Salida - Editable */}
                         <div>
@@ -1262,7 +1270,7 @@ export default function ConsolidacionMain() {
             {/* Resumen */}
             {pedidosEnRango.length > 0 && (
               <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
                   <div>
                     <p className="text-sm text-blue-600">Pedidos en Rango</p>
                     <p className="text-xl font-bold text-blue-700">{pedidosEnRango.length}</p>
@@ -1283,6 +1291,12 @@ export default function ConsolidacionMain() {
                     <p className="text-sm text-blue-600">Estibas</p>
                     <p className="text-xl font-bold text-blue-700">
                       {formatearNumero(pedidosEnRango.reduce((sum, p) => sum + p.estibas, 0))}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-600">Estibas Pagas</p>
+                    <p className="text-xl font-bold text-blue-700">
+                      {formatearNumero(pedidosEnRango.reduce((sum, p) => sum + p.estibasPagas, 0))}
                     </p>
                   </div>
                   <div>

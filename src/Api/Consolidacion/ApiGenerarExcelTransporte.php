@@ -50,10 +50,12 @@ try {
         enc.GuiaMaster,
         enc.GuiaHija,
         MAX(est.TotalEstibas) AS CantidadEstibas,
+        COALESCE(etp.TotalEstibasPagas, 0) AS CantidadEstibasPagas,
         '07:00:00' AS HoraCargue,
         'Normal' AS TipoDato,
         COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'normal'), '') AS Facturas,
-        COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'normal'), '') AS Precintos
+        COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'normal'), '') AS Precintos,
+        COALESCE(ctr.CostoTransporte, 0) AS CostoTransporte
     FROM EncabPedido enc
     INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido   
     INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
@@ -67,6 +69,37 @@ try {
           AND Estado = 'Activo'
         GROUP BY {$campoFecha}
     ) est ON est.{$campoFecha} = enc.{$campoFecha}
+
+    LEFT JOIN (
+        SELECT
+        FechaSalida,
+        SUM(EstibasPagas) AS TotalEstibasPagas
+        FROM (
+            SELECT
+                enc.FechaSalida,
+                IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS EstibasPagas
+            FROM
+                EncabPedido enc 
+                INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
+            WHERE
+                enc.FechaSalida BETWEEN ? AND ?   
+            GROUP BY
+                enc.Id_EncabPedido
+        ) AS pedidos_agrupados
+        GROUP BY
+            FechaSalida
+        ORDER BY
+            FechaSalida
+    ) etp ON etp.FechaSalida = enc.FechaSalida
+
+    LEFT JOIN (
+        SELECT 
+            Fecha,
+            SUM(ValorFlete) AS CostoTransporte
+        FROM CostosTransporteDiario
+        WHERE Fecha BETWEEN ? AND ?      
+        GROUP BY Fecha
+    ) ctr ON ctr.Fecha = enc.{$campoFecha}
     WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
     GROUP BY enc.{$campoFecha}
 
@@ -81,11 +114,12 @@ try {
         enc.GuiaMaster,
         enc.GuiaHija,
         MAX(est.TotalEstibas) AS CantidadEstibas,
+        0 AS CantidadEstibasPagas,
         '07:00:00' AS HoraCargue,
         'Sample' AS TipoDato,
         COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'sample'), '') AS Facturas,
-        COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'sample'), '') AS Precintos
-    FROM EncabPedidoSample enc
+        COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'sample'), '') AS Precintos,
+        0 AS CostoTransporte    FROM EncabPedidoSample enc
     INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido   
     INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
     INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
@@ -105,7 +139,7 @@ try {
 
     // Preparar y ejecutar la consulta
     $stmt = $enlace->prepare($sql);
-    $stmt->bind_param("ssssssss", $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta);
+    $stmt->bind_param("ssssssssssss", $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta);
     $stmt->execute();
     
     // BIND RESULT
@@ -118,10 +152,12 @@ try {
         $guiaMaster,
         $guiaHija,
         $cantidadEstibas,
+        $cantidadEstibasPagas,
         $horaCargue,
         $tipoDato,
         $facturas,
-        $precintos
+        $precintos,
+        $costoTransporte
     );
     
     // Procesar y consolidar datos por fecha (igual que en ApiConsolidadoTransporte.php)
@@ -136,6 +172,9 @@ try {
             $datosConsolidados[$claveUnica]['PesoNeto'] += $pesoNeto;
             $datosConsolidados[$claveUnica]['PesoBruto'] += $pesoBruto;
             $datosConsolidados[$claveUnica]['CantidadEstibas'] += $cantidadEstibas;
+            $datosConsolidados[$claveUnica]['CantidadEstibasPagas'] += $cantidadEstibasPagas;
+            $datosConsolidados[$claveUnica]['CostoTransporte'] += $costoTransporte;
+
 
             // Para Guías: mantener la del registro "Normal" o concatenar
             if ($tipoDato === 'Normal') {
@@ -180,9 +219,11 @@ try {
                 'GuiaMaster' => $guiaMaster,
                 'GuiaHija' => $guiaHija,
                 'CantidadEstibas' => $cantidadEstibas,
+                'CantidadEstibasPagas' => $cantidadEstibasPagas,
                 'HoraCargue' => $horaCargue,
                 'Facturas' => $facturas,
-                'Precintos' => $precintos
+                'Precintos' => $precintos,
+                'CostoTransporte' => $costoTransporte
             ];
         }
     }
@@ -244,7 +285,9 @@ try {
         'PESO BRUTO (KG)', 
         'GUIA MASTER', 
         'GUIA HIJA', 
-        'PALLETS', 
+        'PALLETS',
+        'PALLETS PAGAS',
+        'COSTO TRANSPORTE',
         'FACTURAS', 
         'PRECINTO'
     ];
@@ -265,6 +308,8 @@ try {
     $totalPesoNeto = 0;
     $totalPesoBruto = 0;
     $totalEstibas = 0;
+    $totalEstibasPagas = 0;
+    $totalCostoTransporte = 0;
     
     foreach ($datosTransporte as $dato) {
         $sheet->setCellValue('A' . $fila, $dato['FechaCompleta']);
@@ -275,13 +320,17 @@ try {
         $sheet->setCellValue('F' . $fila, $dato['GuiaMaster']);
         $sheet->setCellValue('G' . $fila, $dato['GuiaHija']);
         $sheet->setCellValue('H' . $fila, $dato['CantidadEstibas']);
-        $sheet->setCellValue('I' . $fila, $dato['Facturas']);
-        $sheet->setCellValue('J' . $fila, $dato['Precintos']);
+        $sheet->setCellValue('I' . $fila, $dato['CantidadEstibasPagas']);
+        $sheet->setCellValue('J' . $fila, $dato['CostoTransporte']);
+        $sheet->setCellValue('K' . $fila, $dato['Facturas']);
+        $sheet->setCellValue('L' . $fila, $dato['Precintos']);
         
         $totalCajas += $dato['CantidadCajas'];
         $totalPesoNeto += $dato['PesoNeto'];
         $totalPesoBruto += $dato['PesoBruto'];
         $totalEstibas += $dato['CantidadEstibas'];
+        $totalEstibasPagas += $dato['CantidadEstibasPagas'];
+        $totalCostoTransporte += $dato['CostoTransporte'];
         
         $fila++;
         $contadorFilas++;
@@ -294,22 +343,24 @@ try {
         $sheet->setCellValue('D' . $fila, $totalPesoNeto);
         $sheet->setCellValue('E' . $fila, $totalPesoBruto);
         $sheet->setCellValue('H' . $fila, $totalEstibas);
+        $sheet->setCellValue('I' . $fila, $totalEstibasPagas);
+        $sheet->setCellValue('J' . $fila, $totalCostoTransporte);
         
         // Aplicar estilo a la fila de totales
-        $sheet->getStyle('A' . $fila . ':J' . $fila)->getFont()->setBold(true);
-        $sheet->getStyle('A' . $fila . ':J' . $fila)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFDCDCDC');
+        $sheet->getStyle('A' . $fila . ':L' . $fila)->getFont()->setBold(true);
+        $sheet->getStyle('A' . $fila . ':L' . $fila)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFDCDCDC');
     }
     
     // Si no hay datos, mostrar mensaje
     if ($contadorFilas === 0) {
         $filaMensaje = $filaActual + 1;
         $sheet->setCellValue('A' . $filaMensaje, 'No hay datos para las fechas seleccionadas: ' . $fechaDesde . ' a ' . $fechaHasta);
-        $sheet->mergeCells('A' . $filaMensaje . ':J' . $filaMensaje);
+        $sheet->mergeCells('A' . $filaMensaje . ':L' . $filaMensaje);
         $sheet->getStyle('A' . $filaMensaje)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
     }
 
     // Autoajustar columnas
-    foreach (range('A', 'J') as $columnID) {
+    foreach (range('A', 'L') as $columnID) {
         $sheet->getColumnDimension($columnID)->setAutoSize(true);
     }
 

@@ -40,6 +40,7 @@ $sqlPedidos = "SELECT
             ROUND(SUM(det.PesoNeto),2) AS pesoNeto,
             ROUND(SUM(det.PesoNeto * det.PrecioUnitario),2) AS valor,
             enc.CantidadEstibas AS estibas,
+            IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS estibasPagas,
             'PED' AS tipo  -- 👈 Identificador para pedidos regulares
         FROM EncabPedido enc
         INNER JOIN Clientes cli ON enc.Id_Cliente = cli.Id_Cliente
@@ -68,6 +69,7 @@ $sqlSamples = "SELECT
             ROUND(SUM(det.PesoNeto ),2) AS pesoNeto,
             ROUND(SUM(det.PesoNeto * det.PrecioUnitario),2) AS valor,
             enc.CantidadEstibas AS estibas,
+            IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS estibasPagas,
             'SMP' AS tipo  -- 👈 Identificador para samples
         FROM EncabPedidoSample enc
         INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
@@ -89,7 +91,7 @@ $stmt->bind_param("ssss", $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta);
 $stmt->execute();
 
 // Usar bind_result
-$stmt->bind_result($id, $numero, $fecha, $cliente, $region, $ordenCompra, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $facturaNo, $cajas, $tms, $pesoNeto, $valor, $estibas, $tipo);
+$stmt->bind_result($id, $numero, $fecha, $cliente, $region, $ordenCompra, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $facturaNo, $cajas, $tms, $pesoNeto, $valor, $estibas, $estibasPagas, $tipo);
 
 $todosLosRegistros = []; // 👈 UN SOLO ARREGLO
 
@@ -114,6 +116,7 @@ while ($stmt->fetch()) {
         'valor' => (float)$valor,
         'ordenCompra' => $ordenCompra,
         'estibas' => (int)$estibas,
+        'estibasPagas' => (int)$estibasPagas,
         'tipo' => $tipo, // 👈 Para identificar fácilmente en el frontend si es necesario
         'seleccionado' => false
     ];

@@ -28,6 +28,7 @@ if (!$data) {
 $facturaId = isset($data["facturaId"]) ? intval($data["facturaId"]) : null;
 $numeroFacturaCompleto = isset($data["numeroFactura"]) ? trim($data["numeroFactura"]) : null;
 
+
 if (!$facturaId || !$numeroFacturaCompleto) {
     echo json_encode(["success" => false, "message" => "ID de factura o número de factura no válido"]);
     exit;
