@@ -36,7 +36,7 @@ if ($modo === 'porFechas') {
     
     $sqlPedidos = "SELECT eps.Id_EncabPedido 
                    FROM EncabPedidoSample eps
-                   WHERE eps.FechaOrden BETWEEN ? AND ?";
+                   WHERE eps.FechaSalida BETWEEN ? AND ?";
                    
     $params = [$fechaDesde, $fechaHasta];
     $types = "ss";

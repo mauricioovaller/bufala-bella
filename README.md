@@ -31,6 +31,10 @@ Sistema de gestión empresarial desarrollado para **Bufala Bella**, especializad
 - Configuración de documentos por cliente
 - Impresión masiva y personalizada
 - Integración con contabilidad
+- **Consulta de facturas existentes** con filtros avanzados
+- **Estadísticas en tiempo real** basadas en resultados
+- **Visualización de documentos asociados** (cartas, reportes, planillas)
+- **Paginación y ordenamiento** de facturas
 
 ### 👥 **Gestión de Clientes y Productos**
 - CRUD completo de clientes con regiones
@@ -692,6 +696,143 @@ tar -czf codigo_$(date +%Y%m%d).tar.gz src/ package.json *.config.js
 3. Verificar integridad de datos
 4. Notificar a usuarios si es necesario
 
+## 🔍 Módulo de Consulta de Facturas (Nuevo)
+
+### **Funcionalidades Implementadas**
+
+#### **Filtros de Búsqueda Avanzados**
+- **Tipo de factura**: Normal, Sample, o Todos
+- **Rango de fechas**: Desde/Hasta con validación
+- **Número de factura**: Búsqueda por parte numérica (ej: "123" para FACT-123 o SMP-FACT-123)
+- **Búsqueda en tiempo real**: Resultados actualizados automáticamente
+
+#### **Estadísticas en Tiempo Real**
+- **Total de facturas** encontradas
+- **Desglose por tipo** (Normales vs Samples)
+- **Valor total acumulado** de facturas
+- **Actualización automática** al cambiar filtros
+
+#### **Lista de Facturas**
+- **Ordenamiento descendente** por Id_EncabInvoice (más recientes primero)
+- **Datos completos**: Número, fecha, cliente, valor, tipo
+- **Acciones por factura**:
+  - 👁️ **Ver factura PDF**: Visualización preliminar
+  - 📄 **Documentos asociados**: Cartas, reportes, planillas
+- **Diseño responsive**: Adaptable a diferentes tamaños de pantalla
+
+#### **Documentos Asociados**
+- **Factura PDF**: Generado desde ApiGenerarFacturaPDF.php
+- **Cartas de responsabilidad** (requieren planilla asociada):
+  - ✈️ **Carta para Aerolínea**: Para transporte aéreo con opción **con firma/sin firma**
+  - 👮 **Carta para Policía**: Para autorizaciones policiales con opción **con firma/sin firma**
+- **Reporte de despacho**: Documento de logística
+- **Plan Vallejo**: Complemento de facturación
+
+**Nota**: Las cartas de responsabilidad utilizan el mismo componente y lógica que la pestaña "Crear Facturas", incluyendo la opción de firma mediante SweetAlert.
+
+**Nota sobre cartas de responsabilidad**: Solo disponibles para facturas que tienen una planilla asociada (`Id_Planilla` no es null ni 0).
+
+### **Arquitectura Técnica**
+
+#### **Componentes React**
+1. **FacturacionMain.jsx**: Componente principal con pestañas
+2. **ListaFacturasGeneradas.jsx**: Componente reutilizable con modo consulta
+3. **DocumentosFacturaModal.jsx**: Modal para visualizar documentos asociados
+
+#### **Servicios Actualizados**
+1. **facturacionService.js**: Nuevas funciones con filtros avanzados
+   - `obtenerFacturasConFiltros()`: Para modo consulta
+   - `obtenerFacturasGeneradas()`: Para modo creación (backward compatible)
+
+#### **APIs PHP Modificadas**
+1. **ApiObtenerFacturasGeneradas.php**: Agregados nuevos parámetros:
+   - `tipo_factura`: Filtro por tipo (normal/sample/todos)
+   - `numero_factura`: Búsqueda por número
+   - `modo_consulta`: Flag para diferenciar modos
+   - Campo `Id_Planilla` agregado al SELECT
+
+#### **Patrones de Diseño Aplicados**
+- **Modo dual**: Componente reutilizable con prop `modoConsulta`
+- **Backward compatibility**: Funcionalidad existente no afectada
+- **Separación de responsabilidades**: Lógica de filtros separada de UI
+- **Paginación implícita**: Máximo 10 facturas por página (configurable)
+
+### **Flujo de Datos**
+
+```
+Usuario establece filtros
+    ↓
+Componente FacturacionMain actualiza estado
+    ↓
+ListaFacturasGeneradas detecta cambios
+    ↓
+Llama a obtenerFacturasConFiltros()
+    ↓
+API procesa filtros y retorna datos
+    ↓
+Componente actualiza lista y estadísticas
+    ↓
+Usuario interactúa con facturas/documentos
+```
+
+### **Consideraciones de Performance**
+- **Lazy loading**: Documentos se generan solo al solicitarlos
+- **Paginación implícita**: API retorna máximo 10 registros
+- **Cache de resultados**: Reutilización de datos entre filtros similares
+- **Ordenamiento en backend**: Por Id_EncabInvoice descendente
+
+### **Mantenimiento y Extensión**
+
+#### **Agregar Nuevos Filtros**
+1. Agregar campo en `filtrosConsulta` state
+2. Actualizar UI en FacturacionMain.jsx
+3. Modificar `obtenerFacturasConFiltros()` service
+4. Actualizar API PHP para aceptar nuevo parámetro
+
+#### **Agregar Nuevos Documentos**
+1. Crear función en `planillasService.js`
+2. Agregar botón en `DocumentosFacturaModal.jsx`
+3. Implementar handler correspondiente
+4. Verificar API existente o crear nueva
+
+#### **Ajustes Realizados en Documentos (Marzo 2025)**
+1. **Consistencia con "Crear Facturas"**: 
+   - `DocumentosFacturaModal.jsx` ahora usa la misma lógica que `DashboardDocumentosDespacho.jsx`
+   - SweetAlert para opción "con firma/sin firma" en cartas de responsabilidad
+   - Mismos parámetros a `ApiGenerarPlanillasPDF.php`
+
+2. **Validación mejorada**:
+   - Cartas solo visibles cuando `Id_Planilla` no es null ni 0
+   - Mensajes claros cuando no hay planilla asociada
+
+3. **Nomenclatura actualizada**:
+   - "Carta para Aerolínea" (en lugar de "Carta Aerolínea")
+   - "Carta para Policía" (en lugar de "Carta Policía")
+   - Colores consistentes: azul para aerolínea, verde para policía
+
+#### **Personalizar Estadísticas**
+1. Modificar `actualizarEstadisticas()` en FacturacionMain.jsx
+2. Agregar nuevos cálculos según necesidades
+3. Actualizar UI de resumen estadístico
+
+### **Testing y Validación**
+
+#### **Casos de Prueba**
+1. **Filtros básicos**: Tipo (normal/sample/todos), fechas, número
+2. **Estadísticas**: Cálculos correctos con diferentes datasets
+3. **Documentos**: Generación y visualización de cada tipo
+4. **Cartas de responsabilidad**: Opción "con firma/sin firma" funcionando correctamente
+5. **Validación de planilla**: Cartas solo disponibles para facturas con planilla asociada
+6. **Responsive**: Comportamiento en diferentes tamaños de pantalla
+7. **Backward compatibility**: Modo creación sigue funcionando
+8. **Consistencia**: Misma experiencia de usuario que pestaña "Crear Facturas"
+
+#### **Validación de Datos**
+- Fechas: Formato YYYY-MM-DD, validación de rango
+- Número factura: Solo dígitos, sanitización de entrada
+- Tipo factura: Valores permitidos (normal/sample/todos)
+- Respuestas API: Estructura esperada, manejo de errores
+
 ## 📚 Documentación para Desarrollo Futuro
 
 ### **Agregar Nuevos Módulos**
@@ -915,6 +1056,6 @@ Este proyecto es propiedad de **Bufala Bella** y está destinado para uso intern
 
 ---
 
-**Última actualización**: Marzo 2025  
-**Versión**: 1.0.0  
+**Última actualización**: Marzo 2025 (Ajustes módulo consulta de facturas)  
+**Versión**: 1.1.0  
 **Mantenedores**: Equipo de Desarrollo Bufala Bella

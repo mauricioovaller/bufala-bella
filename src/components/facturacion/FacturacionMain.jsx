@@ -6,6 +6,7 @@ import ConfiguracionFactura from './ConfiguracionFactura';
 import ListaFacturasGeneradas from './ListaFacturasGeneradas';
 import ModalDocumentosDespacho from './ModalDocumentosDespacho';
 import DashboardDocumentosDespacho from './DashboardDocumentosDespacho';
+import DocumentosFacturaModal from './DocumentosFacturaModal';
 import { getDatosSelect } from '../../services/pedidosService';
 import { crearPlanilla } from '../../services/planillasService';
 import Swal from 'sweetalert2';
@@ -53,39 +54,21 @@ export default function FacturacionMain() {
     const [pasoDocumentos, setPasoDocumentos] = useState('configuracion'); // 'configuracion' | 'dashboard'
     const [planillaCreada, setPlanillaCreada] = useState(null);
 
-    // Datos para pestaña CONSULTAR
-    const [facturasExistentes] = useState([
-        {
-            id: 1,
-            numero: "FACT-2024-001",
-            fecha: "2024-01-15",
-            cliente: "Cliente A & B",
-            valorTotal: 4300000,
-            estado: "Generada",
-            documentos: ["Carta Aerolínea", "Carta Policía"],
-            tipo: "normal"
-        },
-        {
-            id: 2,
-            numero: "FACT-2024-002",
-            fecha: "2024-01-16",
-            cliente: "Cliente C",
-            valorTotal: 4200000,
-            estado: "Generada",
-            documentos: ["Reporte Despacho"],
-            tipo: "normal"
-        },
-        {
-            id: 3,
-            numero: "SMP-FACT-2024-001",
-            fecha: "2024-01-17",
-            cliente: "Cliente Sample",
-            valorTotal: 1500000,
-            estado: "Generada",
-            documentos: ["Carta Aerolínea"],
-            tipo: "sample"
-        }
-    ]);
+    // Estados para pestaña CONSULTAR
+    const [filtrosConsulta, setFiltrosConsulta] = useState({
+        fechaDesde: new Date().toISOString().split('T')[0],
+        fechaHasta: new Date().toISOString().split('T')[0],
+        tipoFactura: "todos",
+        numeroFactura: ""
+    });
+    const [estadisticasConsulta, setEstadisticasConsulta] = useState({
+        totalFacturas: 0,
+        facturasNormales: 0,
+        facturasSamples: 0,
+        valorTotal: 0
+    });
+    const [facturaSeleccionadaDocumentos, setFacturaSeleccionadaDocumentos] = useState(null);
+    const [modalDocumentosAbierto, setModalDocumentosAbierto] = useState(false);
 
     // Cargar datos iniciales
     useEffect(() => {
@@ -159,29 +142,42 @@ export default function FacturacionMain() {
     const limpiarTodoDespuesDeFactura = () => {
         console.log('🧹 Limpiando todo después de generar factura...');
         setPedidosSeleccionados([]);
-        setMostrarPedidos(false);
-        setConfigFactura({
-            numeroFactura: "",
-            fechaFactura: new Date().toISOString().split('T')[0],
-            consignatarioId: "",
-            agenciaId: "",
-            aerolineaId: "",
-            guiaMaster: "",
-            guiaHija: "",
-            observaciones: "",
-            tipoPedido: tipoPedido
+    };
+
+    // Funciones para pestaña CONSULTAR
+    // Función: Actualizar filtros de consulta
+    const handleFiltrosConsultaChange = (nuevosFiltros) => {
+        setFiltrosConsulta(prev => ({
+            ...prev,
+            ...nuevosFiltros
+        }));
+    };
+
+    // Función: Actualizar estadísticas basadas en facturas
+    const actualizarEstadisticas = (facturas) => {
+        const totalFacturas = facturas.length;
+        const facturasNormales = facturas.filter(f => !f.numero.startsWith('SMP-')).length;
+        const facturasSamples = facturas.filter(f => f.numero.startsWith('SMP-')).length;
+        const valorTotal = facturas.reduce((sum, f) => sum + (f.valorTotal || 0), 0);
+        
+        setEstadisticasConsulta({
+            totalFacturas,
+            facturasNormales,
+            facturasSamples,
+            valorTotal
         });
-        setFacturasSeleccionadas([]);
-        // Limpiar configuración de documentos
-        setConfiguracionDocumentos({
-            conductor: null,
-            ayudante: null,
-            precintoSeguridad: '',
-            placaVehiculo: 'VAK076',
-            descripcionVehiculo: 'MITSUBISHI FUSO BLANCA'
-        });
-        setPasoDocumentos('configuracion');
-        setPlanillaCreada(null);
+    };
+
+    // Función: Manejar ver documentos de factura
+    const handleVerDocumentosFactura = (factura) => {
+        setFacturaSeleccionadaDocumentos(factura);
+        setModalDocumentosAbierto(true);
+    };
+
+    // Función: Cerrar modal de documentos
+    const handleCerrarModalDocumentos = () => {
+        setModalDocumentosAbierto(false);
+        setFacturaSeleccionadaDocumentos(null);
     };
 
     const handlePedidosChange = (nuevosPedidosSeleccionados) => {
@@ -624,8 +620,12 @@ export default function FacturacionMain() {
                                         <label className="block text-sm font-medium text-gray-700">
                                             Tipo Factura
                                         </label>
-                                        <select className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                            <option value="">Todos los tipos</option>
+                                        <select 
+                                            value={filtrosConsulta.tipoFactura}
+                                            onChange={(e) => handleFiltrosConsultaChange({ tipoFactura: e.target.value })}
+                                            className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        >
+                                            <option value="todos">Todos los tipos</option>
                                             <option value="normal">Pedidos Normales</option>
                                             <option value="sample">Pedidos Sample</option>
                                         </select>
@@ -637,6 +637,8 @@ export default function FacturacionMain() {
                                         </label>
                                         <input
                                             type="date"
+                                            value={filtrosConsulta.fechaDesde}
+                                            onChange={(e) => handleFiltrosConsultaChange({ fechaDesde: e.target.value })}
                                             className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -647,6 +649,8 @@ export default function FacturacionMain() {
                                         </label>
                                         <input
                                             type="date"
+                                            value={filtrosConsulta.fechaHasta}
+                                            onChange={(e) => handleFiltrosConsultaChange({ fechaHasta: e.target.value })}
                                             className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -657,7 +661,9 @@ export default function FacturacionMain() {
                                         </label>
                                         <input
                                             type="text"
-                                            placeholder="Ej: FACT-2024-001"
+                                            value={filtrosConsulta.numeroFactura}
+                                            onChange={(e) => handleFiltrosConsultaChange({ numeroFactura: e.target.value })}
+                                            placeholder="Ej: 123 (para FACT-123 o SMP-FACT-123)"
                                             className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -666,7 +672,9 @@ export default function FacturacionMain() {
                                         <label className="block text-sm font-medium text-gray-700 opacity-0 sm:opacity-100">
                                             Buscar
                                         </label>
-                                        <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 sm:py-3 px-4 rounded-lg sm:rounded-xl transition-all shadow-sm hover:shadow-md text-sm sm:text-base">
+                                        <button 
+                                            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 sm:py-3 px-4 rounded-lg sm:rounded-xl transition-all shadow-sm hover:shadow-md text-sm sm:text-base"
+                                        >
                                             🔍 Buscar
                                         </button>
                                     </div>
@@ -677,177 +685,42 @@ export default function FacturacionMain() {
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
-                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">15</div>
+                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
+                                        {estadisticasConsulta.totalFacturas}
+                                    </div>
                                     <div className="text-xs sm:text-sm text-gray-600">Facturas Totales</div>
                                 </div>
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
-                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">10</div>
+                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
+                                        {estadisticasConsulta.facturasNormales}
+                                    </div>
                                     <div className="text-xs sm:text-sm text-gray-600">Facturas Normales</div>
                                 </div>
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-orange-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
-                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">5</div>
+                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
+                                        {estadisticasConsulta.facturasSamples}
+                                    </div>
                                     <div className="text-xs sm:text-sm text-gray-600">Facturas Sample</div>
                                 </div>
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-purple-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
-                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">$168M</div>
+                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
+                                        ${estadisticasConsulta.valorTotal.toLocaleString('es-CO')}
+                                    </div>
                                     <div className="text-xs sm:text-sm text-gray-600">Valor Total</div>
                                 </div>
                             </div>
 
                             {/* LISTA DE FACTURAS EXISTENTES */}
-                            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
-                                <div className="flex items-center mb-4 sm:mb-6">
-                                    <div className="w-1 h-6 sm:h-8 bg-green-500 rounded-full mr-3"></div>
-                                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Facturas Existentes</h2>
-                                </div>
-
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-200">
-                                                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">Factura</th>
-                                                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 hidden sm:table-cell">Tipo</th>
-                                                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 hidden sm:table-cell">Fecha</th>
-                                                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">Cliente</th>
-                                                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">Valor</th>
-                                                <th className="text-center py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {facturasExistentes.map((factura) => (
-                                                <tr key={factura.id} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="py-3 px-2 sm:px-4">
-                                                        <div>
-                                                            <p className="font-semibold text-gray-900 text-sm sm:text-base">{factura.numero}</p>
-                                                            <p className="text-xs text-gray-500 sm:hidden">
-                                                                {factura.tipo === 'normal' ? '📦 Normal' : '🔬 Sample'} • {factura.fecha}
-                                                            </p>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 px-2 sm:px-4 text-sm text-gray-600 hidden sm:table-cell">
-                                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${factura.tipo === 'normal'
-                                                            ? 'bg-blue-100 text-blue-800'
-                                                            : 'bg-green-100 text-green-800'}`}>
-                                                            {factura.tipo === 'normal' ? '📦 Normal' : '🔬 Sample'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-3 px-2 sm:px-4 text-sm text-gray-600 hidden sm:table-cell">
-                                                        {factura.fecha}
-                                                    </td>
-                                                    <td className="py-3 px-2 sm:px-4">
-                                                        <p className="text-sm text-gray-900">{factura.cliente}</p>
-                                                        <p className="text-xs text-gray-500">
-                                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${factura.estado === 'Generada' ? 'bg-green-100 text-green-800' :
-                                                                factura.estado === 'Cerrada' ? 'bg-gray-100 text-gray-800' :
-                                                                    'bg-blue-100 text-blue-800'
-                                                                }`}>
-                                                                {factura.estado}
-                                                            </span>
-                                                        </p>
-                                                    </td>
-                                                    <td className="py-3 px-2 sm:px-4 text-sm font-semibold text-gray-900 text-right hidden md:table-cell">
-                                                        ${factura.valorTotal.toLocaleString('es-CO')}
-                                                    </td>
-                                                    <td className="py-3 px-2 sm:px-4">
-                                                        <div className="flex justify-center space-x-1 sm:space-x-2">
-                                                            <button className="text-blue-600 hover:text-blue-800 p-1 sm:p-2 rounded-lg hover:bg-blue-50 transition-all text-xs sm:text-sm">
-                                                                👁️ Ver
-                                                            </button>
-                                                            <button className="text-green-600 hover:text-green-800 p-1 sm:p-2 rounded-lg hover:bg-green-50 transition-all text-xs sm:text-sm">
-                                                                📄 Docs
-                                                            </button>
-                                                            <button className="text-purple-600 hover:text-purple-800 p-1 sm:p-2 rounded-lg hover:bg-purple-50 transition-all text-xs sm:text-sm hidden sm:inline-block">
-                                                                🔄 Regenerar
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {/* PAGINACIÓN */}
-                                <div className="flex flex-col sm:flex-row items-center justify-between pt-4 sm:pt-6 border-t border-gray-200 gap-3 sm:gap-0">
-                                    <p className="text-xs sm:text-sm text-gray-600">
-                                        Mostrando {facturasExistentes.length} de 15 facturas
-                                    </p>
-                                    <div className="flex space-x-1">
-                                        <button className="px-3 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all">
-                                            Anterior
-                                        </button>
-                                        <button className="px-3 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm bg-blue-500 text-white rounded-lg shadow-sm">
-                                            1
-                                        </button>
-                                        <button className="px-3 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all">
-                                            2
-                                        </button>
-                                        <button className="px-3 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all">
-                                            Siguiente
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* DOCUMENTOS GENERADOS */}
-                            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
-                                <div className="flex items-center mb-4 sm:mb-6">
-                                    <div className="w-1 h-6 sm:h-8 bg-purple-500 rounded-full mr-3"></div>
-                                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Documentos Generados</h2>
-                                </div>
-
-                                <div className="space-y-3">
-                                    {facturasExistentes.flatMap(factura =>
-                                        factura.documentos.map((doc, index) => ({
-                                            id: `${factura.id}-${index}`,
-                                            factura: factura.numero,
-                                            tipo: doc,
-                                            fecha: factura.fecha,
-                                            tipoFactura: factura.tipo,
-                                            estado: 'Generado'
-                                        }))
-                                    ).slice(0, 4).map((documento) => (
-                                        <div key={documento.id} className="border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4 hover:border-gray-300 transition-all">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center ${documento.tipoFactura === 'normal' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
-                                                        }`}>
-                                                        {documento.tipo.includes('Aerolínea') ? '✈️' :
-                                                            documento.tipo.includes('Policía') ? '👮' :
-                                                                documento.tipo.includes('Despacho') ? '📊' : '📄'}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 text-sm sm:text-base">{documento.tipo}</p>
-                                                        <p className="text-xs sm:text-sm text-gray-600">
-                                                            Factura: {documento.factura} •
-                                                            {documento.tipoFactura === 'normal' ? ' 📦 Normal' : ' 🔬 Sample'} •
-                                                            {documento.fecha}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center gap-2 self-end sm:self-auto">
-                                                    <button className="text-blue-600 hover:text-blue-800 px-3 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm bg-blue-50 hover:bg-blue-100 rounded-lg transition-all">
-                                                        👁️ Ver
-                                                    </button>
-                                                    <button className="text-green-600 hover:text-green-800 px-3 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm bg-green-50 hover:bg-green-100 rounded-lg transition-all">
-                                                        ⬇️ Descargar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="text-center pt-4">
-                                    <button className="text-blue-600 hover:text-blue-800 font-medium text-sm sm:text-base">
-                                        📋 Ver todos los documentos →
-                                    </button>
-                                </div>
-                            </div>
+                            <ListaFacturasGeneradas
+                                filtros={filtrosConsulta}
+                                modoConsulta={true}
+                                onFacturasChange={() => {}}
+                                onVerDocumentos={handleVerDocumentosFactura}
+                                onEstadisticasChange={actualizarEstadisticas}
+                            />
                         </div>
                     )}
                 </div>
@@ -872,6 +745,13 @@ export default function FacturacionMain() {
                     facturasSeleccionadas={facturasSeleccionadas}
                     onGuardarConfiguracion={handleGuardarConfiguracion}
                     conductores={datosSelect.conductores}
+                />
+
+                {/* MODAL DE DOCUMENTOS DE FACTURA */}
+                <DocumentosFacturaModal
+                    factura={facturaSeleccionadaDocumentos}
+                    isOpen={modalDocumentosAbierto}
+                    onClose={handleCerrarModalDocumentos}
                 />
 
             </div>

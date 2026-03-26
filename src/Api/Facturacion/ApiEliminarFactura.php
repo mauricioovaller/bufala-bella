@@ -24,10 +24,16 @@ if (!$data) {
     exit;
 }
 
-// Validar ID de factura y número de factura
+// Validar ID de factura, número de factura y tipo de pedido
 $facturaId = isset($data["facturaId"]) ? intval($data["facturaId"]) : null;
 $numeroFacturaCompleto = isset($data["numeroFactura"]) ? trim($data["numeroFactura"]) : null;
+$tipoPedido = isset($data["tipoPedido"]) ? trim($data["tipoPedido"]) : "normal";
 
+// Validar tipo de pedido
+if (!in_array($tipoPedido, ['normal', 'sample'])) {
+    echo json_encode(["success" => false, "message" => "Tipo de pedido no válido. Debe ser 'normal' o 'sample'"]);
+    exit;
+}
 
 if (!$facturaId || !$numeroFacturaCompleto) {
     echo json_encode(["success" => false, "message" => "ID de factura o número de factura no válido"]);
@@ -67,8 +73,11 @@ try {
     }
     $stmtDeleteEnc->close();
 
-    // 4. ACTUALIZAR PEDIDOS - PONER FacturaNo EN BLANCO usando el número completo (FEX-2417)
-    $sqlUpdatePedidos = "UPDATE EncabPedido SET FacturaNo = '' WHERE FacturaNo = ?";
+    // 4. ACTUALIZAR PEDIDOS - PONER FacturaNo EN BLANCO usando el número completo
+    // Determinar tabla según el tipo de pedido
+    $tablaPedidos = $tipoPedido === 'normal' ? 'EncabPedido' : 'EncabPedidoSample';
+    
+    $sqlUpdatePedidos = "UPDATE $tablaPedidos SET FacturaNo = '' WHERE FacturaNo = ?";
     $stmtUpdatePedidos = $enlace->prepare($sqlUpdatePedidos);
     $stmtUpdatePedidos->bind_param("s", $numeroFacturaCompleto);
     $stmtUpdatePedidos->execute();
@@ -82,7 +91,9 @@ try {
         "success" => true, 
         "message" => "Factura eliminada correctamente",
         "pedidosActualizados" => $pedidosActualizados,
-        "numeroFactura" => $numeroFacturaCompleto
+        "numeroFactura" => $numeroFacturaCompleto,
+        "tipoPedido" => $tipoPedido,
+        "tablaActualizada" => $tablaPedidos
     ]);
 
 } catch (Exception $e) {

@@ -57,7 +57,7 @@ try {
                     eps.Cliente as cliente,
                     '' as region,
                     eps.PurchaseOrder as po,
-                    eps.FechaOrden as fecha,
+                    eps.FechaSalida as fecha,
                     b.Descripcion as bodega,
                     eps.Id_Bodega as id_bodega
                 FROM EncabPedidoSample eps
@@ -101,18 +101,18 @@ try {
                     eps.Cliente as cliente,
                     '' as region,
                     eps.PurchaseOrder as po,
-                    eps.FechaOrden as fecha,
+                    eps.FechaSalida as fecha,
                     b.Descripcion as bodega,
                     eps.Id_Bodega as id_bodega
                 FROM EncabPedidoSample eps
                 LEFT JOIN Bodegas b ON eps.Id_Bodega = b.Id_Bodega
-                WHERE eps.FechaOrden BETWEEN ? AND ?";
+                WHERE eps.FechaSalida BETWEEN ? AND ?";
         
         if (!empty($bodegaId)) {
             $sql .= " AND eps.Id_Bodega = ?";
         }
         
-        $sql .= " ORDER BY eps.FechaOrden, eps.Id_EncabPedido";
+        $sql .= " ORDER BY eps.FechaSalida, eps.Id_EncabPedido";
         
         $stmt = $enlace->prepare($sql);
         

@@ -103,7 +103,7 @@ export async function guardarFactura(encabezado, pedidosIds, tipoPedido = "norma
   }
 }
 
-// 🔴 FUNCIÓN ACTUALIZADA: Obtener facturas generadas
+// 🔴 FUNCIÓN ACTUALIZADA: Obtener facturas generadas (para modo creación)
 export async function obtenerFacturasGeneradas(fechaDesde, fechaHasta, tipoPedido = "todos") {
   try {
     const endpoint =
@@ -146,6 +146,58 @@ export async function obtenerFacturasGeneradas(fechaDesde, fechaHasta, tipoPedid
     return data;
   } catch (error) {
     console.error("Error en obtenerFacturasGeneradas:", error);
+    throw new Error(`No se pudieron cargar las facturas: ${error.message}`);
+  }
+}
+
+// 🔴 NUEVA FUNCIÓN: Obtener facturas con filtros avanzados (para modo consulta)
+export async function obtenerFacturasConFiltros(filtros) {
+  try {
+    const endpoint =
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Facturacion/ApiObtenerFacturasGeneradas.php";
+
+    const bodyData = {
+      fecha_desde: filtros.fechaDesde,
+      fecha_hasta: filtros.fechaHasta,
+      numero_factura: filtros.numeroFactura || ""
+    };
+    
+    // Solo enviar tipo_factura si no es "todos" o está vacío
+    if (filtros.tipoFactura && filtros.tipoFactura !== 'todos') {
+      bodyData.tipo_factura = filtros.tipoFactura;
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bodyData),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorText = await response.text();
+        console.log("Detalle del error:", errorText);
+        errorDetail += ` - ${errorText}`;
+      } catch (e) {
+        console.log("No se pudo leer el detalle del error");
+      }
+
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en la respuesta del servidor");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerFacturasConFiltros:", error);
     throw new Error(`No se pudieron cargar las facturas: ${error.message}`);
   }
 }

@@ -1,14 +1,15 @@
 // src/components/facturacion/ListaFacturasGeneradas.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { obtenerFacturasGeneradas, generarFacturaPDF, eliminarFacturaCompleta } from '../../services/facturacionService';
+import { obtenerFacturasGeneradas, obtenerFacturasConFiltros, generarFacturaPDF, eliminarFacturaCompleta } from '../../services/facturacionService';
 import ModalVisorPreliminar from '../ModalVisorPreliminar';
 import Swal from 'sweetalert2';
 
 const ListaFacturasGeneradas = ({
     filtros,
-    facturasSeleccionadas,
     onFacturasChange,
-    onSelectAllFacturas
+    modoConsulta = false,
+    onVerDocumentos,
+    onEstadisticasChange
 }) => {
     const [facturas, setFacturas] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -21,7 +22,6 @@ const ListaFacturasGeneradas = ({
 
     // Estados para eliminar factura
     const [eliminandoFactura, setEliminandoFactura] = useState(null);
-    const [mensajeEliminacion, setMensajeEliminacion] = useState(null);
 
     const filtrosAnteriores = useRef({ fechaDesde: '', fechaHasta: '' });
 
@@ -32,30 +32,68 @@ const ListaFacturasGeneradas = ({
                 return;
             }
 
-            if (filtros.fechaDesde === filtrosAnteriores.current.fechaDesde && 
-                filtros.fechaHasta === filtrosAnteriores.current.fechaHasta) {
-                return;
+            // Para modo consulta, también validamos si hay filtros específicos
+            if (modoConsulta) {
+                const filtrosIguales = 
+                    filtros.fechaDesde === filtrosAnteriores.current.fechaDesde && 
+                    filtros.fechaHasta === filtrosAnteriores.current.fechaHasta &&
+                    filtros.tipoFactura === filtrosAnteriores.current.tipoFactura &&
+                    filtros.numeroFactura === filtrosAnteriores.current.numeroFactura;
+                
+                if (filtrosIguales) {
+                    return;
+                }
+            } else {
+                // Para modo creación, solo comparamos fechas
+                if (filtros.fechaDesde === filtrosAnteriores.current.fechaDesde && 
+                    filtros.fechaHasta === filtrosAnteriores.current.fechaHasta) {
+                    return;
+                }
             }
 
             filtrosAnteriores.current = {
                 fechaDesde: filtros.fechaDesde,
-                fechaHasta: filtros.fechaHasta
+                fechaHasta: filtros.fechaHasta,
+                tipoFactura: filtros.tipoFactura,
+                numeroFactura: filtros.numeroFactura
             };
 
             setLoading(true);
             setError(null);
 
             try {
-                const resultado = await obtenerFacturasGeneradas(filtros.fechaDesde, filtros.fechaHasta);
+                let resultado;
+                
+                if (modoConsulta) {
+                    // Usar filtros avanzados para modo consulta
+                    resultado = await obtenerFacturasConFiltros(filtros);
+                } else {
+                    // Usar función original para modo creación
+                    resultado = await obtenerFacturasGeneradas(filtros.fechaDesde, filtros.fechaHasta);
+                }
 
                 if (resultado.facturas && resultado.facturas.length > 0) {
-                    const facturasConSeleccion = resultado.facturas.map(factura => ({
+                    // Ordenar por Id_EncabInvoice descendente (más reciente primero)
+                    const facturasOrdenadas = resultado.facturas.sort((a, b) => 
+                        b.Id_EncabInvoice - a.Id_EncabInvoice
+                    );
+                    
+                    const facturasConSeleccion = facturasOrdenadas.map(factura => ({
                         ...factura,
                         seleccionada: false
                     }));
                     setFacturas(facturasConSeleccion);
+                    
+                    // Actualizar estadísticas si se proporciona callback
+                    if (onEstadisticasChange) {
+                        onEstadisticasChange(facturasConSeleccion);
+                    }
                 } else {
                     setFacturas([]);
+                    // Actualizar estadísticas a cero
+                    if (onEstadisticasChange) {
+                        onEstadisticasChange([]);
+                    }
                 }
             } catch (err) {
                 setError(err.message);
@@ -66,7 +104,7 @@ const ListaFacturasGeneradas = ({
         };
 
         cargarFacturas();
-    }, [filtros.fechaDesde, filtros.fechaHasta]);
+    }, [filtros, modoConsulta, onEstadisticasChange]);
 
     // Función: Manejar selección individual de factura
     const handleFacturaSelect = (facturaId) => {
@@ -101,7 +139,7 @@ const ListaFacturasGeneradas = ({
     };
 
     // Función: Ver factura con PDF
-    const handleVerFactura = async (facturaId, numeroFactura) => {
+    const handleVerFactura = async (facturaId) => {
         setGenerandoPDF(true);
         
         try {
@@ -123,7 +161,10 @@ const ListaFacturasGeneradas = ({
     };
 
     // 🔴 FUNCIÓN ACTUALIZADA: Eliminar factura con SweetAlert2
-    const handleEliminarFactura = async (facturaId, numeroFactura) => {
+    const handleEliminarFactura = async (factura) => {
+        const facturaId = factura.id;
+        const numeroFactura = factura.numero;
+        const tipoPedido = factura.tipoPedido || 'normal'; // Por compatibilidad con facturas existentes
         // PRIMERA CONFIRMACIÓN
         const primeraConfirmacion = await Swal.fire({
             title: '¿Está seguro?',
@@ -172,18 +213,17 @@ const ListaFacturasGeneradas = ({
         }
 
         setEliminandoFactura(facturaId);
-        setMensajeEliminacion(null);
 
         try {
-            const resultado = await eliminarFacturaCompleta(facturaId, numeroFactura);
+            const resultado = await eliminarFacturaCompleta(facturaId, numeroFactura, tipoPedido);
             
             if (resultado.success) {
                 // Mostrar SweetAlert de éxito
                 await Swal.fire({
                     icon: 'success',
                     title: '¡Factura Eliminada!',
-                    html: `Factura <strong>${numeroFactura}</strong> eliminada correctamente.<br>
-                           <strong>${resultado.pedidosActualizados}</strong> pedidos liberados.`,
+                    html: `Factura <strong>${numeroFactura}</strong> (${tipoPedido === 'sample' ? 'Samples' : 'Regular'}) eliminada correctamente.<br>
+                           <strong>${resultado.pedidosActualizados}</strong> pedidos liberados de la tabla <strong>${resultado.tablaActualizada || (tipoPedido === 'sample' ? 'EncabPedidoSample' : 'EncabPedido')}</strong>.`,
                     confirmButtonColor: '#10b981',
                     timer: 5000,
                     timerProgressBar: true
@@ -274,20 +314,24 @@ const ListaFacturasGeneradas = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-0">
                     <div className="flex items-center">
                         <div className="w-1 h-6 sm:h-8 bg-orange-500 rounded-full mr-3"></div>
-                        <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Facturas Generadas</h2>
+                        <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
+                            {modoConsulta ? 'Facturas Existentes' : 'Facturas Generadas'}
+                        </h2>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs sm:text-sm text-gray-600">
-                            {facturasActualesSeleccionadas.length} de {facturas.length} seleccionadas
-                        </span>
-                        <button
-                            onClick={handleSelectAll}
-                            disabled={facturas.length === 0}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {facturas.every(factura => factura.seleccionada) ? 'Desel. Todas' : 'Sel. Todas'}
-                        </button>
-                    </div>
+                    {!modoConsulta && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs sm:text-sm text-gray-600">
+                                {facturasActualesSeleccionadas.length} de {facturas.length} seleccionadas
+                            </span>
+                            <button
+                                onClick={handleSelectAll}
+                                disabled={facturas.length === 0}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {facturas.every(factura => factura.seleccionada) ? 'Desel. Todas' : 'Sel. Todas'}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* LISTA DE FACTURAS */}
@@ -307,12 +351,14 @@ const ListaFacturasGeneradas = ({
                                 }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <input
-                                        type="checkbox"
-                                        checked={factura.seleccionada}
-                                        onChange={() => handleFacturaSelect(factura.id)}
-                                        className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 rounded focus:ring-orange-500"
-                                    />
+                                    {!modoConsulta && (
+                                        <input
+                                            type="checkbox"
+                                            checked={factura.seleccionada}
+                                            onChange={() => handleFacturaSelect(factura.id)}
+                                            className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 rounded focus:ring-orange-500"
+                                        />
+                                    )}
 
                                     <div className="flex-1 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
                                         <div>
@@ -331,7 +377,7 @@ const ListaFacturasGeneradas = ({
                                         </div>
                                         <div className="flex items-center justify-end lg:justify-start gap-2">
                                             <button 
-                                                onClick={() => handleVerFactura(factura.id, factura.numero)}
+                                                onClick={() => handleVerFactura(factura.id)}
                                                 disabled={generandoPDF}
                                                 className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${
                                                     generandoPDF 
@@ -349,25 +395,36 @@ const ListaFacturasGeneradas = ({
                                                 )}
                                             </button>
                                         </div>
-                                        <div className="flex items-center justify-end">
-                                            <button 
-                                                onClick={() => handleEliminarFactura(factura.id, factura.numero)}
-                                                disabled={eliminandoFactura === factura.id}
-                                                className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${
-                                                    eliminandoFactura === factura.id
-                                                        ? 'text-gray-400 cursor-not-allowed' 
-                                                        : 'text-red-600 hover:text-red-800'
-                                                }`}
-                                            >
-                                                {eliminandoFactura === factura.id ? (
-                                                    <>
-                                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600"></div>
-                                                        Eliminando...
-                                                    </>
-                                                ) : (
-                                                    '🗑️ Eliminar'
-                                                )}
-                                            </button>
+                                        <div className="flex items-center justify-end gap-2">
+                                            {modoConsulta ? (
+                                                <>
+                                                    <button 
+                                                        onClick={() => onVerDocumentos && onVerDocumentos(factura)}
+                                                        className="flex items-center gap-1 font-medium text-xs sm:text-sm text-green-600 hover:text-green-800 transition-all hover:scale-105"
+                                                    >
+                                                        📄 Documentos
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleEliminarFactura(factura)}
+                                                    disabled={eliminandoFactura === factura.id}
+                                                    className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${
+                                                        eliminandoFactura === factura.id
+                                                            ? 'text-gray-400 cursor-not-allowed' 
+                                                            : 'text-red-600 hover:text-red-800'
+                                                    }`}
+                                                >
+                                                    {eliminandoFactura === factura.id ? (
+                                                        <>
+                                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600"></div>
+                                                            Eliminando...
+                                                        </>
+                                                    ) : (
+                                                        '🗑️ Eliminar'
+                                                    )}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

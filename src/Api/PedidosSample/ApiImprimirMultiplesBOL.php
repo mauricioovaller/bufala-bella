@@ -68,7 +68,7 @@ if (!empty($bodegaId)) {
     $types .= "i";
 }
 
-$sqlPedidos .= " ORDER BY ep.FechaOrden, ep.Id_EncabPedido";
+$sqlPedidos .= " ORDER BY ep.FechaSalida, ep.Id_EncabPedido";
 
 $stmtPedidos = $enlace->prepare($sqlPedidos);
 if ($stmtPedidos === false) {

@@ -36,7 +36,7 @@ if ($modo === 'porFechas') {
     
     $sqlPedidos = "SELECT ep.Id_EncabPedido 
                    FROM EncabPedidoSample ep
-                   WHERE (ep.FechaOrden BETWEEN ? AND ?)";
+                   WHERE (ep.FechaSalida BETWEEN ? AND ?)";
                    
     $params = [$fechaDesde, $fechaHasta];
     $types = "ss";
@@ -68,7 +68,7 @@ if (!empty($bodegaId)) {
     $types .= "i";
 }
 
-$sqlPedidos .= " ORDER BY ep.FechaOrden, ep.Id_EncabPedido";
+$sqlPedidos .= " ORDER BY ep.FechaSalida, ep.Id_EncabPedido";
 
 $stmtPedidos = $enlace->prepare($sqlPedidos);
 if ($stmtPedidos === false) {
