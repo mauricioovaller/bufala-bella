@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { obtenerFacturasGeneradas, obtenerFacturasConFiltros, generarFacturaPDF, eliminarFacturaCompleta } from '../../services/facturacionService';
 import ModalVisorPreliminar from '../ModalVisorPreliminar';
+import EnviarCorreoFacturaModal from './EnviarCorreoFacturaModal';
 import Swal from 'sweetalert2';
 
 const ListaFacturasGeneradas = ({
@@ -22,6 +23,10 @@ const ListaFacturasGeneradas = ({
 
     // Estados para eliminar factura
     const [eliminandoFactura, setEliminandoFactura] = useState(null);
+    
+    // Estados para envío de correo
+    const [mostrarModalCorreo, setMostrarModalCorreo] = useState(false);
+    const [facturaParaEnviar, setFacturaParaEnviar] = useState(null);
 
     const filtrosAnteriores = useRef({ fechaDesde: '', fechaHasta: '' });
 
@@ -404,6 +409,15 @@ const ListaFacturasGeneradas = ({
                                                     >
                                                         📄 Documentos
                                                     </button>
+                                                    <button 
+                                                        onClick={() => {
+                                                            setFacturaParaEnviar(factura);
+                                                            setMostrarModalCorreo(true);
+                                                        }}
+                                                        className="flex items-center gap-1 font-medium text-xs sm:text-sm text-blue-600 hover:text-blue-800 transition-all hover:scale-105"
+                                                    >
+                                                        📧 Enviar
+                                                    </button>
                                                 </>
                                             ) : (
                                                 <button 
@@ -439,6 +453,22 @@ const ListaFacturasGeneradas = ({
                 <ModalVisorPreliminar
                     url={urlPDF}
                     onClose={handleCloseModal}
+                />
+            )}
+
+            {/* MODAL PARA ENVIAR CORREO */}
+            {mostrarModalCorreo && facturaParaEnviar && (
+                <EnviarCorreoFacturaModal
+                    factura={facturaParaEnviar}
+                    isOpen={mostrarModalCorreo}
+                    onClose={() => {
+                        setMostrarModalCorreo(false);
+                        setFacturaParaEnviar(null);
+                    }}
+                    onEnvioExitoso={(resultado) => {
+                        console.log('Correo enviado exitosamente:', resultado);
+                        // Aquí podrías actualizar la UI si es necesario
+                    }}
                 />
             )}
         </>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba Mejorada de APIs de Correos</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f0f2f5; }
+        .container { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 15px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa; }
+        .test-section h3 { margin-top: 0; color: #2980b9; display: flex; align-items: center; }
+        .test-section h3 i { margin-right: 10px; }
+        button { background: #3498db; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; margin: 5px; font-weight: bold; }
+        button:hover { background: #2980b9; transform: translateY(-1px); }
+        button:disabled { background: #95a5a6; cursor: not-allowed; transform: none; }
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #219653; }
+        .btn-warning { background: #f39c12; }
+        .btn-warning:hover { background: #e67e22; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        .result { margin-top: 15px; padding: 15px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 13px; max-height: 400px; overflow-y: auto; }
+        .loading { background: #ecf0f1; color: #7f8c8d; font-style: italic; }
+        .success { background: #d5f4e6; border: 1px solid #27ae60; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #e74c3c; color: #721c24; }
+        .info { background: #d1ecf1; border: 1px solid #3498db; color: #0c5460; }
+        .status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-left: 10px; }
+        .status-success { background: #27ae60; color: white; }
+        .status-error { background: #e74c3c; color: white; }
+        .status-warning { background: #f39c12; color: white; }
+        .log-entry { padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+        .log-entry:last-child { border-bottom: none; }
+        .timestamp { color: #7f8c8d; font-size: 11px; }
+        .email-preview { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 6px; margin: 10px 0; }
+        .email-preview h4 { margin-top: 0; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 Prueba Mejorada - Sistema de Correos</h1>
+        <p>Prueba las APIs corregidas para envío de correos con adjuntos.</p>
+        
+        <div class="test-section">
+            <h3><i>🔌</i> 1. Conexión y Configuración</h3>
+            <button onclick="testConfig()">Probar Configuración</button>
+            <button onclick="testPHPInfo()">Info PHP</button>
+            <div id="config-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3><i>👥</i> 2. Destinatarios</h3>
+            <button onclick="testDestinatarios()">Listar Todos</button>
+            <button onclick="testDestinatariosPred()">Predeterminados</button>
+            <button onclick="testCrearDestinatario()" class="btn-success">Crear Test</button>
+            <div id="destinatarios-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3><i>📝</i> 3. Plantillas</h3>
+            <button onclick="testPlantillas()">Listar Plantillas</button>
+            <button onclick="testPlantillaPred()">Predeterminada</button>
+            <button onclick="testVariables()" class="btn-warning">Probar Variables</button>
+            <div id="plantillas-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3><i>📤</i> 4. Pruebas de Envío</h3>
+            <div class="email-preview">
+                <h4>Vista previa del correo de prueba:</h4>
+                <p><strong>Destinatario:</strong> contacto@datenbankensoluciones.com.co</p>
+                <p><strong>Asunto:</strong> Prueba de correo con adjuntos</p>
+                <p><strong>Adjuntos:</strong> 2 archivos (txt y pdf simulado)</p>
+            </div>
+            <button onclick="testEnvioSimple()">Envío Simple</button>
+            <button onclick="testEnvioConAdjuntos()" class="btn-success">Con Adjuntos</button>
+            <button onclick="testEnvioCompleto()" class="btn-warning">Prueba Completa</button>
+            <div id="envio-result" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3><i>📊</i> 5. Estado del Sistema</h3>
+            <button onclick="runAllTests()" class="btn-success">Ejecutar Todas las Pruebas</button>
+            <button onclick="clearAll()" class="btn-danger">Limpiar Resultados</button>
+            <div id="all-tests-result" class="result"></div>
+            <div id="test-log"></div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = window.location.origin + '/DatenBankenApp/DiBufala/Api/Correos/';
+        let testLog = [];
+        
+        function logTest(name, status, message) {
+            const entry = {
+                timestamp: new Date().toLocaleTimeString(),
+                name,
+                status,
+                message
+            };
+            testLog.push(entry);
+            updateTestLog();
+        }
+        
+        function updateTestLog() {
+            const logElement = document.getElementById('test-log');
+            if (!logElement) return;
+            
+            let html = '<h4>Registro de Pruebas:</h4>';
+            testLog.slice(-10).reverse().forEach(entry => {
+                const statusClass = entry.status === 'success' ? 'status-success' : 
+                                  entry.status === 'error' ? 'status-error' : 'status-warning';
+                html += `
+                    <div class="log-entry">
+                        <span class="timestamp">[${entry.timestamp}]</span>
+                        <strong>${entry.name}</strong>
+                        <span class="status-badge ${statusClass}">${entry.status}</span>
+                        <span>${entry.message}</span>
+                    </div>
+                `;
+            });
+            logElement.innerHTML = html;
+        }
+        
+        function showResult(elementId, data, type = 'info') {
+            const element = document.getElementById(elementId);
+            const jsonStr = JSON.stringify(data, null, 2);
+            element.textContent = jsonStr;
+            element.className = 'result ' + type;
+        }
+        
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.textContent = '⏳ Cargando...';
+            element.className = 'result loading';
+        }
+        
+        async function fetchAPI(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    url: url
+                };
+            }
+        }
+        
+        // Pruebas individuales
+        async function testConfig() {
+            showLoading('config-result');
+            const data = await fetchAPI(BASE_URL + 'test_compatible.php');
+            showResult('config-result', data, data.success ? 'success' : 'error');
+            logTest('Configuración', data.success ? 'success' : 'error', data.message || 'Completado');
+        }
+        
+        async function testPHPInfo() {
+            showLoading('config-result');
+            const data = {
+                php_version: '<?php echo phpversion(); ?>',
+                server_software: '<?php echo $_SERVER["SERVER_SOFTWARE"] ?? "N/A"; ?>',
+                mbstring: '<?php echo extension_loaded("mbstring") ? "Sí" : "No"; ?>',
+                mail_function: '<?php echo function_exists("mail") ? "Disponible" : "No disponible"; ?>'
+            };
+            showResult('config-result', data, 'info');
+            logTest('Info PHP', 'success', 'Información obtenida');
+        }
+        
+        async function testDestinatarios() {
+            showLoading('destinatarios-result');
+            const data = await fetchAPI(BASE_URL + 'ApiCorreosDestinatarios.php', {
+                method: 'POST',
+                body: JSON.stringify({ accion: 'listar', tipo: 'todos' })
+            });
+            showResult('destinatarios-result', data, data.success ? 'success' : 'error');
+            logTest('Destinatarios', data.success ? 'success' : 'error', 
+                   data.success ? `${data.total} destinatarios` : 'Error');
+        }
+        
+        async function testDestinatariosPred() {
+            showLoading('destinatarios-result');
+            const data = await fetchAPI(BASE_URL + 'ApiCorreosDestinatarios.php?accion=predeterminados', {
+                method: 'GET'
+            });
+            showResult('destinatarios-result', data, data.success ? 'success' : 'error');
+            logTest('Dest. Predeterminados', data.success ? 'success' : 'error',
+                   data.success ? `${data.total} predeterminados` : 'Error');
+        }
+        
+        async function testPlantillas() {
+            showLoading('plantillas-result');
+            const data = await fetchAPI(BASE_URL + 'ApiPlantillasCorreo.php', {
+                method: 'POST',
+                body: JSON.stringify({ accion: 'listar', modulo: 'facturacion' })
+            });
+            showResult('plantillas-result', data, data.success ? 'success' : 'error');
+            logTest('Plantillas', data.success ? 'success' : 'error',
+                   data.success ? `${data.total} plantillas` : 'Error');
+        }
+        
+        async function testEnvioSimple() {
+            showLoading('envio-result');
+            const testData = {
+                destinatarios: ['contacto@datenbankensoluciones.com.co'],
+                asunto: 'Prueba Simple - ' + new Date().toLocaleString(),
+                cuerpo: 'Esta es una prueba simple del sistema de correos.\n\nFecha: ' + new Date().toLocaleString(),
+                modulo: 'facturacion',
+                referencia_id: 999,
+                usuario: 'Prueba HTML'
+            };
+            
+            const data = await fetchAPI(BASE_URL + 'ApiEnviarCorreo.php', {
+                method: 'POST',
+                body: JSON.stringify(testData)
+            });
+            
+            showResult('envio-result', data, data.success ? 'success' : 'error');
+            logTest('Envío Simple', data.success ? 'success' : 'error',
+                   data.success ? `Enviado a ${data.enviados || 0} destinatarios` : 'Error');
+        }
+        
+        async function testEnvioConAdjuntos() {
+            showLoading('envio-result');
+            
+            // Crear adjunto simple (texto)
+            const adjuntoTexto = "Este es un archivo adjunto de prueba.\nGenerado: " + new Date().toLocaleString();
+            const adjuntoBase64 = btoa(unescape(encodeURIComponent(adjuntoTexto)));
+            
+            const testData = {
+                destinatarios: ['contacto@datenbankensoluciones.com.co'],
+                asunto: 'Prueba con Adjuntos - ' + new Date().toLocaleString(),
+                cuerpo: 'Esta es una prueba con archivos adjuntos.\n\nAdjuntos incluidos:\n• prueba.txt\n• factura_prueba.pdf',
+                adjuntos: [
+                    {
+                        nombre: 'prueba_' + Date.now() + '.txt',
+                        contenido: adjuntoBase64,
+                        tipo: 'text/plain'
+                    }
+                ],
+                modulo: 'facturacion',
+                referencia_id: 1000,
+                usuario: 'Prueba HTML'
+            };
+            
+            const data = await fetchAPI(BASE_URL + 'ApiEnviarCorreo.php', {
+                method: 'POST',
+                body: JSON.stringify(testData)
+            });
+            
+            showResult('envio-result', data, data.success ? 'success' : 'error');
+            logTest('Envío con Adjuntos', data.success ? 'success' : 'error',
+                   data.success ? `${data.adjuntos_enviados || 0} adjuntos` : 'Error');
+        }
+        
+        async function testEnvioCompleto() {
+            showLoading('envio-result');
+            
+            // Usar el archivo de prueba PHP
+            const data = await fetchAPI(BASE_URL + 'test_envio_completo.php');
+            
+            showResult('envio-result', data, data.success ? 'success' : 'error');
+            logTest('Envío Completo', data.success ? 'success' : 'error',
+                   data.success ? 'Prueba completa ejecutada' : 'Error');
+        }
+        
+        async function runAllTests() {
+            testLog = [];
+            updateTestLog();
+            
+            await testConfig();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testDestinatarios();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testPlantillas();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testEnvioSimple();
+            
+            showResult('all-tests-result', {
+                message: 'Todas las pruebas completadas',
+                total_tests: 4,
+                timestamp: new Date().toISOString(),
+                log: testLog
+            }, 'success');
+        }
+        
+        function clearAll() {
+            ['config-result', 'destinatarios-result', 'plantillas-result', 'envio-result', 'all-tests-result']
+                .forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = '';
+                        element.className = 'result';
+                    }
+                });
+            testLog = [];
+            updateTestLog();
+        }
+        
+        // Iniciar prueba de configuración automáticamente
+        window.onload = testConfig;
+    </script>
+</body>
+</html>
