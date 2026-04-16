@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba - MCP Database Endpoint</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .content {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        @media (max-width: 900px) {
+            .content { grid-template-columns: 1fr; }
+        }
+        .section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .section h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        label {
+            display: block;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            flex: 1;
+            min-width: 120px;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            flex: 1;
+            min-width: 120px;
+        }
+        .btn-secondary:hover { background: #e0e0e0; }
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+        }
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .result-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            color: #856404;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .success-box {
+            background: #d4edda;
+            border: 1px solid #28a745;
+            border-radius: 6px;
+            padding: 15px;
+            color: #155724;
+            font-size: 13px;
+        }
+        .error-box {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 6px;
+            padding: 15px;
+            color: #721c24;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Prueba de MCP Database Endpoint</h1>
+            <p>Verifica que el endpoint PHP funciona correctamente</p>
+        </div>
+
+        <div class="content">
+            <!-- SECCIÓN: CONFIGURACIÓN -->
+            <div class="section">
+                <h2>⚙️ Configuración</h2>
+
+                <label for="apiUrl">URL del Endpoint</label>
+                <input type="text" id="apiUrl" placeholder="https://tu-servidor/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php" value="">
+
+                <div class="info-box">
+                    <strong>ℹ️ Información:</strong><br>
+                    Esta es la URL del endpoint que creamos en:<br>
+                    <code>src/Api/Admin/ApiEstructuraBD.php</code>
+                </div>
+
+                <label for="accion">Acción a Ejecutar</label>
+                <select id="accion">
+                    <option value="tablas">📋 Listar Tablas</option>
+                    <option value="estructura">🗂️ Estructura Detallada</option>
+                    <option value="completa">✨ Información Completa</option>
+                </select>
+
+                <label for="tabla">Tabla Específica (opcional)</label>
+                <input type="text" id="tabla" placeholder="ej: correos_enviados, clientes, pedidos...">
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="ejecutarPrueba()">🚀 Ejecutar Prueba</button>
+                    <button class="btn-secondary" onclick="limpiarResultados()">🗑️ Limpiar</button>
+                </div>
+
+                <div id="status" class="status" style="display:none;"></div>
+            </div>
+
+            <!-- SECCIÓN: RESULTADO -->
+            <div class="section">
+                <h2>📊 Resultado</h2>
+                <div id="resultado" class="result-box" style="display:none;">Esperando ejecución...</div>
+
+                <div id="ayuda" style="display:block;">
+                    <div class="info-box">
+                        <strong>🎯 Primeros Pasos:</strong><br><br>
+                        1. Ingresa la URL del endpoint<br>
+                        2. Selecciona acción (recomendado: "Listar Tablas")<br>
+                        3. Haz clic en "Ejecutar Prueba"<br>
+                        4. Verifica que recibas datos válidos
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function ejecutarPrueba() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const accion = document.getElementById('accion').value;
+            const tabla = document.getElementById('tabla').value.trim();
+
+            if (!apiUrl) {
+                mostrarError('Por favor, ingresa la URL del endpoint');
+                return;
+            }
+
+            mostrarCargando(`Ejecutando acción: ${accion}...`);
+            document.getElementById('resultado').style.display = 'block';
+            document.getElementById('ayuda').style.display = 'none';
+
+            try {
+                const payload = { accion };
+                if (tabla) payload.tabla = tabla;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    timeout: 10000
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                mostrarExito('✅ Conexión exitosa');
+                mostrarResultado(data);
+
+            } catch (error) {
+                mostrarError(`❌ Error: ${error.message}`);
+                mostrarResultado({ error: error.message });
+            }
+        }
+
+        function mostrarCargando(msg) {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = 'status loading';
+            status.style.display = 'block';
+        }
+
+        function mostrarExito(msg) {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = 'status success';
+            status.style.display = 'block';
+        }
+
+        function mostrarError(msg) {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = 'status error';
+            status.style.display = 'block';
+        }
+
+        function mostrarResultado(data) {
+            const resultBox = document.getElementById('resultado');
+            resultBox.textContent = JSON.stringify(data, null, 2);
+            resultBox.style.display = 'block';
+        }
+
+        function limpiarResultados() {
+            document.getElementById('resultado').style.display = 'none';
+            document.getElementById('status').style.display = 'none';
+            document.getElementById('ayuda').style.display = 'block';
+            document.getElementById('tabla').value = '';
+        }
+
+        // Ejemplo para desarrollo local
+        window.addEventListener('load', () => {
+            // Si estás en desarrollo local, pre-completa la URL
+            const urlInput = document.getElementById('apiUrl');
+            if (!urlInput.value) {
+                // Descomenta según tu configuración:
+                // urlInput.value = 'https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php';
+            }
+        });
+    </script>
+</body>
+</html>
