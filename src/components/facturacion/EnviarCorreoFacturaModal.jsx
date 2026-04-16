@@ -1,15 +1,17 @@
 // src/components/facturacion/EnviarCorreoFacturaModal.jsx
+// REFACTORIZADO: Ahora usa el servicio genérico de envío de correos
+// COMPATIBILIDAD: 100% - Props y comportamiento sin cambios
 import React, { useState, useEffect } from "react";
 import {
   obtenerDestinatariosPredeterminados,
   obtenerPlantillaPredeterminada,
   aplicarVariablesPlantilla,
-  enviarCorreo,
   parsearListaEmails,
   validarEmail,
   generarVariablesFactura,
   generarNombreFactura
 } from '../../services/correoService';
+import { enviarCorreoGenerico } from '../../services/envioCorreosGenericoService';
 import { generarFacturaPDF } from '../../services/facturacionService';
 import { generarCartaResponsabilidad, generarReporteDespacho, generarPlanVallejo } from '../../services/planillasService';
 import DestinatariosSelector from './DestinatariosSelector';
@@ -323,7 +325,7 @@ const EnviarCorreoFacturaModal = ({
     return true;
   };
 
-  // Enviar correo
+  // Enviar correo usando el servicio genérico
   const handleEnviarCorreo = async () => {
     if (!validarFormulario()) {
       return;
@@ -351,32 +353,51 @@ const EnviarCorreoFacturaModal = ({
     try {
       console.log('📤 Iniciando envío de correo...');
 
-      // Asegurar que todos los documentos seleccionados estén generados
-      await generarDocumentosSeleccionados();
-
-      // Preparar adjuntos
-      const adjuntos = [];
-      for (const doc of documentosDisponibles) {
-        if (doc.seleccionado && archivosGenerados[doc.id]) {
-          const archivo = archivosGenerados[doc.id];
-          console.log(`📎 Preparando adjunto: ${archivo.nombre} (${archivo.blob.size} bytes)`);
-          adjuntos.push(archivo);
+      // Generador de documentos específico para facturación
+      const generadorFacturacion = async (tipoDocumento, datos) => {
+        let blob;
+        
+        switch (tipoDocumento) {
+          case 'factura':
+            blob = await generarFacturaPDF(datos.id, datos.tipoPedido || 'normal');
+            break;
+          case 'carta-policia':
+            if (!datos.Id_Planilla) throw new Error('Sin planilla asociada');
+            blob = await generarCartaResponsabilidad('carta-policia', datos.Id_Planilla, true);
+            break;
+          case 'carta-aerolinea':
+            if (!datos.Id_Planilla) throw new Error('Sin planilla asociada');
+            blob = await generarCartaResponsabilidad('carta-aerolinea', datos.Id_Planilla, true);
+            break;
+          case 'plan-vallejo':
+            blob = await generarPlanVallejo(datos.id);
+            break;
+          case 'reporte-despacho':
+            blob = await generarReporteDespacho(datos.id);
+            break;
+          default:
+            throw new Error('Tipo de documento desconocido');
         }
-      }
+        
+        return blob;
+      };
 
-      console.log(`📦 Total adjuntos preparados: ${adjuntos.length}`);
-      console.log(`📧 Destinatarios: ${destinatarios.join(', ')}`);
-      console.log(`📝 Asunto: ${asunto}`);
-
-      // Enviar correo
-      const resultado = await enviarCorreo({
-        destinatarios: destinatarios,
-        asunto: asunto,
-        cuerpo: cuerpo,
-        adjuntos: adjuntos,
+      // Usar el servicio genérico
+      const resultado = await enviarCorreoGenerico({
         modulo: 'facturacion',
         referencia_id: factura.id,
-        usuario: 'Usuario' // TODO: Obtener usuario actual
+        referencia_numero: factura.numero,
+        destinatarios: destinatarios,
+        documentos_seleccionados: documentosDisponibles
+          .filter(d => d.seleccionado)
+          .map(d => d.id),
+        asunto: asunto,
+        cuerpo: cuerpo,
+        datosReferencia: factura,
+        generador: generadorFacturacion,
+        usuario: localStorage.getItem('usuario_nombre') || 'Usuario',
+        usuario_id: localStorage.getItem('usuario_id'),
+        usuario_email: localStorage.getItem('usuario_email')
       });
 
       console.log('📨 Resultado del envío:', resultado);
@@ -385,10 +406,10 @@ const EnviarCorreoFacturaModal = ({
         Swal.fire({
           icon: 'success',
           title: '¡Correo enviado!',
-          html: `<strong>${resultado.message}</strong><br><br>
+          html: `<strong>Correo enviado exitosamente</strong><br><br>
                  <div class="text-left">
-                   <p>📧 Destinatarios: ${resultado.destinatarios_enviados?.length || 0}</p>
-                   <p>📎 Adjuntos enviados: ${resultado.adjuntos_enviados || 0} de ${adjuntos.length}</p>
+                   <p>📧 Destinatarios: ${resultado.destinatarios_enviados}</p>
+                   <p>📎 Adjuntos enviados: ${resultado.adjuntos_enviados}</p>
                    <p>🆔 Referencia: #${resultado.historial_id}</p>
                  </div>`,
           confirmButtonColor: '#10b981',
@@ -402,7 +423,7 @@ const EnviarCorreoFacturaModal = ({
 
         onClose();
       } else {
-        throw new Error(resultado.message);
+        throw new Error(resultado.message || 'Error desconocido');
       }
     } catch (error) {
       console.error('❌ Error enviando correo:', error);
@@ -410,8 +431,7 @@ const EnviarCorreoFacturaModal = ({
         icon: 'error',
         title: 'Error al enviar',
         html: `<strong>No se pudo enviar el correo</strong><br><br>
-               <small>${error.message}</small><br><br>
-               <small>Revisa la consola para más detalles.</small>`,
+               <small>${error.message}</small>`,
         confirmButtonColor: '#dc2626'
       });
     } finally {
