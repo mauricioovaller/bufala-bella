@@ -9,46 +9,61 @@ Endpoints seguros para administración del sistema.
 **Propósito:** Obtener información de tablas, columnas e índices de forma segura.
 
 **Uso:**
+
 ```
 POST https://[tu-servidor]/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php
 ```
 
 **Parámetros:**
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "tablas" | "estructura" | "completa",
   "tabla": "nombre_tabla" (opcional)
 }
 ```
 
+**⚠️ IMPORTANTE:** El `api_key` es **obligatorio** en todas las peticiones.
+
 **Acciones:**
 
 1. **tablas** - Solo lista de tablas
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "tablas"
 }
 ```
+
 Retorna: Lista de todas las tablas con información de tamaño
 
 2. **estructura** - Estructura detallada de tabla(s)
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "estructura",
   "tabla": "correos_enviados"
 }
 ```
+
 Retorna: Columnas, tipos, índices de la tabla especificada
 
 3. **completa** - Todo (tablas + estructura)
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "completa"
 }
 ```
+
 Retorna: Información completa de la BD
 
 **Respuesta Ejemplo:**
+
 ```json
 {
   "success": true,
@@ -95,6 +110,7 @@ Retorna: Información completa de la BD
 ## 🔗 Integración con MCP
 
 Este endpoint se usa con MCP para:
+
 - Visualizar estructura de BD
 - Entender arquitectura de datos
 - Debugging y análisis
@@ -103,5 +119,6 @@ Este endpoint se usa con MCP para:
 ## 📝 Documentación
 
 Ver también:
+
 - [database/scripts/README.md](../../database/scripts/README.md) - Scripts SQL
 - [AGENTS.md](../../AGENTS.md) - Sección 3: Estructura del Proyecto

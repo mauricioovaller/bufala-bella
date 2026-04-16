@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ApiEstructuraBD.php
  * 
@@ -22,15 +23,15 @@
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Incluir conexión a BD
-include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
-$enlace->set_charset("utf8mb4");
+// ===== VALIDACIÓN POR API KEY =====
+// Este endpoint no requiere sesión, usa API Key en su lugar
+const API_KEY_MCP = "mcp_estructura_bd_2024";
 
 // Validar método
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -47,8 +48,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     // Obtener parámetros
     $input = json_decode(file_get_contents("php://input"), true);
+
+    // Validar API Key
+    $api_key = $input['api_key'] ?? '';
+    if ($api_key !== API_KEY_MCP) {
+        http_response_code(401);
+        throw new Exception("API Key inválida o no proporcionada");
+    }
+
     $accion = $input['accion'] ?? 'completa';
     $tabla_especifica = $input['tabla'] ?? null;
+
+    // Incluir conexión a BD DESPUÉS de validar API Key
+    include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
+    $enlace->set_charset("utf8mb4");
 
     // Obtener nombre de la BD actual
     $result_bd = $enlace->query("SELECT DATABASE()");
@@ -200,7 +213,6 @@ try {
 
     http_response_code(200);
     echo json_encode($respuesta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode([
@@ -213,4 +225,3 @@ try {
         $enlace->close();
     }
 }
-?>

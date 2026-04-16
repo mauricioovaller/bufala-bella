@@ -1,47 +1,69 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prueba - MCP Database Endpoint</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow: hidden;
         }
+
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 30px;
             text-align: center;
         }
-        .header h1 { font-size: 28px; margin-bottom: 10px; }
-        .header p { opacity: 0.9; font-size: 14px; }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
         .content {
             padding: 30px;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
         }
+
         @media (max-width: 900px) {
-            .content { grid-template-columns: 1fr; }
+            .content {
+                grid-template-columns: 1fr;
+            }
         }
+
         .section {
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
+
         .section h2 {
             font-size: 18px;
             color: #333;
@@ -49,6 +71,7 @@
             border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
         }
+
         label {
             display: block;
             font-weight: 500;
@@ -56,7 +79,10 @@
             margin-bottom: 8px;
             font-size: 14px;
         }
-        input, select, textarea {
+
+        input,
+        select,
+        textarea {
             width: 100%;
             padding: 12px;
             border: 1px solid #ddd;
@@ -65,20 +91,26 @@
             font-family: 'Courier New', monospace;
             transition: border-color 0.3s;
         }
-        input:focus, select:focus, textarea:focus {
+
+        input:focus,
+        select:focus,
+        textarea:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
+
         textarea {
             min-height: 150px;
             resize: vertical;
         }
+
         .button-group {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
         }
+
         button {
             padding: 12px 24px;
             border: none;
@@ -88,20 +120,30 @@
             cursor: pointer;
             transition: all 0.3s;
         }
+
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             flex: 1;
             min-width: 120px;
         }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
         .btn-secondary {
             background: #f0f0f0;
             color: #333;
             flex: 1;
             min-width: 120px;
         }
-        .btn-secondary:hover { background: #e0e0e0; }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
         .status {
             padding: 15px;
             border-radius: 6px;
@@ -109,18 +151,22 @@
             font-weight: 500;
             text-align: center;
         }
+
         .status.loading {
             background: #e3f2fd;
             color: #1976d2;
         }
+
         .status.success {
             background: #e8f5e9;
             color: #388e3c;
         }
+
         .status.error {
             background: #ffebee;
             color: #c62828;
         }
+
         .result-box {
             background: #f5f5f5;
             border: 1px solid #ddd;
@@ -133,6 +179,7 @@
             white-space: pre-wrap;
             word-break: break-word;
         }
+
         .info-box {
             background: #fff3cd;
             border: 1px solid #ffc107;
@@ -142,6 +189,7 @@
             font-size: 13px;
             line-height: 1.6;
         }
+
         .success-box {
             background: #d4edda;
             border: 1px solid #28a745;
@@ -150,6 +198,7 @@
             color: #155724;
             font-size: 13px;
         }
+
         .error-box {
             background: #f8d7da;
             border: 1px solid #f5c6cb;
@@ -160,6 +209,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -173,12 +223,17 @@
                 <h2>⚙️ Configuración</h2>
 
                 <label for="apiUrl">URL del Endpoint</label>
-                <input type="text" id="apiUrl" placeholder="https://tu-servidor/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php" value="">
+                <input type="text" id="apiUrl"
+                    placeholder="https://tu-servidor/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php" value="">
+
+                <label for="apiKey">API Key</label>
+                <input type="password" id="apiKey" placeholder="mcp_estructura_bd_2024" value="mcp_estructura_bd_2024">
 
                 <div class="info-box">
                     <strong>ℹ️ Información:</strong><br>
-                    Esta es la URL del endpoint que creamos en:<br>
-                    <code>src/Api/Admin/ApiEstructuraBD.php</code>
+                    El endpoint requiere un API Key para validación.<br>
+                    API Key: <code>mcp_estructura_bd_2024</code><br>
+                    Ubicación: <code>src/Api/Admin/ApiEstructuraBD.php</code>
                 </div>
 
                 <label for="accion">Acción a Ejecutar</label>
@@ -220,6 +275,7 @@
     <script>
         async function ejecutarPrueba() {
             const apiUrl = document.getElementById('apiUrl').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
             const accion = document.getElementById('accion').value;
             const tabla = document.getElementById('tabla').value.trim();
 
@@ -228,12 +284,17 @@
                 return;
             }
 
+            if (!apiKey) {
+                mostrarError('Por favor, ingresa el API Key');
+                return;
+            }
+
             mostrarCargando(`Ejecutando acción: ${accion}...`);
             document.getElementById('resultado').style.display = 'block';
             document.getElementById('ayuda').style.display = 'none';
 
             try {
-                const payload = { accion };
+                const payload = { api_key: apiKey, accion };
                 if (tabla) payload.tabla = tabla;
 
                 const response = await fetch(apiUrl, {
@@ -302,4 +363,5 @@
         });
     </script>
 </body>
+
 </html>

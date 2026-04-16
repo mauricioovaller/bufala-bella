@@ -19,11 +19,13 @@ Un **MCP (Model Context Protocol)** es un protocolo que permite a un asistente I
 ### **Paso 1: Endpoint PHP**
 
 El endpoint está en:
+
 ```
 src/Api/Admin/ApiEstructuraBD.php
 ```
 
 URL completa:
+
 ```
 https://[tu-servidor]/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php
 ```
@@ -31,19 +33,26 @@ https://[tu-servidor]/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php
 ### **Paso 2: Verificar Funcionamiento**
 
 Prueba con curl:
+
 ```bash
 curl -X POST https://[tu-servidor]/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php \
   -H "Content-Type: application/json" \
-  -d '{"accion": "tablas"}'
+  -d '{
+    "api_key": "mcp_estructura_bd_2024",
+    "accion": "tablas"
+  }'
 ```
 
 Deberías recibir JSON con lista de tablas.
+
+**⚠️ API Key:** `mcp_estructura_bd_2024` (obligatorio en todas las peticiones)
 
 ### **Paso 3: Configurar MCP**
 
 El MCP se configura en VS Code para usar este endpoint.
 
 Información necesaria:
+
 ```
 URL: https://[tu-servidor]/DatenBankenApp/DiBufala/Api/Admin/ApiEstructuraBD.php
 Método: POST
@@ -59,6 +68,7 @@ Después de configurar, puedo:
 **Yo consulto:** El endpoint `/Api/Admin/ApiEstructuraBD.php`
 
 **Yo respondo:**
+
 ```
 Tablas encontradas:
 ✓ correos_enviados (127 registros)
@@ -81,50 +91,74 @@ Columnas de correos_enviados:
 ✅ No modifica datos
 ✅ CORS habilitado
 ✅ Manejo de errores robusto
+✅ Requiere API Key válida
 ```
 
 ## 📝 Acciones Disponibles
 
+**⚠️ Todas las peticiones REQUIEREN el API Key:**
+
+```
+"api_key": "mcp_estructura_bd_2024"
+```
+
 ### 1. Ver Tablas
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "tablas"
 }
 ```
 
 ### 2. Ver Estructura de Tabla
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "estructura",
   "tabla": "correos_enviados"
 }
 ```
 
 ### 3. Ver Todo
+
 ```json
 {
+  "api_key": "mcp_estructura_bd_2024",
   "accion": "completa"
 }
 ```
 
 ## 🐛 Troubleshooting
 
+### Error: "API Key inválida o no proporcionada"
+
+```
+Solución: Incluir api_key en el JSON
+Correcto: { "api_key": "mcp_estructura_bd_2024", "accion": "tablas" }
+Incorrecto: { "accion": "tablas" }
+```
+
 ### Error: "Método no permitido"
+
 ```
 Solución: El endpoint solo acepta POST
 Verifica que usas POST, no GET
 ```
 
 ### Error: "conexionbd.php no encontrado"
+
 ```
 Solución: El path de inclusión puede variar
 Verifica: $_SERVER['DOCUMENT_ROOT'] correcto
 ```
 
 ### Error: "Access denied"
+
 ```
 Solución: Usuario MySQL sin permisos en INFORMATION_SCHEMA
-Verifica permisos en BD: GRANT SELECT ON INFORMATION_SCHEMA.* 
+Verifica permisos en BD: GRANT SELECT ON INFORMATION_SCHEMA.*
 ```
 
 ## 🎓 Para Desarrolladores
