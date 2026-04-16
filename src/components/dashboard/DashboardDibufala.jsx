@@ -7,6 +7,7 @@ import ChartProductos from './ChartProductos';
 import ChartTendencia from './ChartTendencia';
 import ChartClientesProducto from './ChartClientesProducto';
 import FiltrosFecha from './FiltrosFecha';
+import SeccionTransporte from './SeccionTransporte';
 import { APPS_CONFIG } from '../../services/dashboard/dashboardService';
 import Swal from 'sweetalert2';
 
@@ -610,6 +611,19 @@ const DashboardDibufala = () => {
                     </>
                 )}
             </div>
+
+            {/* 
+        =====================================
+        SECCIÓN TRANSPORTE: Costos de Transporte
+        =====================================
+        Muestra KPIs, gráficos de tendencia y comparación
+        de costos de transporte vs estibas pagas
+      */}
+            <SeccionTransporte 
+                fechaInicio={fechaInicio}
+                fechaFin={fechaFin}
+                configApp={configApp}
+            />
 
             {/* 
         =====================================

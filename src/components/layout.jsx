@@ -1,7 +1,7 @@
 // src/components/Layout.jsx
 import React, { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Home, Users, ShoppingCart, Package, Menu, X, LogOut, BarChart3, FileText, FlaskRound, LayoutDashboard, Car, Factory, BookOpenCheck } from "lucide-react";
+import { Home, Users, ShoppingCart, Package, Menu, X, LogOut, BarChart3, FileText, FlaskRound, LayoutDashboard, Car, Factory, BookOpenCheck, Mail } from "lucide-react";
 import { getPermisos } from "../services/menuPrincipal/menuPrincipalService"; // Servicio para obtener permisos
 
 // Todas las opciones del menú (sin filtrar)
@@ -16,6 +16,7 @@ const menuItems = [
   { to: "/consolidacion", icon: <BarChart3 size={20} />, label: "Consolidación" },
   { to: "/facturacion", icon: <FileText size={20} />, label: "Facturación" },
   { to: "/complemento-facturas", icon: <BookOpenCheck size={20} />, label: "Complemento Facturación" },
+  { to: "/configuracion-correos", icon: <Mail size={20} />, label: "Configuración de Correos" },
   { to: "/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
 ];
 
@@ -44,7 +45,7 @@ export default function Layout() {
   }, []);
 
   // Filtrar las opciones del menú según los permisos obtenidos
-  const menuItemsPermitidos = cargando ? [] : menuItems.filter(item => 
+  const menuItemsPermitidos = cargando ? [] : menuItems.filter(item =>
     permisos.includes(item.to)
   );
 
@@ -90,11 +91,10 @@ export default function Layout() {
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${
-                        isActive
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${isActive
                           ? "bg-white text-slate-900 shadow-lg transform scale-105"
                           : "text-slate-300 hover:text-white hover:bg-slate-600/50"
-                      }`}
+                        }`}
                     >
                       {item.icon}
                       <span>{item.label}</span>
@@ -157,11 +157,10 @@ export default function Layout() {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    className={`flex items-center gap-4 p-4 rounded-xl text-base font-medium transition-all duration-200 ${
-                      isActive
+                    className={`flex items-center gap-4 p-4 rounded-xl text-base font-medium transition-all duration-200 ${isActive
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
                         : "text-slate-300 hover:text-white hover:bg-slate-700/50"
-                    }`}
+                      }`}
                     onClick={() => setMenuOpen(false)}
                   >
                     <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : ''}`}>

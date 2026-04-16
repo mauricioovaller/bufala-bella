@@ -1,7 +1,7 @@
 // src/components/facturacion/EnviarCorreoFacturaModal.jsx
 import React, { useState, useEffect } from "react";
-import { 
-  obtenerDestinatariosPredeterminados, 
+import {
+  obtenerDestinatariosPredeterminados,
   obtenerPlantillaPredeterminada,
   aplicarVariablesPlantilla,
   enviarCorreo,
@@ -12,6 +12,7 @@ import {
 } from '../../services/correoService';
 import { generarFacturaPDF } from '../../services/facturacionService';
 import { generarCartaResponsabilidad, generarReporteDespacho, generarPlanVallejo } from '../../services/planillasService';
+import DestinatariosSelector from './DestinatariosSelector';
 import Swal from 'sweetalert2';
 
 const EnviarCorreoFacturaModal = ({
@@ -22,14 +23,14 @@ const EnviarCorreoFacturaModal = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  
+
   // Estados para datos del correo
   const [destinatarios, setDestinatarios] = useState([]);
   const [destinatariosManual, setDestinatariosManual] = useState('');
   const [asunto, setAsunto] = useState('');
   const [cuerpo, setCuerpo] = useState('');
   const [plantillaId, setPlantillaId] = useState(null);
-  
+
   // Estados para documentos adjuntos
   const [documentosDisponibles, setDocumentosDisponibles] = useState([
     { id: 'factura', nombre: 'Factura PDF', seleccionado: true, obligatorio: true, generando: false },
@@ -38,7 +39,7 @@ const EnviarCorreoFacturaModal = ({
     { id: 'plan_vallejo', nombre: 'Plan Vallejo', seleccionado: false, obligatorio: false, generando: false },
     { id: 'reporte_despacho', nombre: 'Reporte de Despacho', seleccionado: false, obligatorio: false, generando: false }
   ]);
-  
+
   // Estados para archivos generados
   const [archivosGenerados, setArchivosGenerados] = useState({});
 
@@ -59,19 +60,19 @@ const EnviarCorreoFacturaModal = ({
   // Función para actualizar variables de plantilla
   const actualizarVariablesPlantilla = async () => {
     if (!plantillaId) return;
-    
+
     try {
       // Obtener documentos seleccionados
       const documentosSeleccionados = documentosDisponibles
         .filter(doc => doc.seleccionado && archivosGenerados[doc.id])
         .map(doc => ({ nombre: doc.nombre }));
-      
+
       // Generar variables actualizadas
       const variables = generarVariablesFactura(factura, documentosSeleccionados);
-      
+
       // Aplicar variables a la plantilla
       const respuesta = await aplicarVariablesPlantilla(plantillaId, variables);
-      
+
       if (respuesta.success) {
         setAsunto(respuesta.asunto);
         setCuerpo(respuesta.cuerpo);
@@ -97,11 +98,11 @@ const EnviarCorreoFacturaModal = ({
       if (respuestaPlantilla.success) {
         const plantilla = respuestaPlantilla.plantilla;
         setPlantillaId(plantilla.id);
-        
+
         // Aplicar variables a la plantilla
         const variables = generarVariablesFactura(factura, []);
         const respuestaVariables = await aplicarVariablesPlantilla(plantilla.id, variables);
-        
+
         if (respuestaVariables.success) {
           setAsunto(respuestaVariables.asunto);
           setCuerpo(respuestaVariables.cuerpo);
@@ -124,7 +125,7 @@ const EnviarCorreoFacturaModal = ({
   const handleDestinatariosChange = (e) => {
     const texto = e.target.value;
     setDestinatariosManual(texto);
-    
+
     // Parsear emails válidos
     const emails = parsearListaEmails(texto);
     setDestinatarios(emails);
@@ -132,9 +133,9 @@ const EnviarCorreoFacturaModal = ({
 
   // Manejar cambio en selección de documentos
   const handleDocumentoChange = (id) => {
-    setDocumentosDisponibles(prev => 
-      prev.map(doc => 
-        doc.id === id && !doc.obligatorio 
+    setDocumentosDisponibles(prev =>
+      prev.map(doc =>
+        doc.id === id && !doc.obligatorio
           ? { ...doc, seleccionado: !doc.seleccionado }
           : doc
       )
@@ -145,7 +146,7 @@ const EnviarCorreoFacturaModal = ({
   const generarDocumento = async (tipoDocumento) => {
     try {
       console.log(`🔄 Generando documento: ${tipoDocumento}`, { factura });
-      
+
       // Marcar como generando
       setDocumentosDisponibles(prev =>
         prev.map(doc =>
@@ -236,7 +237,7 @@ const EnviarCorreoFacturaModal = ({
 
     } catch (error) {
       console.error(`❌ Error generando ${tipoDocumento}:`, error);
-      
+
       // Desmarcar documento si falla
       setDocumentosDisponibles(prev =>
         prev.map(doc =>
@@ -264,7 +265,7 @@ const EnviarCorreoFacturaModal = ({
   // Generar todos los documentos seleccionados
   const generarDocumentosSeleccionados = async () => {
     const documentosSeleccionados = documentosDisponibles.filter(doc => doc.seleccionado);
-    
+
     for (const doc of documentosSeleccionados) {
       if (!archivosGenerados[doc.id]) {
         await generarDocumento(doc.id);
@@ -349,7 +350,7 @@ const EnviarCorreoFacturaModal = ({
 
     try {
       console.log('📤 Iniciando envío de correo...');
-      
+
       // Asegurar que todos los documentos seleccionados estén generados
       await generarDocumentosSeleccionados();
 
@@ -424,8 +425,8 @@ const EnviarCorreoFacturaModal = ({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         {/* Fondo */}
-        <div 
-          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" 
+        <div
+          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
           onClick={onClose}
         />
 
@@ -452,8 +453,8 @@ const EnviarCorreoFacturaModal = ({
             </div>
             <div className="mt-2">
               <p className="text-sm text-blue-700">
-                Factura: <span className="font-semibold">{factura.numero}</span> | 
-                Cliente: <span className="font-semibold">{factura.cliente}</span> | 
+                Factura: <span className="font-semibold">{factura.numero}</span> |
+                Cliente: <span className="font-semibold">{factura.cliente}</span> |
                 Valor: <span className="font-semibold">${factura.valorTotal?.toLocaleString('es-CO') || '0'}</span>
               </p>
             </div>
@@ -468,35 +469,14 @@ const EnviarCorreoFacturaModal = ({
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Sección 1: Destinatarios */}
-                <div className="space-y-3">
-                  <h4 className="font-medium text-gray-800 flex items-center">
-                    <span className="mr-2">👥</span> Destinatarios
-                  </h4>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Correos electrónicos (separados por comas)
-                    </label>
-                    <textarea
-                      value={destinatariosManual}
-                      onChange={handleDestinatariosChange}
-                      placeholder="ejemplo1@correo.com, ejemplo2@correo.com"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      rows="3"
-                      disabled={enviando}
-                    />
-                    <div className="mt-1 flex justify-between">
-                      <span className="text-xs text-gray-500">
-                        {destinatarios.length} destinatario(s) válido(s)
-                      </span>
-                      {destinatarios.length === 0 && (
-                        <span className="text-xs text-red-500">
-                          ⚠️ Ingrese al menos un email válido
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {/* Sección 1: Destinatarios - Nuevo selector mejorado */}
+                <DestinatariosSelector
+                  destinatariosSeleccionados={destinatarios}
+                  onCambio={setDestinatarios}
+                  puedeAgregar={true}
+                  puedeEditar={true}
+                  puedeEliminar={true}
+                />
 
                 {/* Sección 2: Asunto y Cuerpo */}
                 <div className="space-y-3">

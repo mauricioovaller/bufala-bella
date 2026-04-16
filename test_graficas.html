@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba Gráficas Transporte</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .grafica-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .datos-raw {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Prueba de Gráficas de Transporte</h1>
+        
+        <div class="grafica-container">
+            <h2>📈 Gráfica 1: Fletes Diarios (Línea)</h2>
+            <div id="grafica-fletes" style="height: 300px;"></div>
+        </div>
+        
+        <div class="grafica-container">
+            <h2>📊 Gráfica 2: Estibas Pagas Diarias (Barras)</h2>
+            <div id="grafica-estibas" style="height: 300px;"></div>
+        </div>
+        
+        <div class="grafica-container">
+            <h2>⚖️ Gráfica 3: Comparación Fletes vs Estibas (Barras Agrupadas)</h2>
+            <div id="grafica-comparacion" style="height: 300px;"></div>
+        </div>
+        
+        <div class="datos-raw">
+            <h3>📋 Datos de Prueba Generados:</h3>
+            <pre id="datos-prueba"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Generar datos de prueba similares a los del servicio
+        function generarDatosPrueba() {
+            const fechaInicio = '2026-03-01';
+            const fechaFin = '2026-03-10';
+            const inicio = new Date(fechaInicio);
+            const fin = new Date(fechaFin);
+            const dias = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+            
+            const datosFletes = [];
+            const datosEstibas = [];
+            const datosComparacion = [];
+            
+            for (let i = 0; i < dias; i++) {
+                const fecha = new Date(inicio);
+                fecha.setDate(inicio.getDate() + i);
+                const fechaStr = fecha.toISOString().split('T')[0];
+                const fechaCorta = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}`;
+                
+                // Generar datos realistas
+                const tieneDatos = Math.random() > 0.3;
+                const costoTransporte = tieneDatos ? Math.floor(Math.random() * 500000) + 200000 : 0;
+                const estibasPagas = tieneDatos ? Math.floor(Math.random() * 20) + 1 : 0;
+                const valorEstibasPagas = estibasPagas * 80500;
+                
+                datosFletes.push({
+                    fecha: fechaStr,
+                    fechaCorta: fechaCorta,
+                    costoTransporte: costoTransporte,
+                    costoFormateado: costoTransporte.toLocaleString('es-CO'),
+                    cantidadCamiones: tieneDatos ? Math.floor(Math.random() * 3) + 1 : 0,
+                    sinDatos: !tieneDatos
+                });
+                
+                datosEstibas.push({
+                    fecha: fechaStr,
+                    fechaCorta: fechaCorta,
+                    estibasPagas: estibasPagas,
+                    valorEstibasPagas: valorEstibasPagas,
+                    valorEstibasFormateado: valorEstibasPagas.toLocaleString('es-CO'),
+                    sinDatos: !tieneDatos
+                });
+                
+                datosComparacion.push({
+                    fecha: fechaStr,
+                    fechaCorta: fechaCorta,
+                    costoTransporte: costoTransporte,
+                    costoFormateado: costoTransporte.toLocaleString('es-CO'),
+                    estibasPagas: estibasPagas,
+                    valorEstibasPagas: valorEstibasPagas,
+                    valorEstibasFormateado: valorEstibasPagas.toLocaleString('es-CO'),
+                    sinDatos: !tieneDatos
+                });
+            }
+            
+            return { datosFletes, datosEstibas, datosComparacion };
+        }
+        
+        // Mostrar datos en la página
+        const datos = generarDatosPrueba();
+        document.getElementById('datos-prueba').textContent = JSON.stringify(datos, null, 2);
+        
+        // Mostrar datos en consola también
+        console.log('Datos de prueba generados:', datos);
+        
+        // Mostrar mensaje para el usuario
+        alert('Datos de prueba generados. Revisa la consola (F12 → Console) para ver los datos y prueba las gráficas en la aplicación real.');
+    </script>
+</body>
+</html>

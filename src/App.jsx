@@ -13,6 +13,7 @@ import ProduccionPedidos from "./pages/ProduccionPedidos";
 import ConsolidacionMain from "./components/consolidacion/ConsolidacionMain";
 import FacturacionMain from "./components/facturacion/FacturacionMain";
 import DashboardDibufala from "./components/dashboard/DashboardDibufala";
+import ConfiguracionCorreos from "./components/facturacion/ConfiguracionCorreos";
 
 export default function App() {
   return (
@@ -24,10 +25,11 @@ export default function App() {
         <Route path="productos" element={<Productos />} />
         <Route path="pedidos" element={<Pedidos />} />
         <Route path="samples" element={<PedidosSample />} />
-        <Route path="produccion" element={<ProduccionPedidos />} />        
-        <Route path="consolidacion" element={<ConsolidacionMain />}/>
+        <Route path="produccion" element={<ProduccionPedidos />} />
+        <Route path="consolidacion" element={<ConsolidacionMain />} />
         <Route path="facturacion" element={<FacturacionMain />} />
         <Route path="complemento-facturas" element={<ComplementoFacturas />} />
+        <Route path="configuracion-correos" element={<ConfiguracionCorreos />} />
         <Route path="dashboard" element={<DashboardDibufala />} />
       </Route>
 

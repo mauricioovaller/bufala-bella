@@ -1,5 +1,5 @@
 // src/pages/ComplementoFacturas.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import {
   getFacturasConDetalle,
@@ -21,6 +21,10 @@ export default function ComplementoFacturas() {
   const [facturas, setFacturas] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [itemsEditados, setItemsEditados] = useState({});
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "guardado", "error", ""
 
   const handleBuscar = async () => {
     if (!fechaDesde || !fechaHasta) {
@@ -105,6 +109,106 @@ export default function ComplementoFacturas() {
       console.error(error);
       Swal.fire("Error", "Error de conexión al servidor", "error");
     }
+  };
+
+  // Función de auto-guardado silencioso (sin alertas)
+  const handleAutoSave = async (showNotification = false) => {
+    if (!autoSaveEnabled || Object.keys(itemsEditados).length === 0) {
+      return;
+    }
+
+    setIsAutoSaving(true);
+    setAutoSaveStatus("");
+
+    try {
+      const items = [];
+      facturas.forEach((factura) => {
+        factura.items.forEach((item) => {
+          if (item.planVallejo === -1) {
+            items.push({
+              idDetInvoice: item.idDetInvoice,
+              dex: getItemValue(item, "dex"),
+              dia: getItemValue(item, "dia") || null,
+              mes: getItemValue(item, "mes") || null,
+              anio: getItemValue(item, "anio") || null,
+              ad: getItemValue(item, "ad") || "03",
+              pais: getItemValue(item, "pais") || "269",
+              cip: getItemValue(item, "cip") || item.codigoCIP || "",
+              unidad: getItemValue(item, "unidad") || "Kilogramo",
+              fob: getItemValue(item, "fob") || null,
+              van: getItemValue(item, "van") || null,
+              porcentaje: getItemValue(item, "porcentaje") || null,
+              reposicion: getItemValue(item, "reposicion") || "En Proceso",
+            });
+          }
+        });
+      });
+
+      if (items.length === 0) {
+        setIsAutoSaving(false);
+        return;
+      }
+
+      const res = await actualizarComplementoFactura(items);
+      if (res.success) {
+        setLastAutoSaveTime(new Date());
+        setAutoSaveStatus("guardado");
+        if (showNotification) {
+          Swal.fire({
+            icon: "success",
+            title: "Auto-guardado",
+            text: `${res.actualizados} ítems guardados automáticamente`,
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: "top-end",
+          });
+        }
+        console.log(`✓ Auto-guardado: ${res.actualizados} ítems`);
+      } else {
+        setAutoSaveStatus("error");
+        console.error("Error en auto-guardado:", res.message);
+      }
+    } catch (error) {
+      setAutoSaveStatus("error");
+      console.error("Error de conexión en auto-guardado:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  // Auto-guardado automático cada 30 segundos
+  useEffect(() => {
+    if (!facturas.length || !autoSaveEnabled) {
+      return;
+    }
+
+    const autoSaveInterval = setInterval(() => {
+      handleAutoSave(false);
+    }, 30000); // Cada 30 segundos
+
+    return () => clearInterval(autoSaveInterval);
+  }, [facturas, itemsEditados, autoSaveEnabled]);
+
+  // Limpiar el estado de guardado después de 3 segundos
+  useEffect(() => {
+    if (autoSaveStatus === "guardado") {
+      const timeout = setTimeout(() => {
+        setAutoSaveStatus("");
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [autoSaveStatus]);
+
+  // Formato de tiempo relativo
+  const getTimeAgo = (date) => {
+    if (!date) return "";
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return "hace unos segundos";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    const hours = Math.floor(minutes / 60);
+    return `hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
   };
 
   const handleExportar = async () => {
@@ -208,16 +312,70 @@ export default function ComplementoFacturas() {
         {/* Resultados */}
         {facturas.length > 0 && (
           <div className="mt-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
               <h3 className="text-lg font-semibold text-gray-800">
                 Facturas encontradas: {facturas.length}
               </h3>
-              <button
-                onClick={handleGuardar}
-                className="bg-orange-500 text-white rounded-lg px-4 py-2 hover:bg-orange-600 transition font-medium"
-              >
-                Guardar cambios
-              </button>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
+                {/* Estado de auto-guardado */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    {isAutoSaving ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                        <span className="text-sm text-blue-700 font-medium">Auto-guardando...</span>
+                      </>
+                    ) : autoSaveStatus === "guardado" ? (
+                      <>
+                        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-sm text-green-700 font-medium">Guardado</span>
+                      </>
+                    ) : autoSaveStatus === "error" ? (
+                      <>
+                        <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-sm text-red-700 font-medium">Error</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm text-blue-700">Monitorando cambios</span>
+                      </>
+                    )}
+                  </div>
+
+                  {lastAutoSaveTime && (
+                    <span className="text-xs text-gray-600 ml-2">
+                      {getTimeAgo(lastAutoSaveTime)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Botón guardar manual */}
+                <button
+                  onClick={() => handleAutoSave(true)}
+                  className="bg-orange-500 text-white rounded-lg px-4 py-2 hover:bg-orange-600 transition font-medium whitespace-nowrap disabled:bg-gray-400"
+                  disabled={isAutoSaving || Object.keys(itemsEditados).length === 0}
+                >
+                  {isAutoSaving ? "Guardando..." : "Guardar Ahora"}
+                </button>
+
+                {/* Toggle auto-guardado */}
+                <button
+                  onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition whitespace-nowrap ${autoSaveEnabled
+                      ? "bg-green-100 text-green-700 hover:bg-green-200"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  title={autoSaveEnabled ? "Auto-guardado activado" : "Auto-guardado desactivado"}
+                >
+                  {autoSaveEnabled ? "✓ Auto-guardado" : "⊙ Manual"}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">
