@@ -2,7 +2,7 @@
  * SERVICIO: envioCorreosGenericoService
  * PROPÓSITO: Lógica reutilizable para envío de correos en cualquier módulo
  * MÓDULOS SOPORTADOS: facturación, pedidos, consolidación (extensible)
- * 
+ *
  * CARACTERÍSTICAS:
  * - Generación dinámica de documentos por módulo
  * - Gestión centralizada de historial
@@ -11,9 +11,14 @@
  * - Registro de auditoría
  */
 
-import { enviarCorreo, obtenerDestinatariosPredeterminados, obtenerPlantillaPredeterminada } from './correoService';
+import {
+  enviarCorreo,
+  obtenerDestinatariosPredeterminados,
+  obtenerPlantillaPredeterminada,
+} from "./correoService";
 
-const BASE_URL = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api";
+const BASE_URL =
+  "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api";
 
 // ============================================
 // TIPOS Y CONFIGURACIONES
@@ -26,30 +31,30 @@ const BASE_URL = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiB
 const GENERADORES_DOCUMENTOS = {
   facturacion: {
     factura: {
-      funcion: 'generarFacturaPDF',
-      servicio: 'facturacionService',
-      obligatorio: true
+      funcion: "generarFacturaPDF",
+      servicio: "facturacionService",
+      obligatorio: true,
     },
-    'carta-policia': {
-      funcion: 'generarCartaResponsabilidad',
-      servicio: 'planillasService',
-      obligatorio: false
+    "carta-policia": {
+      funcion: "generarCartaResponsabilidad",
+      servicio: "planillasService",
+      obligatorio: false,
     },
-    'carta-aerolinea': {
-      funcion: 'generarCartaResponsabilidad',
-      servicio: 'planillasService',
-      obligatorio: false
+    "carta-aerolinea": {
+      funcion: "generarCartaResponsabilidad",
+      servicio: "planillasService",
+      obligatorio: false,
     },
-    'plan-vallejo': {
-      funcion: 'generarPlanVallejo',
-      servicio: 'planillasService',
-      obligatorio: false
+    "plan-vallejo": {
+      funcion: "generarPlanVallejo",
+      servicio: "planillasService",
+      obligatorio: false,
     },
-    'reporte-despacho': {
-      funcion: 'generarReporteDespacho',
-      servicio: 'planillasService',
-      obligatorio: false
-    }
+    "reporte-despacho": {
+      funcion: "generarReporteDespacho",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
   },
   // Estructura preparada para Pedidos
   pedidos: {
@@ -58,7 +63,7 @@ const GENERADORES_DOCUMENTOS = {
   // Estructura preparada para Consolidación
   consolidacion: {
     // Se llenará según necesidades
-  }
+  },
 };
 
 // ============================================
@@ -84,24 +89,29 @@ const GENERADORES_DOCUMENTOS = {
  */
 export async function enviarCorreoGenerico(config) {
   try {
-    console.log('📧 Iniciando envío genérico:', { modulo: config.modulo, referencia: config.referencia_numero });
+    console.log("📧 Iniciando envío genérico:", {
+      modulo: config.modulo,
+      referencia: config.referencia_numero,
+    });
 
     // Validar configuración básica
     validarConfiguracion(config);
 
     // Paso 1: Normalizar destinatarios
-    const destinatariosNormalizados = normalizarDestinatarios(config.destinatarios);
+    const destinatariosNormalizados = normalizarDestinatarios(
+      config.destinatarios,
+    );
     if (destinatariosNormalizados.length === 0) {
-      throw new Error('No hay destinatarios válidos');
+      throw new Error("No hay destinatarios válidos");
     }
 
     // Paso 2: Generar documentos
-    console.log('📄 Generando documentos:', config.documentos_seleccionados);
+    console.log("📄 Generando documentos:", config.documentos_seleccionados);
     const archivosGenerados = await generarDocumentosModulo(
       config.modulo,
       config.documentos_seleccionados,
       config.datosReferencia,
-      config.generador
+      config.generador,
     );
 
     // Paso 3: Preparar adjuntos
@@ -110,17 +120,17 @@ export async function enviarCorreoGenerico(config) {
 
     // Paso 4: Enviar correo
     const resultadoEnvio = await enviarCorreo({
-      destinatarios: destinatariosNormalizados.map(d => d.email || d),
+      destinatarios: destinatariosNormalizados.map((d) => d.email || d),
       asunto: config.asunto,
       cuerpo: config.cuerpo,
       adjuntos: adjuntos,
       modulo: config.modulo,
       referencia_id: config.referencia_id,
-      usuario: config.usuario
+      usuario: config.usuario,
     });
 
     if (!resultadoEnvio.success) {
-      throw new Error(resultadoEnvio.message || 'Error al enviar correo');
+      throw new Error(resultadoEnvio.message || "Error al enviar correo");
     }
 
     // Paso 5: Guardar en historial
@@ -132,28 +142,30 @@ export async function enviarCorreoGenerico(config) {
       asunto: config.asunto,
       cuerpo: config.cuerpo,
       adjuntos: archivosGenerados,
-      estado: resultadoEnvio.success ? 'enviado' : 'fallido',
+      estado: resultadoEnvio.success ? "enviado" : "fallido",
       usuario_id: config.usuario_id,
       usuario_nombre: config.usuario,
       usuario_email: config.usuario_email,
       mensaje_error: resultadoEnvio.success ? null : resultadoEnvio.message,
-      respuesta_api: resultadoEnvio
+      respuesta_api: resultadoEnvio,
     });
 
-    console.log('✅ Correo enviado y registrado:', { historialId, destinatarios: destinatariosNormalizados.length });
+    console.log("✅ Correo enviado y registrado:", {
+      historialId,
+      destinatarios: destinatariosNormalizados.length,
+    });
 
     return {
       success: true,
-      message: 'Correo enviado exitosamente',
+      message: "Correo enviado exitosamente",
       historial_id: historialId,
       destinatarios_enviados: destinatariosNormalizados.length,
       adjuntos_enviados: adjuntos.length,
       modulo: config.modulo,
-      referencia_numero: config.referencia_numero
+      referencia_numero: config.referencia_numero,
     };
-
   } catch (error) {
-    console.error('❌ Error en envioGenérico:', error);
+    console.error("❌ Error en envioGenérico:", error);
 
     // Si hay referencia, intentar guardar el error en historial
     if (config.referencia_id) {
@@ -166,15 +178,15 @@ export async function enviarCorreoGenerico(config) {
           asunto: config.asunto,
           cuerpo: config.cuerpo,
           adjuntos: [],
-          estado: 'fallido',
+          estado: "fallido",
           usuario_id: config.usuario_id,
           usuario_nombre: config.usuario,
           usuario_email: config.usuario_email,
           mensaje_error: error.message,
-          respuesta_api: null
+          respuesta_api: null,
         });
       } catch (historialError) {
-        console.error('Error guardando en historial:', historialError);
+        console.error("Error guardando en historial:", historialError);
       }
     }
 
@@ -198,12 +210,12 @@ export async function generarDocumentosModulo(
   modulo,
   documentoIds,
   datosReferencia,
-  generador
+  generador,
 ) {
   const archivos = [];
 
   if (!documentoIds || documentoIds.length === 0) {
-    throw new Error('Debe seleccionar al menos un documento');
+    throw new Error("Debe seleccionar al menos un documento");
   }
 
   for (const docId of documentoIds) {
@@ -221,11 +233,10 @@ export async function generarDocumentosModulo(
         id: docId,
         nombre: generarNombreDocumento(docId, datosReferencia),
         blob: blob,
-        tipo: 'application/pdf'
+        tipo: "application/pdf",
       });
 
       console.log(`✅ ${docId} generado: ${Math.round(blob.size / 1024)} KB`);
-
     } catch (error) {
       console.error(`❌ Error generando ${docId}:`, error);
       throw new Error(`No se pudo generar ${docId}: ${error.message}`);
@@ -239,28 +250,31 @@ export async function generarDocumentosModulo(
  * Genera nombre automatizado para un documento
  */
 function generarNombreDocumento(tipoDocumento, datos) {
-  const fecha = new Date().toISOString().split('T')[0];
-  const numero = datos.numero || datos.id || 'documento';
+  const fecha = new Date().toISOString().split("T")[0];
+  const numero = datos.numero || datos.id || "documento";
 
   const nombres = {
     factura: `factura-${numero}-${fecha}.pdf`,
-    'carta-policia': `carta-policia-${numero}-${fecha}.pdf`,
-    'carta-aerolinea': `carta-aerolinea-${numero}-${fecha}.pdf`,
-    'plan-vallejo': `plan-vallejo-${numero}-${fecha}.pdf`,
-    'reporte-despacho': `reporte-despacho-${numero}-${fecha}.pdf`
+    "carta-policia": `carta-policia-${numero}-${fecha}.pdf`,
+    "carta-aerolinea": `carta-aerolinea-${numero}-${fecha}.pdf`,
+    "plan-vallejo": `plan-vallejo-${numero}-${fecha}.pdf`,
+    "reporte-despacho": `reporte-despacho-${numero}-${fecha}.pdf`,
   };
 
-  return nombres[tipoDocumento] || `documento-${tipoDocumento}-${numero}-${fecha}.pdf`;
+  return (
+    nombres[tipoDocumento] ||
+    `documento-${tipoDocumento}-${numero}-${fecha}.pdf`
+  );
 }
 
 /**
  * Prepara adjuntos para envío (convierte blob a base64)
  */
 function prepararAdjuntos(archivos) {
-  return archivos.map(archivo => ({
+  return archivos.map((archivo) => ({
     nombre: archivo.nombre,
     blob: archivo.blob,
-    tipo: archivo.tipo
+    tipo: archivo.tipo,
   }));
 }
 
@@ -274,12 +288,14 @@ function prepararAdjuntos(archivos) {
 function normalizarDestinatarios(destinatarios) {
   if (!destinatarios) return [];
 
-  return destinatarios.map(dest => {
-    if (typeof dest === 'string') {
-      return { email: dest, nombre: dest.split('@')[0] };
-    }
-    return dest;
-  }).filter(dest => dest.email);
+  return destinatarios
+    .map((dest) => {
+      if (typeof dest === "string") {
+        return { email: dest, nombre: dest.split("@")[0] };
+      }
+      return dest;
+    })
+    .filter((dest) => dest.email);
 }
 
 // ============================================
@@ -291,16 +307,16 @@ function normalizarDestinatarios(destinatarios) {
  */
 function validarConfiguracion(config) {
   const campos = [
-    'modulo',
-    'referencia_id',
-    'referencia_numero',
-    'destinatarios',
-    'documentos_seleccionados',
-    'asunto',
-    'cuerpo',
-    'datosReferencia',
-    'generador',
-    'usuario'
+    "modulo",
+    "referencia_id",
+    "referencia_numero",
+    "destinatarios",
+    "documentos_seleccionados",
+    "asunto",
+    "cuerpo",
+    "datosReferencia",
+    "generador",
+    "usuario",
   ];
 
   for (const campo of campos) {
@@ -313,8 +329,8 @@ function validarConfiguracion(config) {
     throw new Error(`Módulo no soportado: ${config.modulo}`);
   }
 
-  if (typeof config.generador !== 'function') {
-    throw new Error('Generador debe ser una función');
+  if (typeof config.generador !== "function") {
+    throw new Error("Generador debe ser una función");
   }
 }
 
@@ -327,34 +343,41 @@ function validarConfiguracion(config) {
  */
 async function guardarEnHistorial(datos) {
   try {
-    const respuesta = await fetch(`${BASE_URL}/Correos/ApiHistorialCorreos.php`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    const respuesta = await fetch(
+      `${BASE_URL}/Correos/ApiHistorialCorreos.php`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accion: "crear",
+          ...datos,
+          destinatarios_lista: JSON.stringify(datos.destinatarios),
+          adjuntos_lista: JSON.stringify(
+            datos.adjuntos.map((a) => ({ nombre: a.nombre, tipo: a.tipo })),
+          ),
+          adjuntos_count: datos.adjuntos.length,
+          destinatarios_count: datos.destinatarios.length,
+          fecha_envio: new Date().toISOString(),
+        }),
       },
-      body: JSON.stringify({
-        accion: 'crear',
-        ...datos,
-        destinatarios_lista: JSON.stringify(datos.destinatarios),
-        adjuntos_lista: JSON.stringify(
-          datos.adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo }))
-        ),
-        adjuntos_count: datos.adjuntos.length,
-        destinatarios_count: datos.destinatarios.length,
-        fecha_envio: new Date().toISOString()
-      })
-    });
+    );
 
     if (!respuesta.ok) {
-      console.warn(`Aviso: No se guardó en historial (${respuesta.status}), pero el correo se envió`);
+      console.warn(
+        `Aviso: No se guardó en historial (${respuesta.status}), pero el correo se envió`,
+      );
       return `temp-${Date.now()}`;
     }
 
     const resultado = await respuesta.json();
     return resultado.id || resultado.historial_id || `temp-${Date.now()}`;
-
   } catch (error) {
-    console.warn('Aviso: Error guardando historial, pero el correo se envió:', error);
+    console.warn(
+      "Aviso: Error guardando historial, pero el correo se envió:",
+      error,
+    );
     return `temp-${Date.now()}`;
   }
 }
@@ -370,16 +393,19 @@ async function guardarEnHistorial(datos) {
  */
 export async function obtenerHistorialCorreos(filtros = {}) {
   try {
-    const respuesta = await fetch(`${BASE_URL}/Correos/ApiHistorialCorreos.php`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    const respuesta = await fetch(
+      `${BASE_URL}/Correos/ApiHistorialCorreos.php`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accion: "listar",
+          ...filtros,
+        }),
       },
-      body: JSON.stringify({
-        accion: 'listar',
-        ...filtros
-      })
-    });
+    );
 
     if (!respuesta.ok) {
       throw new Error(`Error HTTP: ${respuesta.status}`);
@@ -387,9 +413,8 @@ export async function obtenerHistorialCorreos(filtros = {}) {
 
     const datos = await respuesta.json();
     return datos.success ? datos.correos : [];
-
   } catch (error) {
-    console.error('Error obteniendo historial:', error);
+    console.error("Error obteniendo historial:", error);
     return [];
   }
 }
@@ -399,26 +424,30 @@ export async function obtenerHistorialCorreos(filtros = {}) {
  */
 export async function obtenerEstadisticasCorreos(modulo) {
   try {
-    const respuesta = await fetch(`${BASE_URL}/Correos/ApiHistorialCorreos.php`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    const respuesta = await fetch(
+      `${BASE_URL}/Correos/ApiHistorialCorreos.php`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accion: "estadisticas",
+          modulo: modulo,
+        }),
       },
-      body: JSON.stringify({
-        accion: 'estadisticas',
-        modulo: modulo
-      })
-    });
+    );
 
     if (!respuesta.ok) {
       return { total: 0, exitosos: 0, fallidos: 0 };
     }
 
     const datos = await respuesta.json();
-    return datos.success ? datos.estadisticas : { total: 0, exitosos: 0, fallidos: 0 };
-
+    return datos.success
+      ? datos.estadisticas
+      : { total: 0, exitosos: 0, fallidos: 0 };
   } catch (error) {
-    console.error('Error obteniendo estadísticas:', error);
+    console.error("Error obteniendo estadísticas:", error);
     return { total: 0, exitosos: 0, fallidos: 0 };
   }
 }
@@ -452,5 +481,5 @@ export default {
   obtenerHistorialCorreos,
   obtenerEstadisticasCorreos,
   obtenerDocumentosDisponibles,
-  registrarGeneradoresModulo
+  registrarGeneradoresModulo,
 };

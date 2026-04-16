@@ -1,4 +1,5 @@
 # 📝 CHANGELOG: Refactorización Sistema de Correos
+
 **Fecha:** 16 de abril de 2026  
 **Estado:** ✅ PRODUCCIÓN  
 **Versión:** 2.0 - Sistema Genérico Reutilizable
@@ -8,6 +9,7 @@
 ## 🎯 Resumen Ejecutivo
 
 Se ha **refactorizado completamente el sistema de envío de correos** para ser:
+
 - ✅ **Reutilizable**: Un solo código para Facturación, Pedidos, Consolidación y futuros módulos
 - ✅ **Genérico**: Soporta cualquier tipo de documento y destinatario
 - ✅ **Mantenible**: Lógica centralizada, fácil de debuggear
@@ -23,6 +25,7 @@ Se ha **refactorizado completamente el sistema de envío de correos** para ser:
 ### 1. NUEVOS ARCHIVOS CREADOS
 
 #### Servicios
+
 ```
 ✨ src/services/envioCorreosGenericoService.js (535 líneas)
    - Función principal: enviarCorreoGenerico()
@@ -33,6 +36,7 @@ Se ha **refactorizado completamente el sistema de envío de correos** para ser:
 ```
 
 #### Componentes Reutilizables
+
 ```
 ✨ src/components/correos/EnviarCorreoModal.jsx (380 líneas)
    - Modal genérico para cualquier módulo
@@ -52,6 +56,7 @@ Se ha **refactorizado completamente el sistema de envío de correos** para ser:
 ```
 
 #### Wrappers por Módulo
+
 ```
 ✨ src/components/correos/EnviarPedidoCorreoModal.jsx (190 líneas)
    - Wrapper específico para Pedidos
@@ -65,6 +70,7 @@ Se ha **refactorizado completamente el sistema de envío de correos** para ser:
 ```
 
 #### Base de Datos
+
 ```
 ✨ crear_tabla_historial_correos.sql
    - Tabla: correos_enviados (auditoría completa)
@@ -75,6 +81,7 @@ Se ha **refactorizado completamente el sistema de envío de correos** para ser:
 ```
 
 #### Documentación
+
 ```
 ✨ GUIA_ENVIO_CORREOS_GENERICO.md
    - Guía completa de uso
@@ -91,6 +98,7 @@ Se ha **refactorizado completamente el sistema de envío de correos** para ser:
 ### 2. ARCHIVOS MODIFICADOS
 
 #### src/components/facturacion/EnviarCorreoFacturaModal.jsx
+
 ```
 CAMBIOS INTERNOS (sin cambios visuales):
 ✓ Ahora usa envioCorreosGenericoService.enviarCorreoGenerico()
@@ -110,6 +118,7 @@ COMPATIBILIDAD: 100%
 ## 🔄 Flujos de Funcionamiento
 
 ### ANTES (Facturación)
+
 ```
 EnviarCorreoFacturaModal (monolítica)
   ├─ Lógica de envío (enviarCorreo)
@@ -119,6 +128,7 @@ EnviarCorreoFacturaModal (monolítica)
 ```
 
 ### DESPUÉS (Arquitectura Genérica)
+
 ```
 ┌─ Facturación
 ├─ Pedidos
@@ -139,6 +149,7 @@ Servicio Genérico (envioCorreosGenericoService)
 ## 📊 Impacto en Código Existente
 
 ### Facturación: ✅ CERO CAMBIOS NECESARIOS
+
 ```javascript
 // En ListaFacturasGeneradas.jsx - NO NECESITA CAMBIOS
 <EnviarCorreoFacturaModal
@@ -149,35 +160,37 @@ Servicio Genérico (envioCorreosGenericoService)
     setFacturaParaEnviar(null);
   }}
   onEnvioExitoso={(resultado) => {
-    console.log('Correo enviado exitosamente:', resultado);
+    console.log("Correo enviado exitosamente:", resultado);
   }}
 />
 ```
 
 ### Pedidos: ✅ NUEVA FUNCIONALIDAD (LISTA)
+
 ```javascript
 // En componente Pedidos
-import { EnviarPedidoCorreoModal } from '../../components/correos';
+import { EnviarPedidoCorreoModal } from "../../components/correos";
 
 <EnviarPedidoCorreoModal
   pedido={pedidoData}
   isOpen={mostrarModal}
   onClose={cerrarModal}
   onEnvioExitoso={manejarExito}
-/>
+/>;
 ```
 
 ### Consolidación: ✅ NUEVA FUNCIONALIDAD (LISTA)
+
 ```javascript
 // En componente Consolidación
-import { EnviarConsolidacionCorreoModal } from '../../components/correos';
+import { EnviarConsolidacionCorreoModal } from "../../components/correos";
 
 <EnviarConsolidacionCorreoModal
   consolidacion={consolidacionData}
   isOpen={mostrarModal}
   onClose={cerrarModal}
   onEnvioExitoso={manejarExito}
-/>
+/>;
 ```
 
 ---
@@ -185,12 +198,14 @@ import { EnviarConsolidacionCorreoModal } from '../../components/correos';
 ## 🔐 Validaciones y Seguridad
 
 ✅ **Validaciones de Entrada**
+
 - Emails válidos (regex)
 - Módulos soportados
 - Documentos requeridos presentes
 - Destinatarios no vacíos
 
 ✅ **Registro Completo**
+
 - Usuario y email del que envía
 - Fecha y hora exacta
 - Estado (enviado/fallido)
@@ -198,6 +213,7 @@ import { EnviarConsolidacionCorreoModal } from '../../components/correos';
 - Listado completo de destinatarios
 
 ✅ **Manejo de Errores**
+
 - Intenta guardar en historial aunque falle envío
 - Logs detallados en consola
 - Mensajes amigables al usuario
@@ -207,21 +223,24 @@ import { EnviarConsolidacionCorreoModal } from '../../components/correos';
 ## 📈 Métricas
 
 ### Código Nuevo
-| Archivo | Líneas | Tipo |
-|---------|--------|------|
-| envioCorreosGenericoService.js | 535 | Servicio |
-| EnviarCorreoModal.jsx | 380 | Componente |
-| SelectorDocumentos.jsx | 220 | Componente |
-| EnviarPedidoCorreoModal.jsx | 190 | Wrapper |
-| EnviarConsolidacionCorreoModal.jsx | 220 | Wrapper |
-| **TOTAL NUEVO** | **1,545** | **Código** |
+
+| Archivo                            | Líneas    | Tipo       |
+| ---------------------------------- | --------- | ---------- |
+| envioCorreosGenericoService.js     | 535       | Servicio   |
+| EnviarCorreoModal.jsx              | 380       | Componente |
+| SelectorDocumentos.jsx             | 220       | Componente |
+| EnviarPedidoCorreoModal.jsx        | 190       | Wrapper    |
+| EnviarConsolidacionCorreoModal.jsx | 220       | Wrapper    |
+| **TOTAL NUEVO**                    | **1,545** | **Código** |
 
 ### Código Modificado
-| Archivo | Cambios | Impacto |
-|---------|---------|--------|
+
+| Archivo                      | Cambios   | Impacto      |
+| ---------------------------- | --------- | ------------ |
 | EnviarCorreoFacturaModal.jsx | 30 líneas | 0% - Interno |
 
 ### Ratio
+
 - **Código nuevo reutilizable**: 1,545 líneas
 - **Código duplicado eliminado**: ∞ (ahora centralizado)
 - **Compatibilidad**: 100%
@@ -231,22 +250,26 @@ import { EnviarConsolidacionCorreoModal } from '../../components/correos';
 ## 🚀 Características Nuevas
 
 ### Para Facturación (mejoras internas)
+
 - ✨ Historial automático en BD
 - ✨ Auditoría completa
 - ✨ Estadísticas por módulo
 
 ### Para Pedidos (nuevo)
+
 - ✨ Envío de guías
 - ✨ Reporte de pedidos
 - ✨ Factura del pedido
 
 ### Para Consolidación (preparado)
+
 - ✨ Acta de consolidación
 - ✨ Lista detallada
 - ✨ Certificado de despacho
 - ✨ Manifiesto de transporte
 
 ### General
+
 - ✨ Selector flexible de documentos
 - ✨ Plantillas reutilizables por módulo
 - ✨ Historial centralizado
@@ -258,6 +281,7 @@ import { EnviarConsolidacionCorreoModal } from '../../components/correos';
 ## 🔍 Testing Realizado
 
 ✅ **Compilación**
+
 ```
 npm run build
 → ✓ 2376 módulos transformados
@@ -266,11 +290,13 @@ npm run build
 ```
 
 ✅ **Compatibilidad**
+
 - Facturación: Funciona 100% igual
 - Props: Sin cambios
 - Comportamiento: Idéntico
 
 ✅ **Lógica**
+
 - Validaciones: OK
 - Generación de PDFs: OK
 - Historial: Preparado
@@ -281,23 +307,27 @@ npm run build
 ## 📋 Próximos Pasos
 
 ### INMEDIATO (Esta semana)
+
 1. ✅ Ejecutar script SQL para crear tablas
 2. ✅ Probar envío en Facturación (debe funcionar igual)
 3. ✅ Revisar historial en BD
 
 ### CORTO PLAZO (Próximas 2 semanas)
+
 1. Integrar en Pedidos
 2. Crear generadores de documentos para Pedidos
 3. Integrar en Consolidación
 4. Crear generadores de documentos para Consolidación
 
 ### MEDIANO PLAZO (1 mes)
+
 1. Crear dashboard de historial
 2. Reporte de correos enviados
 3. Estadísticas por módulo
 4. Retransmisión de fallos
 
 ### LARGO PLAZO (Futuro)
+
 1. Nuevos módulos reutilizando la infraestructura
 2. Plantillas editables por usuario
 3. Webhooks de confirmación
@@ -307,33 +337,39 @@ npm run build
 
 ## 📚 Documentación Disponible
 
-| Archivo | Contenido |
-|---------|----------|
+| Archivo                        | Contenido            |
+| ------------------------------ | -------------------- |
 | GUIA_ENVIO_CORREOS_GENERICO.md | Cómo usar el sistema |
-| CHANGELOG.md | Este documento |
-| Script SQL | Crear BD |
-| Comentarios en código | Documentación inline |
+| CHANGELOG.md                   | Este documento       |
+| Script SQL                     | Crear BD             |
+| Comentarios en código          | Documentación inline |
 
 ---
 
 ## 🆘 Si Algo No Funciona
 
 ### Problema: Facturación no envía correos
-**Solución**: 
+
+**Solución**:
+
 1. Verifica que compiló sin errores
 2. Revisa consola del navegador (F12)
 3. Verifica que la factura esté generada
 4. Revisa logs de la API en el servidor
 
 ### Problema: Historial no guarda
+
 **Solución**:
+
 1. Ejecuta el script SQL
 2. Verifica tabla `correos_enviados` existe
 3. Revisa permisos de usuario BD
 4. Verifica endpoint API `/ApiHistorialCorreos.php`
 
 ### Problema: Modal no se abre
+
 **Solución**:
+
 1. Verifica que pasas `isOpen={true}`
 2. Revisa que existe la factura/pedido
 3. Verifica imports están correctos
@@ -360,18 +396,19 @@ npm run build
 
 ## 👥 Responsables
 
-| Rol | Acción |
-|-----|--------|
-| DevOps/DBA | Ejecutar script SQL |
-| Frontend | Integrar en Pedidos y Consolidación |
-| QA | Probar compatibilidad Facturación |
-| Backend | Implementar generadores faltantes |
+| Rol        | Acción                              |
+| ---------- | ----------------------------------- |
+| DevOps/DBA | Ejecutar script SQL                 |
+| Frontend   | Integrar en Pedidos y Consolidación |
+| QA         | Probar compatibilidad Facturación   |
+| Backend    | Implementar generadores faltantes   |
 
 ---
 
 ## 📞 Soporte
 
 Cualquier pregunta:
+
 1. Revisa GUIA_ENVIO_CORREOS_GENERICO.md
 2. Mira comentarios en el código
 3. Ejecuta tests de compilación

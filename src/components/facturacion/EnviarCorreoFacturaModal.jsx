@@ -356,7 +356,7 @@ const EnviarCorreoFacturaModal = ({
       // Generador de documentos específico para facturación
       const generadorFacturacion = async (tipoDocumento, datos) => {
         let blob;
-        
+
         switch (tipoDocumento) {
           case 'factura':
             blob = await generarFacturaPDF(datos.id, datos.tipoPedido || 'normal');
@@ -378,7 +378,7 @@ const EnviarCorreoFacturaModal = ({
           default:
             throw new Error('Tipo de documento desconocido');
         }
-        
+
         return blob;
       };
 

@@ -3,6 +3,7 @@
 ## 🎯 Resumen Rápido
 
 Tu aplicación ahora tiene un **sistema centralizado y reutilizable de envío de correos** que funciona en:
+
 - ✅ Facturación (LISTO - funciona igual que antes)
 - 🔄 Pedidos (Preparado para integración)
 - 🔄 Consolidación (Preparado para integración)
@@ -41,30 +42,48 @@ Para agregar envío de correos a Pedidos:
 ### 1. En PedidoDetail.jsx (o donde quieras agregar el botón)
 
 ```jsx
-import EnviarCorreoModal from '../correos/EnviarCorreoModal';
-import { generarReportePedido, generarGuia } from '../../services/pedidosService';
+import EnviarCorreoModal from "../correos/EnviarCorreoModal";
+import {
+  generarReportePedido,
+  generarGuia,
+} from "../../services/pedidosService";
 
 export default function PedidoDetail({ pedido }) {
   const [mostrarEnvioCorreo, setMostrarEnvioCorreo] = useState(false);
 
   // Documentos disponibles para pedidos
   const documentosPedidos = [
-    { id: 'guia', nombre: 'Guía de Transporte', descripcion: 'Documento de envío', obligatorio: true },
-    { id: 'reporte-pedido', nombre: 'Reporte del Pedido', descripcion: 'Detalles completos', obligatorio: false },
-    { id: 'factura-pedido', nombre: 'Factura Relacionada', descripcion: 'Comprobante fiscal', obligatorio: false }
+    {
+      id: "guia",
+      nombre: "Guía de Transporte",
+      descripcion: "Documento de envío",
+      obligatorio: true,
+    },
+    {
+      id: "reporte-pedido",
+      nombre: "Reporte del Pedido",
+      descripcion: "Detalles completos",
+      obligatorio: false,
+    },
+    {
+      id: "factura-pedido",
+      nombre: "Factura Relacionada",
+      descripcion: "Comprobante fiscal",
+      obligatorio: false,
+    },
   ];
 
   // Generador de documentos específico para pedidos
   const generadorPedidos = async (tipoDocumento, datosPedido) => {
     switch (tipoDocumento) {
-      case 'guia':
+      case "guia":
         return await generarGuia(datosPedido.id);
-      case 'reporte-pedido':
+      case "reporte-pedido":
         return await generarReportePedido(datosPedido.id);
-      case 'factura-pedido':
+      case "factura-pedido":
         return await generarFacturaPedido(datosPedido.id);
       default:
-        throw new Error('Documento desconocido');
+        throw new Error("Documento desconocido");
     }
   };
 
@@ -90,7 +109,7 @@ export default function PedidoDetail({ pedido }) {
         documentosDisponibles={documentosPedidos}
         generadorDocumentos={generadorPedidos}
         onEnvioExitoso={(resultado) => {
-          console.log('Pedido enviado:', resultado);
+          console.log("Pedido enviado:", resultado);
           // Actualizar UI si es necesario
         }}
       />
@@ -104,12 +123,20 @@ export default function PedidoDetail({ pedido }) {
 Similar a Pedidos:
 
 ```jsx
-import EnviarCorreoModal from '../correos/EnviarCorreoModal';
+import EnviarCorreoModal from "../correos/EnviarCorreoModal";
 
 const documentosConsolidacion = [
-  { id: 'acta-consolidacion', nombre: 'Acta de Consolidación', obligatorio: true },
-  { id: 'lista-detalle', nombre: 'Lista Detallada', obligatorio: false },
-  { id: 'certificado-despacho', nombre: 'Certificado de Despacho', obligatorio: false }
+  {
+    id: "acta-consolidacion",
+    nombre: "Acta de Consolidación",
+    obligatorio: true,
+  },
+  { id: "lista-detalle", nombre: "Lista Detallada", obligatorio: false },
+  {
+    id: "certificado-despacho",
+    nombre: "Certificado de Despacho",
+    obligatorio: false,
+  },
 ];
 
 const generadorConsolidacion = async (tipoDocumento, datosConsolidacion) => {
@@ -123,7 +150,7 @@ const generadorConsolidacion = async (tipoDocumento, datosConsolidacion) => {
   documentosDisponibles={documentosConsolidacion}
   generadorDocumentos={generadorConsolidacion}
   // ... resto de props
-/>
+/>;
 ```
 
 ## 🎨 Props de EnviarCorreoModal
@@ -158,6 +185,7 @@ const generadorConsolidacion = async (tipoDocumento, datosConsolidacion) => {
 El script SQL está en: `crear_tabla_historial_correos.sql`
 
 Contiene:
+
 - ✅ `correos_enviados` - Historial centralizado
 - ✅ `plantillas_correos_modulos` - Plantillas reutilizables
 - ✅ `documentos_adjuntables` - Catálogo de documentos
@@ -166,15 +194,18 @@ Contiene:
 ## 🔍 Revisar Historial de Correos
 
 ```javascript
-import { obtenerHistorialCorreos, obtenerEstadisticasCorreos } from '../../services/envioCorreosGenericoService';
+import {
+  obtenerHistorialCorreos,
+  obtenerEstadisticasCorreos,
+} from "../../services/envioCorreosGenericoService";
 
 // Obtener todos los correos
-const correos = await obtenerHistorialCorreos({ 
-  modulo: 'facturacion' 
+const correos = await obtenerHistorialCorreos({
+  modulo: "facturacion",
 });
 
 // Obtener estadísticas
-const stats = await obtenerEstadisticasCorreos('facturacion');
+const stats = await obtenerEstadisticasCorreos("facturacion");
 // Resultado: { total: 10, exitosos: 9, fallidos: 1 }
 ```
 
@@ -183,14 +214,14 @@ const stats = await obtenerEstadisticasCorreos('facturacion');
 Si necesitas registrar nuevos documentos en tiempo de ejecución:
 
 ```javascript
-import { registrarGeneradoresModulo } from '../../services/envioCorreosGenericoService';
+import { registrarGeneradoresModulo } from "../../services/envioCorreosGenericoService";
 
-registrarGeneradoresModulo('pedidos', {
-  'nuevo-documento': {
-    funcion: 'generarNuevoDoc',
-    servicio: 'pedidosService',
-    obligatorio: false
-  }
+registrarGeneradoresModulo("pedidos", {
+  "nuevo-documento": {
+    funcion: "generarNuevoDoc",
+    servicio: "pedidosService",
+    obligatorio: false,
+  },
 });
 ```
 
@@ -216,11 +247,13 @@ registrarGeneradoresModulo('pedidos', {
 ## 📞 Soporte
 
 Cualquier pregunta o problema:
+
 - Revisa la consola del navegador (F12)
 - Los logs muestran exactamente qué pasó en cada paso
 - Archivo de base de datos: historial completo de envíos
 
 ---
+
 **Última actualización:** 16 de abril de 2026
 **Estado:** ✅ Producción - Facturación funcionando
 **Próximos:** Pedidos y Consolidación
