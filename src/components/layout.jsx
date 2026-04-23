@@ -10,13 +10,13 @@ const menuItems = [
   { to: "/clientes", icon: <Users size={20} />, label: "Clientes" },
   { to: "/conductores", icon: <Car size={20} />, label: "Conductores" },
   { to: "/productos", icon: <Package size={20} />, label: "Productos" },
+  { to: "/configuracion-correos", icon: <Mail size={20} />, label: "Configuración de Correos" },
   { to: "/pedidos", icon: <ShoppingCart size={20} />, label: "Pedidos" },
   { to: "/samples", icon: <FlaskRound size={20} />, label: "Samples" },
   { to: "/produccion", icon: <Factory size={20} />, label: "Despachos" },
   { to: "/consolidacion", icon: <BarChart3 size={20} />, label: "Consolidación" },
   { to: "/facturacion", icon: <FileText size={20} />, label: "Facturación" },
-  { to: "/complemento-facturas", icon: <BookOpenCheck size={20} />, label: "Complemento Facturación" },
-  { to: "/configuracion-correos", icon: <Mail size={20} />, label: "Configuración de Correos" },
+  { to: "/complemento-facturas", icon: <BookOpenCheck size={20} />, label: "Complemento Facturación" },  
   { to: "/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
 ];
 

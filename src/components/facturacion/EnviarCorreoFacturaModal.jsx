@@ -36,10 +36,10 @@ const EnviarCorreoFacturaModal = ({
   // Estados para documentos adjuntos
   const [documentosDisponibles, setDocumentosDisponibles] = useState([
     { id: 'factura', nombre: 'Factura PDF', seleccionado: true, obligatorio: true, generando: false },
-    { id: 'carta_policia', nombre: 'Carta para Policía', seleccionado: false, obligatorio: false, generando: false },
-    { id: 'carta_aerolinea', nombre: 'Carta para Aerolínea', seleccionado: false, obligatorio: false, generando: false },
-    { id: 'plan_vallejo', nombre: 'Plan Vallejo', seleccionado: false, obligatorio: false, generando: false },
-    { id: 'reporte_despacho', nombre: 'Reporte de Despacho', seleccionado: false, obligatorio: false, generando: false }
+    { id: 'carta-policia', nombre: 'Carta para Policía', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'carta-aerolinea', nombre: 'Carta para Aerolínea', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'plan-vallejo', nombre: 'Plan Vallejo', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'reporte-despacho', nombre: 'Reporte de Despacho', seleccionado: false, obligatorio: false, generando: false }
   ]);
 
   // Estados para archivos generados
@@ -167,7 +167,7 @@ const EnviarCorreoFacturaModal = ({
           console.log(`✅ Factura generada: ${nombreArchivo}, tamaño: ${archivoBlob.size} bytes`);
           break;
 
-        case 'carta_policia':
+        case 'carta-policia':
           if (!factura.Id_Planilla) {
             throw new Error('La factura no tiene planilla asociada para generar carta de policía');
           }
@@ -177,7 +177,7 @@ const EnviarCorreoFacturaModal = ({
           console.log(`✅ Carta policía generada: ${nombreArchivo}`);
           break;
 
-        case 'carta_aerolinea':
+        case 'carta-aerolinea':
           if (!factura.Id_Planilla) {
             throw new Error('La factura no tiene planilla asociada para generar carta de aerolínea');
           }
@@ -187,14 +187,14 @@ const EnviarCorreoFacturaModal = ({
           console.log(`✅ Carta aerolínea generada: ${nombreArchivo}`);
           break;
 
-        case 'plan_vallejo':
+        case 'plan-vallejo':
           console.log(`📄 Generando plan vallejo para factura: ${factura.id}`);
           archivoBlob = await generarPlanVallejo(factura.id);
           nombreArchivo = `plan-vallejo-factura-${factura.numero}.pdf`;
           console.log(`✅ Plan vallejo generado: ${nombreArchivo}`);
           break;
 
-        case 'reporte_despacho':
+        case 'reporte-despacho':
           console.log(`📄 Generando reporte despacho para factura: ${factura.id}`);
           archivoBlob = await generarReporteDespacho(factura.id);
           nombreArchivo = `reporte-despacho-factura-${factura.numero}.pdf`;

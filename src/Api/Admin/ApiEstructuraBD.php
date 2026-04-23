@@ -105,6 +105,49 @@ try {
         $stmt_tablas->close();
     }
 
+    // ===== ACCIÓN 2 (NUEVA): EJECUTAR CONSULTA SELECT =====
+    if ($accion === 'query') {
+        $sql = $input['sql'] ?? '';
+
+        // Validar que es un SELECT
+        if (empty($sql) || stripos(trim($sql), 'SELECT') !== 0) {
+            throw new Exception("Solo se permiten consultas SELECT. La consulta debe comenzar con SELECT.");
+        }
+
+        // Prevenir inyección SQL simple
+        $sql_upper = strtoupper(trim($sql));
+        if (preg_match('/(UPDATE|DELETE|DROP|INSERT|ALTER|CREATE|TRUNCATE|REPLACE)/i', $sql_upper)) {
+            throw new Exception("No se permiten operaciones de modificación. Solo SELECT.");
+        }
+
+        // Ejecutar consulta
+        $result_query = $enlace->query($sql);
+
+        if (!$result_query) {
+            throw new Exception("Error en la consulta: " . $enlace->error);
+        }
+
+        $registros = [];
+        while ($fila = $result_query->fetch_assoc()) {
+            $registros[] = $fila;
+        }
+        $result_query->close();
+
+        $respuesta = [
+            "success" => true,
+            "base_de_datos" => $database_actual,
+            "timestamp" => date('Y-m-d H:i:s'),
+            "accion" => "query",
+            "sql" => $sql,
+            "registros" => $registros,
+            "cantidad_registros" => count($registros)
+        ];
+
+        http_response_code(200);
+        echo json_encode($respuesta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        exit;
+    }
+
     // ===== ACCIÓN 2: ESTRUCTURA DETALLADA =====
     if ($accion === 'estructura' || $accion === 'completa') {
         $estructura = [];

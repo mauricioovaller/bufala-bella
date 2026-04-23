@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import EnviarReporteDashboardModal from './EnviarReporteDashboardModal';
 import { fetchDashboardData, fetchVentasRegionCliente, fetchClientesProducto } from '../../services/dashboard/dashboardService';
 import KPICards from './KPICards';
 import ChartProveedoresClientes from './ChartProveedoresClientes';
@@ -8,7 +9,7 @@ import ChartTendencia from './ChartTendencia';
 import ChartClientesProducto from './ChartClientesProducto';
 import FiltrosFecha from './FiltrosFecha';
 import SeccionTransporte from './SeccionTransporte';
-import { APPS_CONFIG } from '../../services/dashboard/dashboardService';
+import { APPS_CONFIG, fechaLocalStr } from '../../services/dashboard/dashboardService';
 import Swal from 'sweetalert2';
 
 /**
@@ -57,6 +58,8 @@ const DashboardDibufala = () => {
     // ============================================
     // ESTADO: Datos principales del dashboard
     // ============================================
+    const dashboardRef = useRef(null);
+    const [modalReporteAbierto, setModalReporteAbierto] = useState(false);
     const [datos, setDatos] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -67,11 +70,11 @@ const DashboardDibufala = () => {
     const [fechaInicio, setFechaInicio] = useState(() => {
         const firstDay = new Date();
         firstDay.setDate(1);
-        return firstDay.toISOString().split('T')[0];
+        return fechaLocalStr(firstDay);
     });
 
     const [fechaFin, setFechaFin] = useState(() => {
-        return new Date().toISOString().split('T')[0];
+        return fechaLocalStr();
     });
 
     // ============================================
@@ -252,130 +255,281 @@ const DashboardDibufala = () => {
     // RENDERIZADO PRINCIPAL
     // ============================================
     return (
-        <div className="p-3 md:p-6 bg-gray-50 min-h-screen">
-            {/* 
+        <>
+            <div ref={dashboardRef} data-dashboard-capture className="p-3 md:p-6 bg-gray-50 min-h-screen">
+                {/* 
         =====================================
         HEADER: Título y botón de actualización
         =====================================
       */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 md:mb-6 pb-4 border-b border-gray-200">
-                <div className="mb-3 lg:mb-0">
-                    <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-800">
-                        {configApp.nombre} - Dashboard
-                    </h1>
-                    <p className="text-sm text-gray-600 mt-1">
-                        Período: {fechaInicio} al {fechaFin}
-                    </p>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 md:mb-6 pb-4 border-b border-gray-200">
+                    <div className="mb-3 lg:mb-0">
+                        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-800">
+                            {configApp.nombre} - Dashboard
+                        </h1>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Período: {fechaInicio} al {fechaFin}
+                        </p>
+                    </div>
+
+                    {/* Botón de actualización */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <button
+                            onClick={handleRecargar}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
+                            title="Recargar datos del dashboard"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Actualizar
+                        </button>
+
+                        <button
+                            onClick={() => setModalReporteAbierto(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
+                            title="Enviar reporte del dashboard por correo"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Enviar reporte
+                        </button>
+                    </div>
                 </div>
 
-                {/* Botón de actualización */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                    <button
-                        onClick={handleRecargar}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
-                        title="Recargar datos del dashboard"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Actualizar
-                    </button>
-                </div>
-            </div>
-
-            {/* 
+                {/* 
         =====================================
         FILTROS: Selección de rango de fechas
         =====================================
       */}
-            <div className="mb-6">
-                <FiltrosFecha
-                    fechaInicio={fechaInicio}
-                    fechaFin={fechaFin}
-                    onFechasCambiadas={handleFechasCambiadas}
-                />
-            </div>
+                <div className="mb-6">
+                    <FiltrosFecha
+                        fechaInicio={fechaInicio}
+                        fechaFin={fechaFin}
+                        onFechasCambiadas={handleFechasCambiadas}
+                    />
+                </div>
 
-            {/* 
+                {/* 
         =====================================
         SECCIÓN VENTAS: Principal y más importante
         =====================================
       */}
-            <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
-                <h2 className="text-xl font-bold mb-6 pb-3 border-b border-gray-100"
-                    style={{ color: configApp.colorVentas }}>
-                    💰 Ventas
-                </h2>
+                <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
+                    <h2 className="text-xl font-bold mb-6 pb-3 border-b border-gray-100"
+                        style={{ color: configApp.colorVentas }}>
+                        💰 Ventas
+                    </h2>
 
-                {datos?.ventas && (
-                    <>
-                        {/* KPIs: Métricas principales de ventas */}
-                        <div className="mb-6">
-                            <KPICards
-                                kpis={datos.ventas.kpis}
-                                tipo="ventas"
-                                color={configApp.colorVentas}
-                            />
-                        </div>
+                    {datos?.ventas && (
+                        <>
+                            {/* KPIs: Métricas principales de ventas */}
+                            <div className="mb-6">
+                                <KPICards
+                                    kpis={datos.ventas.kpis}
+                                    tipo="ventas"
+                                    color={configApp.colorVentas}
+                                />
+                            </div>
 
-                        {/* 
+                            {/* 
               VERSIÓN DESKTOP (≥1280px): Layout de 2 columnas
               - Izquierda: Clientes y regiones
               - Derecha: Productos orgánicos, no orgánicos y clientes por producto
             */}
-                        <div className="hidden xl:grid xl:grid-cols-2 gap-4 md:gap-6 mb-6 items-start">
-                            {/* Columna Izquierda: Top 10 Clientes y Regiones */}
-                            <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                                <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
-                                    Top 10 Clientes
-                                </h3>
-                                <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                                    <ChartProveedoresClientes
-                                        data={datos.ventas.clientes}
-                                        color={configApp.colorVentas}
-                                        tipo="clientes"
-                                        onBarClick={handleClientClick}
-                                        clienteSeleccionadoId={clienteSeleccionado?.id}
-                                    />
+                            <div className="hidden xl:grid xl:grid-cols-2 gap-4 md:gap-6 mb-6 items-start">
+                                {/* Columna Izquierda: Top 10 Clientes y Regiones */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
+                                        Top 10 Clientes
+                                    </h3>
+                                    <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
+                                        <ChartProveedoresClientes
+                                            data={datos.ventas.clientes}
+                                            color={configApp.colorVentas}
+                                            tipo="clientes"
+                                            onBarClick={handleClientClick}
+                                            clienteSeleccionadoId={clienteSeleccionado?.id}
+                                        />
+                                    </div>
+
+                                    {/* Detalle de regiones cuando se selecciona un cliente */}
+                                    {clienteSeleccionado && (
+                                        <div className="mt-4 bg-white border border-gray-200 rounded-lg p-3">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-base font-semibold text-gray-700">
+                                                    Ventas por región: {clienteSeleccionado.nombre}
+                                                </h4>
+                                                <button
+                                                    onClick={limpiarSeleccionCliente}
+                                                    className="text-gray-500 hover:text-gray-700 transition-colors"
+                                                    title="Cerrar selección"
+                                                    aria-label="Cerrar"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            {cargandoRegiones ? (
+                                                <div className="text-center py-4">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                                                    <p className="text-sm text-gray-600">Cargando regiones...</p>
+                                                </div>
+                                            ) : (
+                                                <ChartRegionesCliente
+                                                    data={regionesCliente}
+                                                    clienteNombre={clienteSeleccionado.nombre}
+                                                    color={configApp.colorVentas}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Detalle de regiones cuando se selecciona un cliente */}
-                                {clienteSeleccionado && (
-                                    <div className="mt-4 bg-white border border-gray-200 rounded-lg p-3">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <h4 className="text-base font-semibold text-gray-700">
-                                                Ventas por región: {clienteSeleccionado.nombre}
-                                            </h4>
-                                            <button
-                                                onClick={limpiarSeleccionCliente}
-                                                className="text-gray-500 hover:text-gray-700 transition-colors"
-                                                title="Cerrar selección"
-                                                aria-label="Cerrar"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        {cargandoRegiones ? (
-                                            <div className="text-center py-4">
-                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                                                <p className="text-sm text-gray-600">Cargando regiones...</p>
+                                {/* Columna Derecha: Productos y Clientes por Producto */}
+                                <div className="flex flex-col gap-4">
+                                    {/* Grid de productos: Orgánicos y No Orgánicos */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Productos Orgánicos */}
+                                        <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                            <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
+                                                Productos Orgánicos
+                                            </h3>
+                                            <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
+                                                {datos.ventas.productos?.organicos?.length > 0 ? (
+                                                    <ChartProductos
+                                                        data={datos.ventas.productos.organicos}
+                                                        color={PRODUCT_COLORS.ORGANICO}
+                                                        tipo="ventas"
+                                                        onBarClick={(producto) => handleProductoClick(producto, 'Orgánico', PRODUCT_COLORS.ORGANICO)}
+                                                        productoSeleccionadoId={productoSeleccionado?.id}
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full text-gray-500">
+                                                        Sin datos
+                                                    </div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <ChartRegionesCliente
-                                                data={regionesCliente}
-                                                clienteNombre={clienteSeleccionado.nombre}
-                                                color={configApp.colorVentas}
-                                            />
-                                        )}
+                                        </div>
+
+                                        {/* Productos Convencionales */}
+                                        <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                            <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
+                                                Productos Convencionales
+                                            </h3>
+                                            <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
+                                                {datos.ventas.productos?.noOrganicos?.length > 0 ? (
+                                                    <ChartProductos
+                                                        data={datos.ventas.productos.noOrganicos}
+                                                        color={PRODUCT_COLORS.NO_ORGANICO}
+                                                        tipo="ventas"
+                                                        onBarClick={(producto) => handleProductoClick(producto, 'Convencional', PRODUCT_COLORS.NO_ORGANICO)}
+                                                        productoSeleccionadoId={productoSeleccionado?.id}
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full text-gray-500">
+                                                        Sin datos
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                )}
+
+                                    {/* Detalle de clientes cuando se selecciona un producto */}
+                                    {productoSeleccionado && (
+                                        <div className="bg-white border border-gray-200 rounded-lg p-3">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h3 className="text-base md:text-lg font-semibold text-gray-800">
+                                                    Clientes que compraron: {productoSeleccionado.categoria} - {productoSeleccionado.producto}
+                                                </h3>
+                                                <button
+                                                    onClick={limpiarSeleccionProducto}
+                                                    className="text-gray-500 hover:text-gray-700 transition-colors"
+                                                    title="Cerrar selección"
+                                                    aria-label="Cerrar"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            {cargandoClientesProducto ? (
+                                                <div className="text-center py-4">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                                                    <p className="text-sm text-gray-600">Cargando clientes...</p>
+                                                </div>
+                                            ) : (
+                                                <div className="min-h-[250px] md:min-h-[300px] h-auto overflow-hidden">
+                                                    <ChartClientesProducto
+                                                        data={clientesProducto}
+                                                        productoNombre={`${productoSeleccionado.categoria} - ${productoSeleccionado.producto}`}
+                                                        color={productoSeleccionado.color}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Columna Derecha: Productos y Clientes por Producto */}
-                            <div className="flex flex-col gap-4">
-                                {/* Grid de productos: Orgánicos y No Orgánicos */}
+                            {/* 
+              VERSIÓN MÓVIL/TABLET (<1280px): Layout en columna única
+              Mismos gráficos que desktop pero apilados verticalmente
+            */}
+                            <div className="block xl:hidden space-y-4 mb-6">
+                                {/* Top 10 Clientes */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
+                                        Top 10 Clientes
+                                    </h3>
+                                    <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
+                                        <ChartProveedoresClientes
+                                            data={datos.ventas.clientes}
+                                            color={configApp.colorVentas}
+                                            tipo="clientes"
+                                            onBarClick={handleClientClick}
+                                            clienteSeleccionadoId={clienteSeleccionado?.id}
+                                        />
+                                    </div>
+
+                                    {/* Detalle de regiones en móvil */}
+                                    {clienteSeleccionado && (
+                                        <div className="mt-4 bg-white border border-gray-200 rounded-lg p-3">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-base font-semibold text-gray-700">
+                                                    Ventas por región: {clienteSeleccionado.nombre}
+                                                </h4>
+                                                <button
+                                                    onClick={limpiarSeleccionCliente}
+                                                    className="text-gray-500 hover:text-gray-700 transition-colors"
+                                                    title="Cerrar selección"
+                                                    aria-label="Cerrar"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            {cargandoRegiones ? (
+                                                <div className="text-center py-4">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                                                    <p className="text-sm text-gray-600">Cargando regiones...</p>
+                                                </div>
+                                            ) : (
+                                                <ChartRegionesCliente
+                                                    data={regionesCliente}
+                                                    clienteNombre={clienteSeleccionado.nombre}
+                                                    color={configApp.colorVentas}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Productos: Orgánicos y No Orgánicos */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Productos Orgánicos */}
                                     <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
@@ -422,7 +576,7 @@ const DashboardDibufala = () => {
                                     </div>
                                 </div>
 
-                                {/* Detalle de clientes cuando se selecciona un producto */}
+                                {/* Detalle de clientes por producto en móvil */}
                                 {productoSeleccionado && (
                                     <div className="bg-white border border-gray-200 rounded-lg p-3">
                                         <div className="flex justify-between items-center mb-2">
@@ -457,247 +611,119 @@ const DashboardDibufala = () => {
                                     </div>
                                 )}
                             </div>
-                        </div>
 
-                        {/* 
-              VERSIÓN MÓVIL/TABLET (<1280px): Layout en columna única
-              Mismos gráficos que desktop pero apilados verticalmente
-            */}
-                        <div className="block xl:hidden space-y-4 mb-6">
-                            {/* Top 10 Clientes */}
+                            {/* Gráfico de Tendencia: Se muestra en todos los tamaños de pantalla */}
                             <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
                                 <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
-                                    Top 10 Clientes
+                                    Tendencia de Ventas
                                 </h3>
-                                <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                                    <ChartProveedoresClientes
-                                        data={datos.ventas.clientes}
-                                        color={configApp.colorVentas}
-                                        tipo="clientes"
-                                        onBarClick={handleClientClick}
-                                        clienteSeleccionadoId={clienteSeleccionado?.id}
-                                    />
-                                </div>
-
-                                {/* Detalle de regiones en móvil */}
-                                {clienteSeleccionado && (
-                                    <div className="mt-4 bg-white border border-gray-200 rounded-lg p-3">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <h4 className="text-base font-semibold text-gray-700">
-                                                Ventas por región: {clienteSeleccionado.nombre}
-                                            </h4>
-                                            <button
-                                                onClick={limpiarSeleccionCliente}
-                                                className="text-gray-500 hover:text-gray-700 transition-colors"
-                                                title="Cerrar selección"
-                                                aria-label="Cerrar"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        {cargandoRegiones ? (
-                                            <div className="text-center py-4">
-                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                                                <p className="text-sm text-gray-600">Cargando regiones...</p>
-                                            </div>
-                                        ) : (
-                                            <ChartRegionesCliente
-                                                data={regionesCliente}
-                                                clienteNombre={clienteSeleccionado.nombre}
-                                                color={configApp.colorVentas}
-                                            />
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Productos: Orgánicos y No Orgánicos */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Productos Orgánicos */}
-                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
-                                        Productos Orgánicos
-                                    </h3>
-                                    <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                                        {datos.ventas.productos?.organicos?.length > 0 ? (
-                                            <ChartProductos
-                                                data={datos.ventas.productos.organicos}
-                                                color={PRODUCT_COLORS.ORGANICO}
-                                                tipo="ventas"
-                                                onBarClick={(producto) => handleProductoClick(producto, 'Orgánico', PRODUCT_COLORS.ORGANICO)}
-                                                productoSeleccionadoId={productoSeleccionado?.id}
-                                            />
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full text-gray-500">
-                                                Sin datos
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Productos Convencionales */}
-                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
-                                        Productos Convencionales
-                                    </h3>
-                                    <div className={DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                                        {datos.ventas.productos?.noOrganicos?.length > 0 ? (
-                                            <ChartProductos
-                                                data={datos.ventas.productos.noOrganicos}
-                                                color={PRODUCT_COLORS.NO_ORGANICO}
-                                                tipo="ventas"
-                                                onBarClick={(producto) => handleProductoClick(producto, 'Convencional', PRODUCT_COLORS.NO_ORGANICO)}
-                                                productoSeleccionadoId={productoSeleccionado?.id}
-                                            />
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full text-gray-500">
-                                                Sin datos
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Detalle de clientes por producto en móvil */}
-                            {productoSeleccionado && (
-                                <div className="bg-white border border-gray-200 rounded-lg p-3">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-base md:text-lg font-semibold text-gray-800">
-                                            Clientes que compraron: {productoSeleccionado.categoria} - {productoSeleccionado.producto}
-                                        </h3>
-                                        <button
-                                            onClick={limpiarSeleccionProducto}
-                                            className="text-gray-500 hover:text-gray-700 transition-colors"
-                                            title="Cerrar selección"
-                                            aria-label="Cerrar"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    {cargandoClientesProducto ? (
-                                        <div className="text-center py-4">
-                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                                            <p className="text-sm text-gray-600">Cargando clientes...</p>
-                                        </div>
-                                    ) : (
-                                        <div className="min-h-[250px] md:min-h-[300px] h-auto overflow-hidden">
-                                            <ChartClientesProducto
-                                                data={clientesProducto}
-                                                productoNombre={`${productoSeleccionado.categoria} - ${productoSeleccionado.producto}`}
-                                                color={productoSeleccionado.color}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Gráfico de Tendencia: Se muestra en todos los tamaños de pantalla */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                            <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">
-                                Tendencia de Ventas
-                            </h3>
-                            <div style={{ height: DIMENSIONS.CHART_HEIGHT }}>
-                                <ChartTendencia
-                                    data={datos.ventas.tendencia}
-                                    color={configApp.colorVentas}
-                                />
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/* 
-        =====================================
-        SECCIÓN TRANSPORTE: Costos de Transporte
-        =====================================
-        Muestra KPIs, gráficos de tendencia y comparación
-        de costos de transporte vs estibas pagas
-      */}
-            <SeccionTransporte 
-                fechaInicio={fechaInicio}
-                fechaFin={fechaFin}
-                configApp={configApp}
-            />
-
-            {/* 
-        =====================================
-        SECCIÓN COMPRAS (Actualmente oculta)
-        =====================================
-        Se mostrará cuando SHOW_PURCHASES sea true
-        Contiene: KPIs, Proveedores, Productos y Tendencia
-      */}
-            {DASHBOARD_CONFIG.SHOW_PURCHASES && (
-                <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
-                    <h2 className="text-xl font-bold mb-6 pb-3 border-b border-gray-100"
-                        style={{ color: configApp.colorCompras }}>
-                        📦 Compras
-                    </h2>
-
-                    {datos?.compras && (
-                        <>
-                            {/* KPIs: Métricas principales de compras */}
-                            <div className="mb-6">
-                                <KPICards
-                                    kpis={datos.compras.kpis}
-                                    tipo="compras"
-                                    color={configApp.colorCompras}
-                                />
-                            </div>
-
-                            {/* Grid: Proveedores y Productos más comprados */}
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 mb-6 items-start">
-                                {/* Top 10 Proveedores */}
-                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3">
-                                        Top 10 Proveedores
-                                    </h3>
-                                    <div style={{ height: DIMENSIONS.CHART_HEIGHT_EXTENDED }}>
-                                        <ChartProveedoresClientes
-                                            data={datos.compras.proveedores}
-                                            color={configApp.colorCompras}
-                                            tipo="proveedores"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Productos Más Comprados */}
-                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3">
-                                        Productos Más Comprados
-                                    </h3>
-                                    <div style={{ height: DIMENSIONS.CHART_HEIGHT_EXTENDED }}>
-                                        <ChartProductos
-                                            data={datos.compras.productos}
-                                            color={configApp.colorCompras}
-                                            tipo="compras"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Tendencia de Compras */}
-                            <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-                                <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3">
-                                    Tendencia de Compras
-                                </h3>
-                                <div style={{ height: DIMENSIONS.CHART_HEIGHT_LARGE }}>
+                                <div style={{ height: DIMENSIONS.CHART_HEIGHT }}>
                                     <ChartTendencia
-                                        data={datos.compras.tendencia}
-                                        color={configApp.colorCompras}
+                                        data={datos.ventas.tendencia}
+                                        color={configApp.colorVentas}
                                     />
                                 </div>
                             </div>
                         </>
                     )}
                 </div>
-            )}
-        </div>
+
+                {/* 
+        =====================================
+        SECCIÓN TRANSPORTE: Costos de Transporte
+        =====================================
+        Muestra KPIs, gráficos de tendencia y comparación
+        de costos de transporte vs estibas pagas
+      */}
+                <SeccionTransporte
+                    fechaInicio={fechaInicio}
+                    fechaFin={fechaFin}
+                    configApp={configApp}
+                    pesoNetoTotal={datos?.ventas?.kpis?.pesoNetoTotal ?? 0}
+                />
+
+                {/* 
+        =====================================
+        SECCIÓN COMPRAS (Actualmente oculta)
+        =====================================
+        Se mostrará cuando SHOW_PURCHASES sea true
+        Contiene: KPIs, Proveedores, Productos y Tendencia
+      */}
+                {DASHBOARD_CONFIG.SHOW_PURCHASES && (
+                    <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                        <h2 className="text-xl font-bold mb-6 pb-3 border-b border-gray-100"
+                            style={{ color: configApp.colorCompras }}>
+                            📦 Compras
+                        </h2>
+
+                        {datos?.compras && (
+                            <>
+                                {/* KPIs: Métricas principales de compras */}
+                                <div className="mb-6">
+                                    <KPICards
+                                        kpis={datos.compras.kpis}
+                                        tipo="compras"
+                                        color={configApp.colorCompras}
+                                    />
+                                </div>
+
+                                {/* Grid: Proveedores y Productos más comprados */}
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 mb-6 items-start">
+                                    {/* Top 10 Proveedores */}
+                                    <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                        <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3">
+                                            Top 10 Proveedores
+                                        </h3>
+                                        <div style={{ height: DIMENSIONS.CHART_HEIGHT_EXTENDED }}>
+                                            <ChartProveedoresClientes
+                                                data={datos.compras.proveedores}
+                                                color={configApp.colorCompras}
+                                                tipo="proveedores"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Productos Más Comprados */}
+                                    <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                        <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3">
+                                            Productos Más Comprados
+                                        </h3>
+                                        <div style={{ height: DIMENSIONS.CHART_HEIGHT_EXTENDED }}>
+                                            <ChartProductos
+                                                data={datos.compras.productos}
+                                                color={configApp.colorCompras}
+                                                tipo="compras"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Tendencia de Compras */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
+                                    <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3">
+                                        Tendencia de Compras
+                                    </h3>
+                                    <div style={{ height: DIMENSIONS.CHART_HEIGHT_LARGE }}>
+                                        <ChartTendencia
+                                            data={datos.compras.tendencia}
+                                            color={configApp.colorCompras}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <EnviarReporteDashboardModal
+                visible={modalReporteAbierto}
+                onCerrar={() => setModalReporteAbierto(false)}
+                dashboardRef={dashboardRef}
+                fechaInicio={fechaInicio}
+                fechaFin={fechaFin}
+            />
+        </>
     );
 };
 

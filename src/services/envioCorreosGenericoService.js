@@ -253,6 +253,14 @@ function generarNombreDocumento(tipoDocumento, datos) {
   const fecha = new Date().toISOString().split("T")[0];
   const numero = datos.numero || datos.id || "documento";
 
+  // Patrón para envío múltiple: "factura-{id}" → busca el número real en datos.facturas
+  if (tipoDocumento.startsWith("factura-")) {
+    const factId = tipoDocumento.replace("factura-", "");
+    const factItem = datos.facturas?.find((f) => String(f.id) === factId);
+    const factNumero = factItem?.numero || factId;
+    return `factura-${factNumero}-${fecha}.pdf`;
+  }
+
   const nombres = {
     factura: `factura-${numero}-${fecha}.pdf`,
     "carta-policia": `carta-policia-${numero}-${fecha}.pdf`,

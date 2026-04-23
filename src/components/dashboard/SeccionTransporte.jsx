@@ -12,7 +12,7 @@ import Swal from 'sweetalert2';
  * Sección principal de transporte en el dashboard
  * Contiene KPIs, gráficos de tendencia y comparación
  */
-const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
+const SeccionTransporte = ({ fechaInicio, fechaFin, pesoNetoTotal = 0 }) => {
     // Estados para datos y carga
     const [datos, setDatos] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
             } catch (err) {
                 console.error('Error cargando datos de transporte:', err);
                 setError(err.message);
-                
+
                 // Mostrar alerta de error
                 Swal.fire({
                     icon: 'error',
@@ -53,7 +53,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
         try {
             const data = await fetchCostosTransporte('dibufala', fechaInicio, fechaFin);
             setDatos(data);
-            
+
             // Mostrar notificación de éxito
             Swal.fire({
                 icon: 'success',
@@ -85,7 +85,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                            <span 
+                            <span
                                 className="inline-flex items-center justify-center w-8 h-8 rounded-full mr-3"
                                 style={{ backgroundColor: `${TRANSPORTE_CONFIG.colorPrincipal}20`, color: TRANSPORTE_CONFIG.colorPrincipal }}
                             >
@@ -98,10 +98,10 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                         </p>
                     </div>
                 </div>
-                
+
                 <div className="flex flex-col items-center justify-center min-h-[400px]">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 mb-4"
-                         style={{ borderColor: TRANSPORTE_CONFIG.colorPrincipal }}></div>
+                        style={{ borderColor: TRANSPORTE_CONFIG.colorPrincipal }}></div>
                     <p className="text-gray-600">Cargando datos de transporte...</p>
                 </div>
             </div>
@@ -115,7 +115,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                            <span 
+                            <span
                                 className="inline-flex items-center justify-center w-8 h-8 rounded-full mr-3"
                                 style={{ backgroundColor: `${TRANSPORTE_CONFIG.colorPrincipal}20`, color: TRANSPORTE_CONFIG.colorPrincipal }}
                             >
@@ -128,11 +128,11 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                         </p>
                     </div>
                 </div>
-                
+
                 <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
                     <div className="text-red-500 mb-4">
                         <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                                 d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
@@ -157,7 +157,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                            <span 
+                            <span
                                 className="inline-flex items-center justify-center w-8 h-8 rounded-full mr-3"
                                 style={{ backgroundColor: `${TRANSPORTE_CONFIG.colorPrincipal}20`, color: TRANSPORTE_CONFIG.colorPrincipal }}
                             >
@@ -169,35 +169,35 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             Período: {fechaInicio} al {fechaFin}
                         </p>
                     </div>
-                    
+
                     <div className="flex items-center gap-3">
                         {/* Botón de ayuda (móvil) */}
                         <div className="sm:hidden">
                             <AyudaTransporte valorEstiba={80500} />
                         </div>
-                        
+
                         <button
                             onClick={handleRecargar}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                            style={{ 
+                            style={{
                                 backgroundColor: TRANSPORTE_CONFIG.colorPrincipal,
                                 color: 'white'
                             }}
                             disabled={recargando}
                         >
                             <svg className={`w-4 h-4 ${recargando ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                             {recargando ? 'Actualizando...' : 'Actualizar'}
                         </button>
                     </div>
                 </div>
-                
+
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
                     <div className="text-blue-500 mb-4">
                         <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                                 d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                         </svg>
                     </div>
@@ -221,7 +221,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
             <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 pb-4 border-b border-gray-100">
                 <div className="mb-3 lg:mb-0">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                        <span 
+                        <span
                             className="inline-flex items-center justify-center w-8 h-8 rounded-full mr-3"
                             style={{ backgroundColor: `${TRANSPORTE_CONFIG.colorPrincipal}20`, color: TRANSPORTE_CONFIG.colorPrincipal }}
                         >
@@ -235,10 +235,10 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                         </p>
                         {datos.resumen.diasConDatos > 0 && (
                             <span className="text-xs font-medium px-2 py-1 rounded-full"
-                                  style={{ 
-                                      backgroundColor: `${TRANSPORTE_CONFIG.colorPrincipal}10`,
-                                      color: TRANSPORTE_CONFIG.colorPrincipal
-                                  }}>
+                                style={{
+                                    backgroundColor: `${TRANSPORTE_CONFIG.colorPrincipal}10`,
+                                    color: TRANSPORTE_CONFIG.colorPrincipal
+                                }}>
                                 {datos.resumen.diasConDatos} días con datos
                             </span>
                         )}
@@ -251,12 +251,12 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                     <div className="hidden sm:block">
                         <AyudaTransporte valorEstiba={datos?.configuracion?.valorEstiba || 80500} />
                     </div>
-                    
+
                     {/* Botón de actualización */}
                     <button
                         onClick={handleRecargar}
                         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:shadow-md"
-                        style={{ 
+                        style={{
                             backgroundColor: TRANSPORTE_CONFIG.colorPrincipal,
                             color: 'white'
                         }}
@@ -264,7 +264,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                         title="Actualizar datos de transporte"
                     >
                         <svg className={`w-4 h-4 ${recargando ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                         {recargando ? 'Actualizando...' : 'Actualizar'}
@@ -277,7 +277,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
             ===================================== */}
             {datos.resumen.diasConDatos > 0 && (
                 <div className="mb-6 p-4 rounded-lg"
-                     style={{ backgroundColor: TRANSPORTE_CONFIG.colorFondo, border: `1px solid ${TRANSPORTE_CONFIG.colorBorde}` }}>
+                    style={{ backgroundColor: TRANSPORTE_CONFIG.colorFondo, border: `1px solid ${TRANSPORTE_CONFIG.colorBorde}` }}>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="text-center">
                             <div className="text-2xl font-bold" style={{ color: TRANSPORTE_CONFIG.colorPrincipal }}>
@@ -298,9 +298,9 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             <div className="text-sm text-gray-600">Camiones utilizados</div>
                         </div>
                     </div>
-                <div className="mt-3 text-center text-xs text-gray-500">
-                    💡 Valor por estiba: {datos.configuracion.valorEstibaFormateado} (se paga cuando un pedido tiene 20+ cajas)
-                </div>
+                    <div className="mt-3 text-center text-xs text-gray-500">
+                        💡 Valor por estiba: {datos.configuracion.valorEstibaFormateado} (se paga cuando un pedido tiene 20+ cajas)
+                    </div>
                 </div>
             )}
 
@@ -312,9 +312,10 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                     <span className="mr-2" style={{ color: TRANSPORTE_CONFIG.colorPrincipal }}>📊</span>
                     Métricas Clave
                 </h3>
-                <KPICardsTransporte 
+                <KPICardsTransporte
                     kpis={datos.kpis}
                     colorPrincipal={TRANSPORTE_CONFIG.colorPrincipal}
+                    pesoNetoTotal={pesoNetoTotal}
                 />
             </div>
 
@@ -326,7 +327,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                     <span className="mr-2" style={{ color: TRANSPORTE_CONFIG.colorPrincipal }}>📈</span>
                     Análisis Gráfico
                 </h3>
-                
+
                 <div className="grid grid-cols-3 gap-6 mb-6">
                     {/* Gráfico 1: Tendencia de fletes diarios */}
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -339,7 +340,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             </span>
                         </div>
                         <div className={TRANSPORTE_DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                            <ChartFletesDiarios 
+                            <ChartFletesDiarios
                                 data={datos.graficos.fletes}
                                 color={TRANSPORTE_CONFIG.colorPrincipal}
                             />
@@ -357,7 +358,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             </span>
                         </div>
                         <div className={TRANSPORTE_DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                            <ChartEstibasDiarias 
+                            <ChartEstibasDiarias
                                 data={datos.graficos.estibas}
                                 color="#10B981"
                                 valorEstiba={datos.configuracion.valorEstiba}
@@ -376,7 +377,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             </span>
                         </div>
                         <div className={TRANSPORTE_DIMENSIONS.CHART_CONTAINER_HEIGHT}>
-                            <ChartComparacionAcumulada 
+                            <ChartComparacionAcumulada
                                 data={datos.graficos.comparacion}
                                 colorFletes={TRANSPORTE_CONFIG.colorPrincipal}
                                 colorEstibas="#10B981"
@@ -394,7 +395,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                     <span className="mr-2" style={{ color: TRANSPORTE_CONFIG.colorPrincipal }}>📈</span>
                     Análisis Gráfico
                 </h3>
-                
+
                 <div className="space-y-6">
                     {/* Gráfico 1: Tendencia de fletes diarios (móvil) */}
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -407,7 +408,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             </span>
                         </div>
                         <div className={TRANSPORTE_DIMENSIONS.CHART_CONTAINER_HEIGHT_MOBILE}>
-                            <ChartFletesDiarios 
+                            <ChartFletesDiarios
                                 data={datos.graficos.fletes}
                                 color={TRANSPORTE_CONFIG.colorPrincipal}
                             />
@@ -425,7 +426,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             </span>
                         </div>
                         <div className={TRANSPORTE_DIMENSIONS.CHART_CONTAINER_HEIGHT_MOBILE}>
-                            <ChartEstibasDiarias 
+                            <ChartEstibasDiarias
                                 data={datos.graficos.estibas}
                                 color="#10B981"
                                 valorEstiba={datos.configuracion.valorEstiba}
@@ -444,7 +445,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
                             </span>
                         </div>
                         <div className={TRANSPORTE_DIMENSIONS.CHART_CONTAINER_HEIGHT_MOBILE}>
-                            <ChartComparacionAcumulada 
+                            <ChartComparacionAcumulada
                                 data={datos.graficos.comparacion}
                                 colorFletes={TRANSPORTE_CONFIG.colorPrincipal}
                                 colorEstibas="#10B981"
@@ -457,7 +458,7 @@ const SeccionTransporte = ({ fechaInicio, fechaFin }) => {
             {/* =====================================
                 PIE DE PÁGINA: Información adicional
             ===================================== */}
-                <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="mt-8 pt-6 border-t border-gray-200">
                 <div className="flex flex-col md:flex-row md:items-center justify-between text-sm text-gray-500">
                     <div>
                         <p className="mb-1">

@@ -1,5 +1,6 @@
 // src/components/dashboard/ChartCostosVsEstibas.jsx
 import React from 'react';
+import { formatearFechaLocal } from '../../services/dashboard/dashboardService';
 import {
     BarChart,
     Bar,
@@ -61,12 +62,7 @@ const ChartCostosVsEstibas = ({ data, colorCosto = '#8B5CF6', colorEstibas = '#1
                     {/* Fecha */}
                     <div className="mb-3 pb-2 border-b border-gray-100">
                         <p className="font-semibold text-gray-800 text-sm">
-                            {new Date(data.fecha).toLocaleDateString('es-ES', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                            })}
+                            {formatearFechaLocal(data.fecha)}
                         </p>
                     </div>
 
@@ -118,8 +114,8 @@ const ChartCostosVsEstibas = ({ data, colorCosto = '#8B5CF6', colorEstibas = '#1
                             <div className="flex items-center justify-between mb-1">
                                 <span className="text-sm font-medium text-gray-700">Relación Costo/Estiba:</span>
                                 <span className={`text-sm font-bold ${data.esBajaRelacion ? 'text-green-600' :
-                                        data.esMediaRelacion ? 'text-yellow-600' :
-                                            'text-red-600'
+                                    data.esMediaRelacion ? 'text-yellow-600' :
+                                        'text-red-600'
                                     }`}>
                                     {data.relacionPorcentaje}%
                                 </span>

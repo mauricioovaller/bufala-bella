@@ -1,5 +1,6 @@
 // src/components/dashboard/FiltrosFecha.jsx
 import React, { useState } from 'react';
+import { fechaLocalStr } from '../../services/dashboard/dashboardService';
 
 const FiltrosFecha = ({ fechaInicio, fechaFin, onFechasCambiadas }) => {
     const [tempFechaInicio, setTempFechaInicio] = useState(fechaInicio);
@@ -10,11 +11,11 @@ const FiltrosFecha = ({ fechaInicio, fechaFin, onFechasCambiadas }) => {
     };
 
     const resetearFiltro = () => {
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = fechaLocalStr();
         const primerDiaMes = new Date();
         primerDiaMes.setDate(1);
-        const inicioMes = primerDiaMes.toISOString().split('T')[0];
-        
+        const inicioMes = fechaLocalStr(primerDiaMes);
+
         setTempFechaInicio(inicioMes);
         setTempFechaFin(hoy);
         onFechasCambiadas(inicioMes, hoy);
@@ -24,10 +25,10 @@ const FiltrosFecha = ({ fechaInicio, fechaFin, onFechasCambiadas }) => {
         const fin = new Date();
         const inicio = new Date();
         inicio.setDate(fin.getDate() - dias);
-        
-        const inicioStr = inicio.toISOString().split('T')[0];
-        const finStr = fin.toISOString().split('T')[0];
-        
+
+        const inicioStr = fechaLocalStr(inicio);
+        const finStr = fechaLocalStr(fin);
+
         setTempFechaInicio(inicioStr);
         setTempFechaFin(finStr);
         onFechasCambiadas(inicioStr, finStr);
@@ -36,7 +37,7 @@ const FiltrosFecha = ({ fechaInicio, fechaFin, onFechasCambiadas }) => {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Filtros de Fecha</h3>
-            
+
             <div className="flex flex-col md:flex-row md:items-center gap-4">
                 {/* Rápidos */}
                 <div className="flex flex-wrap gap-2">
@@ -79,7 +80,7 @@ const FiltrosFecha = ({ fechaInicio, fechaFin, onFechasCambiadas }) => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
-                    
+
                     <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Fecha fin

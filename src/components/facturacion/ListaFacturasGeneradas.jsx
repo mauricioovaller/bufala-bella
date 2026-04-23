@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { obtenerFacturasGeneradas, obtenerFacturasConFiltros, generarFacturaPDF, eliminarFacturaCompleta } from '../../services/facturacionService';
 import ModalVisorPreliminar from '../ModalVisorPreliminar';
 import EnviarCorreoFacturaModal from './EnviarCorreoFacturaModal';
+import EnviarCorreoMultipleFacturasModal from './EnviarCorreoMultipleFacturasModal';
 import Swal from 'sweetalert2';
 
 const ListaFacturasGeneradas = ({
@@ -15,7 +16,7 @@ const ListaFacturasGeneradas = ({
     const [facturas, setFacturas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+
     // Estados para el modal de PDF
     const [mostrarModalPDF, setMostrarModalPDF] = useState(false);
     const [urlPDF, setUrlPDF] = useState(null);
@@ -23,10 +24,14 @@ const ListaFacturasGeneradas = ({
 
     // Estados para eliminar factura
     const [eliminandoFactura, setEliminandoFactura] = useState(null);
-    
+
     // Estados para envío de correo
     const [mostrarModalCorreo, setMostrarModalCorreo] = useState(false);
     const [facturaParaEnviar, setFacturaParaEnviar] = useState(null);
+
+    // Estados para envío múltiple (modoConsulta)
+    const [idsEnvioMultiple, setIdsEnvioMultiple] = useState([]);
+    const [mostrarModalCorreoMultiple, setMostrarModalCorreoMultiple] = useState(false);
 
     const filtrosAnteriores = useRef({ fechaDesde: '', fechaHasta: '' });
 
@@ -39,18 +44,18 @@ const ListaFacturasGeneradas = ({
 
             // Para modo consulta, también validamos si hay filtros específicos
             if (modoConsulta) {
-                const filtrosIguales = 
-                    filtros.fechaDesde === filtrosAnteriores.current.fechaDesde && 
+                const filtrosIguales =
+                    filtros.fechaDesde === filtrosAnteriores.current.fechaDesde &&
                     filtros.fechaHasta === filtrosAnteriores.current.fechaHasta &&
                     filtros.tipoFactura === filtrosAnteriores.current.tipoFactura &&
                     filtros.numeroFactura === filtrosAnteriores.current.numeroFactura;
-                
+
                 if (filtrosIguales) {
                     return;
                 }
             } else {
                 // Para modo creación, solo comparamos fechas
-                if (filtros.fechaDesde === filtrosAnteriores.current.fechaDesde && 
+                if (filtros.fechaDesde === filtrosAnteriores.current.fechaDesde &&
                     filtros.fechaHasta === filtrosAnteriores.current.fechaHasta) {
                     return;
                 }
@@ -68,7 +73,7 @@ const ListaFacturasGeneradas = ({
 
             try {
                 let resultado;
-                
+
                 if (modoConsulta) {
                     // Usar filtros avanzados para modo consulta
                     resultado = await obtenerFacturasConFiltros(filtros);
@@ -79,16 +84,16 @@ const ListaFacturasGeneradas = ({
 
                 if (resultado.facturas && resultado.facturas.length > 0) {
                     // Ordenar por Id_EncabInvoice descendente (más reciente primero)
-                    const facturasOrdenadas = resultado.facturas.sort((a, b) => 
+                    const facturasOrdenadas = resultado.facturas.sort((a, b) =>
                         b.Id_EncabInvoice - a.Id_EncabInvoice
                     );
-                    
+
                     const facturasConSeleccion = facturasOrdenadas.map(factura => ({
                         ...factura,
                         seleccionada: false
                     }));
                     setFacturas(facturasConSeleccion);
-                    
+
                     // Actualizar estadísticas si se proporciona callback
                     if (onEstadisticasChange) {
                         onEstadisticasChange(facturasConSeleccion);
@@ -122,7 +127,7 @@ const ListaFacturasGeneradas = ({
 
             const seleccionadas = nuevasFacturas.filter(f => f.seleccionada);
             onFacturasChange(seleccionadas);
-            
+
             return nuevasFacturas;
         });
     };
@@ -138,7 +143,7 @@ const ListaFacturasGeneradas = ({
 
             const seleccionadas = nuevasFacturas.filter(f => f.seleccionada);
             onFacturasChange(seleccionadas);
-            
+
             return nuevasFacturas;
         });
     };
@@ -146,7 +151,7 @@ const ListaFacturasGeneradas = ({
     // Función: Ver factura con PDF
     const handleVerFactura = async (facturaId) => {
         setGenerandoPDF(true);
-        
+
         try {
             const pdfBlob = await generarFacturaPDF(facturaId);
             const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -221,7 +226,7 @@ const ListaFacturasGeneradas = ({
 
         try {
             const resultado = await eliminarFacturaCompleta(facturaId, numeroFactura, tipoPedido);
-            
+
             if (resultado.success) {
                 // Mostrar SweetAlert de éxito
                 await Swal.fire({
@@ -236,7 +241,7 @@ const ListaFacturasGeneradas = ({
 
                 // Recargar la lista de facturas
                 const resultadoActualizado = await obtenerFacturasGeneradas(filtros.fechaDesde, filtros.fechaHasta);
-                
+
                 if (resultadoActualizado.facturas && resultadoActualizado.facturas.length > 0) {
                     const facturasConSeleccion = resultadoActualizado.facturas.map(factura => ({
                         ...factura,
@@ -254,7 +259,7 @@ const ListaFacturasGeneradas = ({
             }
         } catch (error) {
             console.error('Error al eliminar factura:', error);
-            
+
             await Swal.fire({
                 icon: 'error',
                 title: 'Error',
@@ -275,6 +280,27 @@ const ListaFacturasGeneradas = ({
             setUrlPDF(null);
         }
     };
+
+    // Función: Alternar selección de factura para envío múltiple
+    const handleToggleEnvioMultiple = (facturaId) => {
+        setIdsEnvioMultiple(prev =>
+            prev.includes(facturaId)
+                ? prev.filter(id => id !== facturaId)
+                : [...prev, facturaId]
+        );
+    };
+
+    // Función: Abrir modal de envío múltiple con las facturas seleccionadas
+    const handleEnviarSeleccionadas = () => {
+        setMostrarModalCorreoMultiple(true);
+    };
+
+    // Facturas seleccionadas para envío múltiple
+    const facturasParaEnvioMultiple = facturas.filter(f => idsEnvioMultiple.includes(f.id));
+
+    // Validar que todas las facturas seleccionadas sean del mismo día
+    const todasMismaFecha = facturasParaEnvioMultiple.length >= 2 &&
+        facturasParaEnvioMultiple.every(f => f.fecha === facturasParaEnvioMultiple[0].fecha);
 
     const facturasActualesSeleccionadas = facturas.filter(factura => factura.seleccionada);
 
@@ -337,6 +363,36 @@ const ListaFacturasGeneradas = ({
                             </button>
                         </div>
                     )}
+                    {modoConsulta && idsEnvioMultiple.length >= 2 && (
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs sm:text-sm text-gray-600">
+                                    {idsEnvioMultiple.length} seleccionadas
+                                </span>
+                                {todasMismaFecha ? (
+                                    <button
+                                        onClick={handleEnviarSeleccionadas}
+                                        className="bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1"
+                                    >
+                                        📧 Enviar {idsEnvioMultiple.length} seleccionadas
+                                    </button>
+                                ) : (
+                                    <button
+                                        disabled
+                                        className="bg-gray-300 text-gray-500 px-3 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium cursor-not-allowed flex items-center gap-1"
+                                        title="Solo se pueden enviar juntas facturas del mismo día"
+                                    >
+                                        📧 Enviar seleccionadas
+                                    </button>
+                                )}
+                            </div>
+                            {!todasMismaFecha && (
+                                <p className="text-xs text-amber-600">
+                                    ⚠️ Solo se pueden enviar juntas facturas del mismo día
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* LISTA DE FACTURAS */}
@@ -349,19 +405,26 @@ const ListaFacturasGeneradas = ({
                         facturas.map((factura) => (
                             <div
                                 key={factura.id}
-                                className={`border-2 rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all duration-200 ${
-                                    factura.seleccionada
-                                        ? 'border-orange-500 bg-orange-50'
-                                        : 'border-gray-200 bg-white hover:border-gray-300'
-                                }`}
+                                className={`border-2 rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all duration-200 ${factura.seleccionada
+                                    ? 'border-orange-500 bg-orange-50'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    {!modoConsulta && (
+                                    {!modoConsulta ? (
                                         <input
                                             type="checkbox"
                                             checked={factura.seleccionada}
                                             onChange={() => handleFacturaSelect(factura.id)}
                                             className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 rounded focus:ring-orange-500"
+                                        />
+                                    ) : (
+                                        <input
+                                            type="checkbox"
+                                            checked={idsEnvioMultiple.includes(factura.id)}
+                                            onChange={() => handleToggleEnvioMultiple(factura.id)}
+                                            className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 rounded focus:ring-green-500"
+                                            title="Seleccionar para envío múltiple"
                                         />
                                     )}
 
@@ -381,14 +444,13 @@ const ListaFacturasGeneradas = ({
                                             </p>
                                         </div>
                                         <div className="flex items-center justify-end lg:justify-start gap-2">
-                                            <button 
+                                            <button
                                                 onClick={() => handleVerFactura(factura.id)}
                                                 disabled={generandoPDF}
-                                                className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${
-                                                    generandoPDF 
-                                                        ? 'text-gray-400 cursor-not-allowed' 
-                                                        : 'text-blue-600 hover:text-blue-800'
-                                                }`}
+                                                className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${generandoPDF
+                                                    ? 'text-gray-400 cursor-not-allowed'
+                                                    : 'text-blue-600 hover:text-blue-800'
+                                                    }`}
                                             >
                                                 {generandoPDF ? (
                                                     <>
@@ -403,13 +465,13 @@ const ListaFacturasGeneradas = ({
                                         <div className="flex items-center justify-end gap-2">
                                             {modoConsulta ? (
                                                 <>
-                                                    <button 
+                                                    <button
                                                         onClick={() => onVerDocumentos && onVerDocumentos(factura)}
                                                         className="flex items-center gap-1 font-medium text-xs sm:text-sm text-green-600 hover:text-green-800 transition-all hover:scale-105"
                                                     >
                                                         📄 Documentos
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => {
                                                             setFacturaParaEnviar(factura);
                                                             setMostrarModalCorreo(true);
@@ -420,14 +482,13 @@ const ListaFacturasGeneradas = ({
                                                     </button>
                                                 </>
                                             ) : (
-                                                <button 
+                                                <button
                                                     onClick={() => handleEliminarFactura(factura)}
                                                     disabled={eliminandoFactura === factura.id}
-                                                    className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${
-                                                        eliminandoFactura === factura.id
-                                                            ? 'text-gray-400 cursor-not-allowed' 
-                                                            : 'text-red-600 hover:text-red-800'
-                                                    }`}
+                                                    className={`flex items-center gap-1 font-medium text-xs sm:text-sm transition-all hover:scale-105 ${eliminandoFactura === factura.id
+                                                        ? 'text-gray-400 cursor-not-allowed'
+                                                        : 'text-red-600 hover:text-red-800'
+                                                        }`}
                                                 >
                                                     {eliminandoFactura === factura.id ? (
                                                         <>
@@ -456,7 +517,7 @@ const ListaFacturasGeneradas = ({
                 />
             )}
 
-            {/* MODAL PARA ENVIAR CORREO */}
+            {/* MODAL PARA ENVIAR CORREO INDIVIDUAL */}
             {mostrarModalCorreo && facturaParaEnviar && (
                 <EnviarCorreoFacturaModal
                     factura={facturaParaEnviar}
@@ -467,7 +528,22 @@ const ListaFacturasGeneradas = ({
                     }}
                     onEnvioExitoso={(resultado) => {
                         console.log('Correo enviado exitosamente:', resultado);
-                        // Aquí podrías actualizar la UI si es necesario
+                    }}
+                />
+            )}
+
+            {/* MODAL PARA ENVIAR CORREO MÚLTIPLE */}
+            {mostrarModalCorreoMultiple && facturasParaEnvioMultiple.length >= 2 && todasMismaFecha && (
+                <EnviarCorreoMultipleFacturasModal
+                    facturas={facturasParaEnvioMultiple}
+                    isOpen={mostrarModalCorreoMultiple}
+                    onClose={() => {
+                        setMostrarModalCorreoMultiple(false);
+                        setIdsEnvioMultiple([]);
+                    }}
+                    onEnvioExitoso={(resultado) => {
+                        console.log('Correo múltiple enviado:', resultado);
+                        setIdsEnvioMultiple([]);
                     }}
                 />
             )}

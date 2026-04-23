@@ -25,13 +25,16 @@ if (!$data) {
 }
 
 // Funciones de sanitización (las mismas que usas)
-function limpiar_texto($txt) {
+function limpiar_texto($txt)
+{
     return htmlspecialchars(trim($txt), ENT_QUOTES, "UTF-8");
 }
-function validar_entero($valor) {
+function validar_entero($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
-function validar_flotante($valor) {
+function validar_flotante($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : null;
 }
 
@@ -71,25 +74,6 @@ if (!$idAerolinea || !$idAgencia) {
 try {
     $enlace->begin_transaction();
 
-    // Construir la consulta de actualización
-    $sqlUpdate = "UPDATE EncabPedido SET 
-                    IdAerolinea = ?, 
-                    IdAgencia = ?, 
-                    GuiaMaster = ?, 
-                    GuiaHija = ? 
-                  WHERE ";
-
-    // Construir la condición WHERE según el tipo de fecha
-    $whereConditions = [];
-    $params = [];
-    $paramTypes = "iiss"; // tipos: idAerolinea, idAgencia, guiaMaster, guiaHija
-
-    // Agregar parámetros para la actualización
-    $params[] = $idAerolinea;
-    $params[] = $idAgencia;
-    $params[] = $guiaMaster;
-    $params[] = $guiaHija;
-
     // Determinar el campo de fecha según el tipo
     $campoFecha = "";
     switch ($tipoFecha) {
@@ -105,55 +89,104 @@ try {
             break;
     }
 
-    // Construir condición de fecha
-    $whereConditions[] = "$campoFecha BETWEEN ? AND ?";
-    $paramTypes .= "ss"; // dos strings para las fechas
-    $params[] = $fechaDesde;
-    $params[] = $fechaHasta;
+    // ============================================
+    // 1. ACTUALIZAR TABLA EncabPedido (pedidos regulares)
+    // ============================================
+    $sqlUpdatePedidos = "UPDATE EncabPedido SET 
+                            IdAerolinea = ?, 
+                            IdAgencia = ?, 
+                            GuiaMaster = ?, 
+                            GuiaHija = ? 
+                        WHERE $campoFecha BETWEEN ? AND ?";
 
-    // Combinar condiciones WHERE
-    $sqlUpdate .= implode(" AND ", $whereConditions);
-
-    // Preparar y ejecutar la consulta
-    $stmt = $enlace->prepare($sqlUpdate);
-    
-    if (!$stmt) {
-        throw new Exception("Error al preparar la consulta: " . $enlace->error);
+    $stmtPedidos = $enlace->prepare($sqlUpdatePedidos);
+    if (!$stmtPedidos) {
+        throw new Exception("Error al preparar actualización de pedidos: " . $enlace->error);
     }
 
-    // Vincular parámetros dinámicamente
-    $stmt->bind_param($paramTypes, ...$params);
-    $stmt->execute();
-
-    $pedidosActualizados = $stmt->affected_rows;
+    $stmtPedidos->bind_param(
+        "iissss",
+        $idAerolinea,
+        $idAgencia,
+        $guiaMaster,
+        $guiaHija,
+        $fechaDesde,
+        $fechaHasta
+    );
+    $stmtPedidos->execute();
+    $pedidosActualizados = $stmtPedidos->affected_rows;
 
     if ($pedidosActualizados < 0) {
         throw new Exception("Error al actualizar los pedidos");
     }
 
+    // ============================================
+    // 2. ACTUALIZAR TABLA EncabPedidoSample (samples)
+    // ============================================
+    $sqlUpdateSamples = "UPDATE EncabPedidoSample SET 
+                            IdAerolinea = ?, 
+                            IdAgencia = ?, 
+                            GuiaMaster = ?, 
+                            GuiaHija = ? 
+                        WHERE $campoFecha BETWEEN ? AND ?";
+
+    $stmtSamples = $enlace->prepare($sqlUpdateSamples);
+    if (!$stmtSamples) {
+        throw new Exception("Error al preparar actualización de samples: " . $enlace->error);
+    }
+
+    $stmtSamples->bind_param(
+        "iissss",
+        $idAerolinea,
+        $idAgencia,
+        $guiaMaster,
+        $guiaHija,
+        $fechaDesde,
+        $fechaHasta
+    );
+    $stmtSamples->execute();
+    $samplesActualizadas = $stmtSamples->affected_rows;
+
+    if ($samplesActualizadas < 0) {
+        throw new Exception("Error al actualizar las samples");
+    }
+
     $enlace->commit();
 
     // Respuesta exitosa
+    $totalActualizados = $pedidosActualizados + $samplesActualizadas;
+
     echo json_encode([
-        "success" => true, 
+        "success" => true,
         "message" => "Datos actualizados correctamente",
+        "totalActualizados" => $totalActualizados,
         "pedidosActualizados" => $pedidosActualizados,
+        "samplesActualizadas" => $samplesActualizadas,
         "datosAplicados" => [
             "aerolineaId" => $idAerolinea,
             "agenciaId" => $idAgencia,
             "guiaMaster" => $guiaMaster,
-            "guiaHija" => $guiaHija
+            "guiaHija" => $guiaHija,
+            "rango_fechas" => [
+                "tipo" => $tipoFecha,
+                "desde" => $fechaDesde,
+                "hasta" => $fechaHasta
+            ]
         ]
     ]);
-
 } catch (Exception $e) {
     $enlace->rollback();
     echo json_encode([
-        "success" => false, 
+        "success" => false,
         "message" => "Error al actualizar en lote: " . $e->getMessage()
     ]);
+} finally {
+    // Cerrar los statements solo una vez
+    if (isset($stmtPedidos) && $stmtPedidos !== false) {
+        @$stmtPedidos->close();
+    }
+    if (isset($stmtSamples) && $stmtSamples !== false) {
+        @$stmtSamples->close();
+    }
+    $enlace->close();
 }
-
-$stmt->close();
-$enlace->close();
-?>

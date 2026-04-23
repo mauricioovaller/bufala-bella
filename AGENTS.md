@@ -7,8 +7,8 @@
 ║ ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-**Última actualización:** 16 de Abril de 2026  
-**Versión:** 1.0  
+**Última actualización:** 21 de Abril de 2026  
+**Versión:** 1.1  
 **Responsable:** Equipo de Desarrollo
 
 ---
@@ -99,16 +99,43 @@
 ├─ VS Code
 ├─ npm (Package manager)
 ├─ ESLint (Linting)
-└─ npm scripts (Build, dev)
+└─ npm scripts (Build, dev, test)
+```
+
+### Testing
+
+```
+├─ Vitest 4.x (Test runner, integrado con Vite)
+├─ @testing-library/react (Testing de componentes React)
+├─ @testing-library/jest-dom (Matchers DOM adicionales)
+├─ @testing-library/user-event (Simulación de interacciones)
+├─ @testing-library/dom (Utilidades DOM)
+├─ @vitest/coverage-v8 (Cobertura de código)
+└─ jsdom (Entorno DOM simulado para Node.js)
 ```
 
 ### Dependencias Principales
 
 ```json
 {
-  "react": "^18.x",
-  "react-dom": "^18.x",
+  "react": "^19.x",
+  "react-dom": "^19.x",
+  "react-router-dom": "^7.x",
   "sweetalert2": "latest"
+}
+```
+
+### Dependencias de Desarrollo (Testing)
+
+```json
+{
+  "vitest": "^4.x",
+  "@vitest/coverage-v8": "latest",
+  "jsdom": "latest",
+  "@testing-library/react": "^16.x",
+  "@testing-library/jest-dom": "^6.x",
+  "@testing-library/user-event": "latest",
+  "@testing-library/dom": "^10.x"
 }
 ```
 
@@ -176,6 +203,29 @@ bufala-bella/
 │       ├── crear_tabla_correos_cuentas.sql
 │       ├── create_costos_transporte_diario.sql
 │       └── README.md (Cómo ejecutar scripts)
+│
+├── 📁 src/
+│   └── __tests__/                     ⭐ Tests automatizados
+│       ├── services/                  (Tests de servicios)
+│       │   ├── correoService.test.js
+│       │   ├── clientesService.test.js
+│       │   ├── productosService.test.js
+│       │   ├── facturacionService.test.js
+│       │   ├── pedidosService.test.js
+│       │   ├── conductoresService.test.js
+│       │   ├── dashboardService.test.js
+│       │   ├── produccionService.test.js
+│       │   ├── menuPrincipalService.test.js
+│       │   └── consolidacionService.test.js
+│       ├── pages/                     (Tests de páginas)
+│       │   ├── Inicio.test.jsx
+│       │   ├── Clientes.test.jsx
+│       │   ├── Conductores.test.jsx
+│       │   └── Productos.test.jsx
+│       └── App.test.jsx               (Tests de enrutamiento)
+│
+│   └── test/
+│       └── setup.js                   (Configuración global de tests)
 │
 ├── 📁 public/                         (Archivos públicos)
 ├── 📁 dist/                           (Build output)
@@ -840,16 +890,144 @@ export async function guardarDatos(datos) {
 ### 10.1 Tipos de Pruebas
 
 ```
-Unitarias: Funciones individuales
-Integración: Componentes + Servicios
-E2E: Flujos completos del usuario
-Manual: Testing visual y de UX
+Unitarias:   Funciones individuales (servicios, helpers)
+Integración: Componentes + Servicios (páginas con mocks)
+Enrutamiento: Navegación y rutas de la app (App.test.jsx)
+E2E:         Flujos completos del usuario (manual o Playwright)
+Manual:      Testing visual y de UX
 ```
 
-### 10.2 Checklist Pre-Deploy
+### 10.2 Configuración del Entorno de Tests
+
+Vitest está configurado en `vite.config.js`:
+
+```javascript
+// vite.config.js
+test: {
+  globals: true,           // describe/it/expect sin importar
+  environment: 'jsdom',    // Simula el DOM del navegador
+  setupFiles: './src/test/setup.js',  // Setup global
+  css: false,              // Ignora CSS para mayor velocidad
+  coverage: {
+    provider: 'v8',
+    reporter: ['text', 'lcov', 'html']
+  }
+}
+```
+
+El archivo `src/test/setup.js` configura globalmente:
+
+- Mock de `fetch` API (`global.fetch = vi.fn()`)
+- Mock de SweetAlert2 (evita UI real en tests)
+- Mock de `URL.createObjectURL/revokeObjectURL`
+- Limpieza automática de mocks entre tests (`vi.clearAllMocks()`)
+
+### 10.3 Comandos de Testing
+
+```bash
+npm test              # Ejecuta todos los tests una vez
+npm run test:watch    # Modo observador (re-ejecuta al guardar)
+npm run test:coverage # Tests + reporte de cobertura
+npm run test:ui       # Interfaz visual de Vitest
+
+# Ejecutar un archivo específico:
+npx vitest run src/__tests__/services/clientesService.test.js
+
+# Ejecutar tests que coincidan con un patrón:
+npx vitest run --grep "validarEmail"
+```
+
+### 10.4 Cobertura Actual de Tests
 
 ```
-✅ Compilación sin errores
+Total: 191 tests | 15 archivos | 0 fallos (21 Abril 2026)
+
+Servicios (10 archivos):
+  correoService.test.js         - validarEmail, parsearEmails, generarNombre...
+  clientesService.test.js       - listarClientes, guardar, actualizar, validar
+  productosService.test.js      - listarProductos, guardar, actualizar
+  facturacionService.test.js    - obtenerPedidos, guardarFactura
+  pedidosService.test.js        - getDatosSelect, guardar, actualizar
+  conductoresService.test.js    - listarConductores, guardar, actualizar
+  dashboardService.test.js      - fetchDashboardData, APPS_CONFIG
+  produccionService.test.js     - getLotes, guardarLote, getResponsables
+  menuPrincipalService.test.js  - getPermisos, manejo de errores
+  consolidacionService.test.js  - generarExcel, generarReportes
+
+Páginas (4 archivos):
+  Inicio.test.jsx       - renderiza, métricas, actividad reciente
+  Clientes.test.jsx     - formulario, listar, toggle vista
+  Conductores.test.jsx  - formulario, listar, manejo errores
+  Productos.test.jsx    - formulario, listar, manejo errores
+
+Enrutamiento (1 archivo):
+  App.test.jsx          - las 13 rutas de la aplicación
+```
+
+### 10.5 Convenciones para Escribir Tests
+
+```javascript
+// ✅ CORRECTO: Estructura de un test de servicio
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { miFuncion } from "../../services/miServicio";
+
+describe("miFuncion", () => {
+  beforeEach(() => {
+    // fetch ya está mockeado globalmente en setup.js
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, datos: [] }),
+    });
+  });
+
+  it("retorna datos cuando la API responde con éxito", async () => {
+    const resultado = await miFuncion();
+    expect(resultado).toEqual([]);
+    expect(global.fetch).toHaveBeenCalledOnce();
+  });
+
+  it("lanza error cuando la API falla", async () => {
+    global.fetch.mockResolvedValue({ ok: false, status: 500 });
+    await expect(miFuncion()).rejects.toThrow();
+  });
+});
+```
+
+```javascript
+// ✅ CORRECTO: Estructura de un test de componente/página
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import MiPagina from "../../pages/MiPagina";
+import * as miServicio from "../../services/miServicio";
+
+vi.mock("../../services/miServicio");
+
+describe("MiPagina", () => {
+  beforeEach(() => {
+    miServicio.listarItems.mockResolvedValue({ items: [] });
+  });
+
+  it("renderiza sin errores", async () => {
+    render(<MiPagina />);
+    await waitFor(() => {
+      expect(miServicio.listarItems).toHaveBeenCalled();
+    });
+  });
+});
+```
+
+**⚠️ Notas importantes al escribir tests:**
+
+- La API retorna propiedades en **PascalCase** (`Nombre`, `Id_Cliente`) — usar esas mismas en los mocks
+- El `Layout` usa `<Outlet>` de React Router, no `{children}` — mockear con `vi.importActual`
+- Componentes con vista desktop+mobile renderizarán el mismo texto **dos veces** → usar `getAllByText` en lugar de `getByText`
+- Labels sin `htmlFor` → buscar inputs por `getByPlaceholderText` en lugar de `getByRole`
+
+### 10.6 Checklist Pre-Deploy
+
+```
+✅ npm test → 0 fallos
+✅ Compilación sin errores (npm run build)
 ✅ Console sin advertencias/errores rojos
 ✅ Flujos críticos probados manualmente
 ✅ Responsive en mobile y desktop
@@ -861,9 +1039,16 @@ Manual: Testing visual y de UX
 ✅ .env variables correctas
 ```
 
-### 10.3 Testing de Funcionalidades Nuevas
+### 10.7 Testing de Funcionalidades Nuevas
 
-Ver: `docs/guides/GUIA_TESTING_SISTEMA_CORREOS.md`
+Cuando agregues una funcionalidad nueva:
+
+1. Crea el archivo de test en `src/__tests__/services/` o `src/__tests__/pages/`
+2. Sigue las convenciones de la sección 10.5
+3. Ejecuta `npm test` para verificar que no rompiste nada existente
+4. Actualiza el conteo en la sección 10.4 de este documento
+
+Ver también: `docs/guides/GUIA_TESTING_SISTEMA_CORREOS.md`
 
 ---
 
@@ -1220,6 +1405,9 @@ if (!documento) {
 npm run dev       # Desarrollo
 npm run build     # Build production
 npm run preview   # Ver build localmente
+npm test          # Ejecutar todos los tests
+npm run test:watch    # Tests en modo observador
+npm run test:coverage # Tests + cobertura
 git log --oneline # Ver commits
 ```
 
@@ -1232,7 +1420,7 @@ git log --oneline # Ver commits
 - [ ] Validaciones en lugar
 - [ ] Responsivo en mobile
 - [ ] Documentación actualizada
-- [ ] Tests pasando
+- [ ] `npm test` → 0 fallos
 - [ ] Commit message descriptivo
 - [ ] Sin archivos temporales
 - [ ] Sin credenciales en código
@@ -1256,6 +1444,6 @@ Cuando implementes algo nuevo:
 
 ---
 
-**Última actualización:** 16 de Abril de 2026  
+**Última actualización:** 21 de Abril de 2026  
 **Mantenido por:** Equipo de Desarrollo  
 **Próxima revisión:** Cuando agregues nueva funcionalidad importante

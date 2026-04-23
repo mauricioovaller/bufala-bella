@@ -1,5 +1,6 @@
 // src/components/dashboard/ChartEstibasDiarias.jsx
 import React from 'react';
+import { formatearFechaLocal } from '../../services/dashboard/dashboardService';
 import {
     BarChart,
     Bar,
@@ -53,12 +54,7 @@ const ChartEstibasDiarias = ({ data, color = '#10B981', valorEstiba = 80500 }) =
                     {/* Fecha */}
                     <div className="mb-3 pb-2 border-b border-gray-100">
                         <p className="font-semibold text-gray-800 text-sm">
-                            {new Date(data.fecha).toLocaleDateString('es-ES', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                            })}
+                            {formatearFechaLocal(data.fecha)}
                         </p>
                     </div>
 

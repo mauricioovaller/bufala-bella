@@ -1,5 +1,6 @@
 // src/components/dashboard/ChartTendencia.jsx
 import React from 'react';
+import { formatearFechaLocal, formatearFechaCorta } from '../../services/dashboard/dashboardService';
 import {
     AreaChart,
     Area,
@@ -14,10 +15,7 @@ const ChartTendencia = ({ data, color }) => {
     // Formatear datos
     const datosGrafico = data.map(item => ({
         fecha: item.fecha,
-        fechaCorta: new Date(item.fecha).toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: 'short'
-        }),
+        fechaCorta: formatearFechaCorta(item.fecha),
         cantidad: item.cantidad,
         pesoNeto: Math.round(item.pesoNeto),
         valor: Math.round(item.valor),
@@ -36,12 +34,7 @@ const ChartTendencia = ({ data, color }) => {
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="font-semibold text-gray-800 mb-2">
-                        {new Date(data.fecha).toLocaleDateString('es-ES', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        })}
+                        {formatearFechaLocal(data.fecha)}
                     </p>
 
                     <div className="space-y-2">
@@ -59,7 +52,7 @@ const ChartTendencia = ({ data, color }) => {
                         </div>
 
                         <div className="flex items-center">
-                             <div
+                            <div
                                 className="w-3 h-3 rounded-full mr-2"
                                 style={{ backgroundColor: color }}
                             ></div>

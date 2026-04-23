@@ -2,6 +2,51 @@
 const API_BASE =
   "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Dashboard";
 
+/**
+ * Parsea una fecha en formato YYYY-MM-DD como fecha local (sin desplazamiento UTC)
+ * y la formatea en español para mostrar en tooltips.
+ * @param {string} fechaStr - Fecha en formato YYYY-MM-DD
+ * @returns {string} Fecha formateada, ej: "miércoles, 2 de abril de 2026"
+ */
+export const formatearFechaLocal = (fechaStr) => {
+  if (!fechaStr) return "Sin fecha";
+  const partes = fechaStr.split("-").map(Number);
+  if (partes.length !== 3 || partes.some(isNaN)) return "Fecha inválida";
+  const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
+  return fecha.toLocaleDateString("es-ES", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
+/**
+ * Parsea YYYY-MM-DD como fecha local y la formatea en formato corto para ejes X.
+ * @param {string} fechaStr - Fecha en formato YYYY-MM-DD
+ * @returns {string} Fecha corta, ej: "02 abr"
+ */
+export const formatearFechaCorta = (fechaStr) => {
+  if (!fechaStr) return "";
+  const partes = fechaStr.split("-").map(Number);
+  if (partes.length !== 3 || partes.some(isNaN)) return "";
+  const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
+  return fecha.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+};
+
+/**
+ * Devuelve una fecha en formato YYYY-MM-DD usando la hora local (no UTC).
+ * Evita el desfase que produce toISOString() en zonas horarias negativas.
+ * @param {Date} date - Objeto Date (por defecto: hoy)
+ * @returns {string} Fecha en formato YYYY-MM-DD
+ */
+export const fechaLocalStr = (date = new Date()) => {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export const fetchDashboardData = async (app, fechaInicio, fechaFin) => {
   try {
     const response = await fetch(`${API_BASE}/datos.php`, {
@@ -122,25 +167,21 @@ export const fetchClientesProducto = async (
  * @returns {Promise<Object>} Datos para gráficos y KPIs
  */
 export const fetchCostosTransporte = async (app, fechaInicio, fechaFin) => {
-  // TEMPORAL: Usar datos de prueba por defecto para desarrollo
-  console.log("Usando datos de prueba para costos de transporte...");
-  return generarDatosPrueba(fechaInicio, fechaFin);
-
-  // NOTA: Para usar la API real, descomentar el código siguiente:
-  /*
   try {
-    // Usar API real que respeta el rango de fechas
-    const response = await fetch(`${API_BASE}/ApiDashboardCostosTransporte.php`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await fetch(
+      `${API_BASE}/ApiDashboardCostosTransporte.php`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          app: app,
+          fechaInicio: fechaInicio,
+          fechaFin: fechaFin,
+        }),
       },
-      body: JSON.stringify({
-        app: app,
-        fechaInicio: fechaInicio,
-        fechaFin: fechaFin,
-      }),
-    });
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -157,18 +198,17 @@ export const fetchCostosTransporte = async (app, fechaInicio, fechaFin) => {
     return data;
   } catch (error) {
     console.error("Error fetching costos de transporte:", error);
-    
-    // Fallback a datos de prueba
-    console.log("Fallback a datos de prueba...");
-    return generarDatosPrueba(fechaInicio, fechaFin);
+    throw error;
   }
-  */
 };
 
-// Función temporal para generar datos de prueba
+// Función de respaldo para generar datos de prueba (solo si la API falla)
 const generarDatosPrueba = (fechaInicio, fechaFin) => {
-  const inicio = new Date(fechaInicio);
-  const fin = new Date(fechaFin);
+  // Parsear como fecha local para evitar desplazamiento por zona horaria UTC
+  const [iy, im, id] = fechaInicio.split("-").map(Number);
+  const [fy, fm, fd] = fechaFin.split("-").map(Number);
+  const inicio = new Date(iy, im - 1, id);
+  const fin = new Date(fy, fm - 1, fd);
   const dias = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
 
   const datosFletes = [];
@@ -178,8 +218,12 @@ const generarDatosPrueba = (fechaInicio, fechaFin) => {
   for (let i = 0; i < dias; i++) {
     const fecha = new Date(inicio);
     fecha.setDate(inicio.getDate() + i);
-    const fechaStr = fecha.toISOString().split("T")[0];
-    const fechaCorta = `${fecha.getDate().toString().padStart(2, "0")}/${(fecha.getMonth() + 1).toString().padStart(2, "0")}`;
+    // Usar componentes locales para evitar desplazamiento por zona horaria UTC
+    const yyyy = fecha.getFullYear();
+    const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+    const dd = String(fecha.getDate()).padStart(2, "0");
+    const fechaStr = `${yyyy}-${mm}-${dd}`;
+    const fechaCorta = `${dd}/${mm}`;
 
     // Generar datos aleatorios pero realistas
     const tieneDatos = Math.random() > 0.3; // 70% de probabilidad de tener datos

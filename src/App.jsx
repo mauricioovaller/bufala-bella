@@ -24,12 +24,12 @@ export default function App() {
         <Route path="conductores" element={<Conductores />} />
         <Route path="productos" element={<Productos />} />
         <Route path="pedidos" element={<Pedidos />} />
+        <Route path="configuracion-correos" element={<ConfiguracionCorreos />} />
         <Route path="samples" element={<PedidosSample />} />
         <Route path="produccion" element={<ProduccionPedidos />} />
         <Route path="consolidacion" element={<ConsolidacionMain />} />
         <Route path="facturacion" element={<FacturacionMain />} />
-        <Route path="complemento-facturas" element={<ComplementoFacturas />} />
-        <Route path="configuracion-correos" element={<ConfiguracionCorreos />} />
+        <Route path="complemento-facturas" element={<ComplementoFacturas />} />        
         <Route path="dashboard" element={<DashboardDibufala />} />
       </Route>
 
