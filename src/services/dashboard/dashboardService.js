@@ -118,30 +118,6 @@ export const fetchClientesProducto = async (
   fechaInicio,
   fechaFin,
 ) => {
-  // TEMPORAL: Datos de prueba
-  console.log("Usando datos de prueba para clientes por producto...");
-
-  const datosPrueba = {
-    success: true,
-    producto: {
-      id: idProducto,
-      nombre: "Producto de Prueba",
-    },
-    clientes: [
-      { cliente: "Supermercado A", cantidad: 450, valor: 3500000 },
-      { cliente: "Restaurante B", cantidad: 320, valor: 2800000 },
-      { cliente: "Tienda C", cantidad: 280, valor: 2200000 },
-      { cliente: "Distribuidor D", cantidad: 190, valor: 1500000 },
-    ],
-    totalCantidad: 1240,
-    totalValor: 10000000,
-    mensaje: "Datos de prueba para clientes por producto",
-  };
-
-  return datosPrueba;
-
-  // NOTA: Para usar la API real, descomentar:
-  /*
   const response = await fetch(`${API_BASE}/ApiClientesProducto.php`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -151,7 +127,6 @@ export const fetchClientesProducto = async (
   const data = await response.json();
   if (!data.success) throw new Error(data.message);
   return data;
-  */
 };
 
 // ============================================================================

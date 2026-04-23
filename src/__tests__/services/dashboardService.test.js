@@ -116,25 +116,61 @@ describe("fetchVentasRegionCliente", () => {
 });
 
 describe("fetchClientesProducto", () => {
-  it("retorna datos de clientes para un producto (datos de prueba)", async () => {
-    // Esta función actualmente usa datos de prueba hardcoded, no hace fetch
+  it("retorna datos de clientes para un producto", async () => {
+    mockFetchOk({
+      success: true,
+      idProducto: 1,
+      nombreProducto: "Mozzarella Orgánica",
+      clientes: [
+        {
+          id: 1,
+          nombre: "Supermercado A",
+          cantidad: 5,
+          valor: 3500000,
+          pesoNeto: 120,
+        },
+        {
+          id: 2,
+          nombre: "Restaurante B",
+          cantidad: 3,
+          valor: 2800000,
+          pesoNeto: 90,
+        },
+      ],
+    });
     const result = await fetchClientesProducto(1, "2026-01-01", "2026-04-30");
     expect(result.success).toBe(true);
     expect(result.clientes).toBeInstanceOf(Array);
     expect(result.clientes.length).toBeGreaterThan(0);
   });
 
-  it("cada cliente tiene cantidad y valor", async () => {
+  it("cada cliente tiene id, nombre, cantidad, valor y pesoNeto", async () => {
+    mockFetchOk({
+      success: true,
+      clientes: [
+        {
+          id: 2,
+          nombre: "Restaurante B",
+          cantidad: 3,
+          valor: 2800000,
+          pesoNeto: 90,
+        },
+      ],
+    });
     const result = await fetchClientesProducto(2, "2026-01-01", "2026-04-30");
     result.clientes.forEach((cliente) => {
+      expect(cliente).toHaveProperty("id");
+      expect(cliente).toHaveProperty("nombre");
       expect(cliente).toHaveProperty("cantidad");
       expect(cliente).toHaveProperty("valor");
+      expect(cliente).toHaveProperty("pesoNeto");
     });
   });
 
-  it("incluye totales consolidados", async () => {
-    const result = await fetchClientesProducto(1, "2026-01-01", "2026-04-30");
-    expect(result).toHaveProperty("totalCantidad");
-    expect(result).toHaveProperty("totalValor");
+  it("lanza error cuando la API responde con success false", async () => {
+    mockFetchOk({ success: false, message: "Producto no encontrado" });
+    await expect(
+      fetchClientesProducto(99, "2026-01-01", "2026-04-30"),
+    ).rejects.toThrow("Producto no encontrado");
   });
 });

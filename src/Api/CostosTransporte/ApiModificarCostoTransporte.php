@@ -26,7 +26,8 @@ if (!$data) {
 }
 
 // Función para limpiar texto
-function limpiar_texto($texto) {
+function limpiar_texto($texto)
+{
     return htmlspecialchars(trim($texto), ENT_QUOTES, "UTF-8");
 }
 
@@ -35,6 +36,8 @@ $cantidadCamiones = $data["CantidadCamiones"] ?? null;
 $valorFlete = $data["ValorFlete"] ?? null;
 $observaciones = limpiar_texto($data["Observaciones"] ?? "");
 $usuarioModificacion = limpiar_texto($data["usuarioModificacion"] ?? "Sistema");
+$horasExtras = array_key_exists("HorasExtras", $data) ? (is_numeric($data["HorasExtras"]) ? floatval($data["HorasExtras"]) : 0) : null;
+$valorHorasExtras = array_key_exists("ValorHorasExtras", $data) ? (is_numeric($data["ValorHorasExtras"]) ? floatval($data["ValorHorasExtras"]) : 0) : null;
 
 // Validaciones básicas
 if (!is_numeric($idCosto) || $idCosto <= 0) {
@@ -64,7 +67,7 @@ if ($nuevaFecha !== null) {
         echo json_encode(["success" => false, "message" => "Formato de fecha inválido. Use YYYY-MM-DD"]);
         exit;
     }
-    
+
     // Validar que exista en EncabInvoice
     $sqlCheckFecha = "SELECT COUNT(*) FROM EncabInvoice WHERE Fecha = ?";
     $stmtCheckFecha = $enlace->prepare($sqlCheckFecha);
@@ -73,19 +76,19 @@ if ($nuevaFecha !== null) {
     $stmtCheckFecha->bind_result($countFacturas);
     $stmtCheckFecha->fetch();
     $stmtCheckFecha->close();
-    
+
     if ($countFacturas == 0) {
         echo json_encode(["success" => false, "message" => "No existen facturas para la fecha $nuevaFecha. La fecha debe tener al menos una factura registrada."]);
         exit;
     }
-    
+
     // Validar que no exista otro registro con la misma fecha (excluyendo el actual)
     $sqlCheckDuplicado = "SELECT Id_CostoTransporte FROM CostosTransporteDiario WHERE Fecha = ? AND Id_CostoTransporte != ?";
     $stmtCheckDuplicado = $enlace->prepare($sqlCheckDuplicado);
     $stmtCheckDuplicado->bind_param("si", $nuevaFecha, $idCosto);
     $stmtCheckDuplicado->execute();
     $stmtCheckDuplicado->store_result();
-    
+
     if ($stmtCheckDuplicado->num_rows > 0) {
         echo json_encode(["success" => false, "message" => "Ya existe otro registro de costo de transporte para la fecha $nuevaFecha"]);
         $stmtCheckDuplicado->close();
@@ -131,6 +134,18 @@ if ($observaciones !== null) {
     $valores[] = $observaciones;
 }
 
+if ($horasExtras !== null) {
+    $campos[] = "HorasExtras = ?";
+    $tipos .= "d";
+    $valores[] = $horasExtras;
+}
+
+if ($valorHorasExtras !== null) {
+    $campos[] = "ValorHorasExtras = ?";
+    $tipos .= "d";
+    $valores[] = $valorHorasExtras;
+}
+
 // Siempre actualizar usuario de modificación (podría ser un campo separado si se desea)
 // $campos[] = "UsuarioRegistro = ?";
 // $tipos .= "s";
@@ -160,7 +175,7 @@ if ($stmt->execute()) {
     $affectedRows = $stmt->affected_rows;
     if ($affectedRows > 0) {
         echo json_encode([
-            "success" => true, 
+            "success" => true,
             "message" => "Costo de transporte actualizado exitosamente",
             "affectedRows" => $affectedRows
         ]);
@@ -173,4 +188,3 @@ if ($stmt->execute()) {
 
 $stmt->close();
 $enlace->close();
-?>

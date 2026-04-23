@@ -26,7 +26,8 @@ if (!$data) {
 }
 
 // Función para limpiar texto
-function limpiar_texto($texto) {
+function limpiar_texto($texto)
+{
     return htmlspecialchars(trim($texto), ENT_QUOTES, "UTF-8");
 }
 
@@ -35,6 +36,8 @@ $cantidadCamiones = $data["CantidadCamiones"] ?? 1;
 $valorFlete = $data["ValorFlete"] ?? 0;
 $observaciones = limpiar_texto($data["Observaciones"] ?? "");
 $usuarioRegistro = limpiar_texto($data["UsuarioRegistro"] ?? "Sistema");
+$horasExtras = isset($data["HorasExtras"]) && is_numeric($data["HorasExtras"]) ? floatval($data["HorasExtras"]) : 0;
+$valorHorasExtras = isset($data["ValorHorasExtras"]) && is_numeric($data["ValorHorasExtras"]) ? floatval($data["ValorHorasExtras"]) : 0;
 
 // Validaciones básicas
 if (!$fecha) {
@@ -86,16 +89,16 @@ if ($stmtCheckDuplicado->num_rows > 0) {
 $stmtCheckDuplicado->close();
 
 // Insertar registro
-$sql = "INSERT INTO CostosTransporteDiario (Fecha, CantidadCamiones, ValorFlete, Observaciones, UsuarioRegistro) 
-        VALUES (?, ?, ?, ?, ?)";
+$sql = "INSERT INTO CostosTransporteDiario (Fecha, CantidadCamiones, ValorFlete, Observaciones, HorasExtras, ValorHorasExtras, UsuarioRegistro) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)";
 $stmt = $enlace->prepare($sql);
-$stmt->bind_param("sddss", $fecha, $cantidadCamiones, $valorFlete, $observaciones, $usuarioRegistro);
+$stmt->bind_param("sddsdds", $fecha, $cantidadCamiones, $valorFlete, $observaciones, $horasExtras, $valorHorasExtras, $usuarioRegistro);
 
 if ($stmt->execute()) {
     $id = $stmt->insert_id;
     echo json_encode([
-        "success" => true, 
-        "message" => "Costo de transporte guardado exitosamente", 
+        "success" => true,
+        "message" => "Costo de transporte guardado exitosamente",
         "idCostoTransporte" => $id
     ]);
 } else {
@@ -104,4 +107,3 @@ if ($stmt->execute()) {
 
 $stmt->close();
 $enlace->close();
-?>

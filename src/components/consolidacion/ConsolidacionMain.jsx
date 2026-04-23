@@ -76,7 +76,9 @@ export default function ConsolidacionMain() {
     Fecha: '',
     CantidadCamiones: 1,
     ValorFlete: '',
-    Observaciones: ''
+    Observaciones: '',
+    HorasExtras: '',
+    ValorHorasExtras: ''
   });
 
   // Estados para aerolíneas y agencias
@@ -258,7 +260,9 @@ export default function ConsolidacionMain() {
         Fecha: costo.Fecha,
         CantidadCamiones: costo.CantidadCamiones,
         ValorFlete: costo.ValorFlete,
-        Observaciones: costo.Observaciones || ''
+        Observaciones: costo.Observaciones || '',
+        HorasExtras: costo.HorasExtras || '',
+        ValorHorasExtras: costo.ValorHorasExtras || ''
       });
     } else {
       // Modo nuevo
@@ -281,7 +285,9 @@ export default function ConsolidacionMain() {
       Fecha: '',
       CantidadCamiones: 1,
       ValorFlete: '',
-      Observaciones: ''
+      Observaciones: '',
+      HorasExtras: '',
+      ValorHorasExtras: ''
     });
   };
 
@@ -300,6 +306,15 @@ export default function ConsolidacionMain() {
       setErrorCostos('El valor del flete debe ser mayor a 0');
       return;
     }
+    const horasExtras = formCosto.HorasExtras !== '' ? parseFloat(formCosto.HorasExtras) : 0;
+    if (formCosto.HorasExtras !== '' && (isNaN(horasExtras) || horasExtras <= 0)) {
+      setErrorCostos('Las horas extras deben ser un valor mayor a 0');
+      return;
+    }
+    if (horasExtras > 0 && (!formCosto.ValorHorasExtras || parseFloat(formCosto.ValorHorasExtras) <= 0)) {
+      setErrorCostos('El valor de horas extras es requerido cuando se registran horas extras');
+      return;
+    }
 
     setGuardandoCosto(true);
     setErrorCostos(null);
@@ -310,7 +325,9 @@ export default function ConsolidacionMain() {
         await modificarCostoTransporte(costoEditando, {
           CantidadCamiones: formCosto.CantidadCamiones,
           ValorFlete: formCosto.ValorFlete,
-          Observaciones: formCosto.Observaciones
+          Observaciones: formCosto.Observaciones,
+          HorasExtras: horasExtras > 0 ? horasExtras : 0,
+          ValorHorasExtras: horasExtras > 0 ? parseFloat(formCosto.ValorHorasExtras) : 0
         });
       } else {
         // Crear nuevo
@@ -319,6 +336,8 @@ export default function ConsolidacionMain() {
           CantidadCamiones: formCosto.CantidadCamiones,
           ValorFlete: formCosto.ValorFlete,
           Observaciones: formCosto.Observaciones,
+          HorasExtras: horasExtras > 0 ? horasExtras : 0,
+          ValorHorasExtras: horasExtras > 0 ? parseFloat(formCosto.ValorHorasExtras) : 0,
           UsuarioRegistro: 'Sistema'
         });
       }
@@ -326,13 +345,13 @@ export default function ConsolidacionMain() {
       // Recargar lista
       await cargarCostosTransporte();
       cerrarModalCosto();
-      
+
       // Mostrar mensaje de éxito
       Swal.fire({
         icon: 'success',
         title: costoEditando ? '¡Actualizado!' : '¡Guardado!',
-        text: costoEditando 
-          ? 'Costo de transporte actualizado correctamente.' 
+        text: costoEditando
+          ? 'Costo de transporte actualizado correctamente.'
           : 'Costo de transporte guardado correctamente.',
         timer: 2000,
         showConfirmButton: false
@@ -377,7 +396,7 @@ export default function ConsolidacionMain() {
       await eliminarCostoTransporte(costo.id);
       // Recargar lista
       await cargarCostosTransporte();
-      
+
       // Mostrar mensaje de éxito
       Swal.fire({
         icon: 'success',
@@ -822,7 +841,7 @@ export default function ConsolidacionMain() {
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
                 <div className="flex items-center">
                   <div className="text-red-500 mr-2">⚠️</div>
-                   <p className="text-red-700">{errorCostos}</p>
+                  <p className="text-red-700">{errorCostos}</p>
                 </div>
               </div>
             )}
@@ -853,13 +872,13 @@ export default function ConsolidacionMain() {
                     </thead>
                     <tbody>
                       {costosTransporte.map((costo) => (
-                         <tr key={costo.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <tr key={costo.id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-3 px-4">{costo.Fecha}</td>
                           <td className="py-3 px-4">{formatearNumero(costo.CantidadCamiones)}</td>
                           <td className="py-3 px-4">${formatearNumero(costo.ValorFlete)}</td>
                           <td className="py-3 px-4">
-                            {costo.CostoPorKg 
-                              ? `$${parseFloat(costo.CostoPorKg).toFixed(2)}` 
+                            {costo.CostoPorKg
+                              ? `$${parseFloat(costo.CostoPorKg).toFixed(2)}`
                               : 'N/A'}
                           </td>
                           <td className="py-3 px-4 max-w-xs truncate" title={costo.Observaciones}>
@@ -890,7 +909,7 @@ export default function ConsolidacionMain() {
                 {/* Vista móvil - Tarjetas */}
                 <div className="lg:hidden space-y-3">
                   {costosTransporte.map((costo) => (
-                     <div key={costo.id} className="border border-gray-200 rounded-xl p-4 bg-white">
+                    <div key={costo.id} className="border border-gray-200 rounded-xl p-4 bg-white">
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                           <p className="text-xs text-gray-600">Fecha</p>
@@ -907,8 +926,8 @@ export default function ConsolidacionMain() {
                         <div>
                           <p className="text-xs text-gray-600">Costo/Kg</p>
                           <p className="font-medium">
-                            {costo.CostoPorKg 
-                              ? `$${parseFloat(costo.CostoPorKg).toFixed(2)}` 
+                            {costo.CostoPorKg
+                              ? `$${parseFloat(costo.CostoPorKg).toFixed(2)}`
                               : 'N/A'}
                           </p>
                         </div>
@@ -1052,8 +1071,8 @@ export default function ConsolidacionMain() {
                       onClick={handleActualizarEnLote}
                       disabled={actualizandoEnLote || !datosEnLote.aerolineaId || !datosEnLote.agenciaId || loadingSelects || hayPedidosFacturados()}
                       className={`px-4 py-2 rounded-lg font-medium transition-all ${actualizandoEnLote || !datosEnLote.aerolineaId || !datosEnLote.agenciaId || loadingSelects || hayPedidosFacturados()
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-green-500 hover:bg-green-600 text-white"
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-green-500 hover:bg-green-600 text-white"
                         }`}
                       title={hayPedidosFacturados() ? "No se puede aplicar a pedidos facturados" : ""}
                     >
@@ -1164,7 +1183,7 @@ export default function ConsolidacionMain() {
                           <p className="font-medium text-gray-900">
                             {formatearNumero(pedido.estibasPagas)}
                           </p>
-                        </div>                        
+                        </div>
 
                         {/* Fecha de Salida - Editable */}
                         <div>
@@ -1345,10 +1364,10 @@ export default function ConsolidacionMain() {
                       )}
                       {reporte.disponible && (
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${reporte.id === 'transporte'
-                            ? 'bg-gradient-to-r from-red-100 to-green-100 text-gray-800'
-                            : reporte.tipo === "pdf"
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-green-100 text-green-800'
+                          ? 'bg-gradient-to-r from-red-100 to-green-100 text-gray-800'
+                          : reporte.tipo === "pdf"
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-green-100 text-green-800'
                           }`}>
                           {reporte.id === 'transporte' ? 'PDF + Excel' : reporte.tipo === "pdf" ? 'PDF' : 'Excel'}
                         </span>
@@ -1506,10 +1525,10 @@ export default function ConsolidacionMain() {
           <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
             <div className="bg-green-500 text-white p-4">
               <h2 className="text-xl font-semibold">
-                 {costoEditando ? 'Editar Costo' : 'Nuevo Costo de Transporte'}
+                {costoEditando ? 'Editar Costo' : 'Nuevo Costo de Transporte'}
               </h2>
             </div>
-            
+
             <div className="p-6">
               <div className="space-y-4">
                 <div>
@@ -1558,6 +1577,44 @@ export default function ConsolidacionMain() {
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Horas Extras
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formCosto.HorasExtras}
+                      onChange={(e) => setFormCosto(prev => ({ ...prev, HorasExtras: e.target.value, ValorHorasExtras: e.target.value === '' || parseFloat(e.target.value) <= 0 ? '' : prev.ValorHorasExtras }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Valor Horas Extras ($)
+                      {formCosto.HorasExtras !== '' && parseFloat(formCosto.HorasExtras) > 0 && (
+                        <span className="text-red-500 ml-1">*</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formCosto.ValorHorasExtras}
+                      onChange={(e) => setFormCosto(prev => ({ ...prev, ValorHorasExtras: e.target.value }))}
+                      disabled={formCosto.HorasExtras === '' || parseFloat(formCosto.HorasExtras) <= 0}
+                      className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${formCosto.HorasExtras === '' || parseFloat(formCosto.HorasExtras) <= 0
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : ''
+                        }`}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Observaciones
@@ -1572,11 +1629,11 @@ export default function ConsolidacionMain() {
                 </div>
               </div>
 
-               {errorCostos && (
+              {errorCostos && (
                 <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
                   <div className="flex items-center">
                     <div className="text-red-500 mr-2">⚠️</div>
-                     <p className="text-red-700 text-sm">{errorCostos}</p>
+                    <p className="text-red-700 text-sm">{errorCostos}</p>
                   </div>
                 </div>
               )}
@@ -1592,8 +1649,8 @@ export default function ConsolidacionMain() {
                   onClick={guardarCosto}
                   disabled={guardandoCosto}
                   className={`flex-1 py-2 rounded-lg font-medium transition ${guardandoCosto
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-green-500 hover:bg-green-600 text-white'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
                     }`}
                 >
                   {guardandoCosto ? (

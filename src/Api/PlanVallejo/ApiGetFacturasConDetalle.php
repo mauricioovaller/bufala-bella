@@ -114,7 +114,9 @@ try {
             di.FOB,
             di.VAN,
             di.Porcentaje,
-            di.Reposicion
+            di.Reposicion,
+            p.FOB_Valor,
+            p.VAN_Valor
         FROM DetInvoice di
         INNER JOIN Productos p ON di.Codigo_Siesa = p.Codigo_Siesa
         WHERE di.Id_EncabInvoice = ? AND p.PlanVallejo = -1
@@ -145,7 +147,9 @@ try {
             $fob,
             $van,
             $porcentaje,
-            $reposicion
+            $reposicion,
+            $fobValor,
+            $vanValor
         );
 
         $fechaEnc = new DateTime($enc['fecha']);
@@ -154,6 +158,19 @@ try {
         $anioEnc = (int)$fechaEnc->format('Y');
         $items = [];
         while ($stmtDet->fetch()) {
+            // Si FOB/VAN ya fueron guardados en BD, usar esos valores.
+            // Si son NULL (primera carga), calcular a partir de Kg × FOB_Valor / VAN_Valor.
+            $fobEfectivo     = ($fob !== null)
+                ? $fob
+                : round($kilogramos * floatval($fobValor), 2);
+            $vanEfectivo     = ($van !== null)
+                ? $van
+                : round($kilogramos * floatval($vanValor), 2);
+            // % = VAN / FOB (ratio decimal). Si FOB es 0, se deja null para evitar división.
+            $porcentajeEfectivo = ($porcentaje !== null)
+                ? $porcentaje
+                : ($fobEfectivo != 0 ? round($vanEfectivo / $fobEfectivo, 6) : null);
+
             $items[] = [
                 'idDetInvoice' => $idDetInvoice,
                 'codigoSiesa' => $codigoSiesa,
@@ -173,9 +190,9 @@ try {
                 'ad' => $ad,
                 'cip' => $cip,
                 'unidad' => !empty($unidad) ? $unidad : 'Kilogramo',
-                'fob' => $fob,
-                'van' => $van,
-                'porcentaje' => $porcentaje,
+                'fob' => $fobEfectivo,
+                'van' => $vanEfectivo,
+                'porcentaje' => $porcentajeEfectivo,
                 'reposicion' => $reposicion,
             ];
         }
