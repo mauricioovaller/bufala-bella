@@ -353,9 +353,14 @@ function enviarConSocketSMTP($datos)
         // Preparar mensaje
         $boundary = md5(uniqid(time()));
 
+        // Construir header To: y Reply-To: con todos los destinatarios
+        // para que el receptor pueda responder a todos
+        $toHeader = implode(', ', $datos['destinatarios']);
+
         $headers = [
             'From: ' . $nombre_remitente . ' <' . $remitente . '>',
-            'Reply-To: ' . $remitente,
+            'To: ' . $toHeader,
+            'Reply-To: ' . $toHeader,
             'MIME-Version: 1.0',
             'Content-Type: multipart/mixed; boundary="' . $boundary . '"'
         ];
@@ -400,18 +405,24 @@ function enviarConSocketSMTP($datos)
 
         $body .= "--" . $boundary . "--\r\n";
 
-        // Enviar a cada destinatario
-        $enviados = 0;
+        // Enviar UN SOLO correo a todos los destinatarios
+        // MAIL FROM (una sola vez)
+        fputs($socket, "MAIL FROM: <" . $remitente . ">\r\n");
+        fgets($socket);
+
+        // RCPT TO para cada destinatario (todos en la misma transacción)
+        $rcptAceptados = 0;
         foreach ($datos['destinatarios'] as $destinatario) {
-            // MAIL FROM
-            fputs($socket, "MAIL FROM: <" . $remitente . ">\r\n");
-            fgets($socket);
-
-            // RCPT TO
             fputs($socket, "RCPT TO: <" . $destinatario . ">\r\n");
-            fgets($socket);
+            $rcptResp = fgets($socket);
+            if (strpos($rcptResp, '250') !== false || strpos($rcptResp, '251') !== false) {
+                $rcptAceptados++;
+            }
+        }
 
-            // DATA
+        // DATA (una sola vez para todos los destinatarios aceptados)
+        $enviados = 0;
+        if ($rcptAceptados > 0) {
             fputs($socket, "DATA\r\n");
             fgets($socket);
 
@@ -419,7 +430,7 @@ function enviarConSocketSMTP($datos)
             $headersStr = implode("\r\n", $headers) . "\r\n";
             $asuntoCodificado = '=?UTF-8?B?' . base64_encode($datos['asunto']) . '?=';
 
-            // Enviar mensaje
+            // Enviar mensaje único
             fputs($socket, "Subject: " . $asuntoCodificado . "\r\n");
             fputs($socket, $headersStr . "\r\n");
             fputs($socket, $body);
@@ -427,7 +438,7 @@ function enviarConSocketSMTP($datos)
 
             $respuesta = fgets($socket);
             if (strpos($respuesta, '250') !== false) {
-                $enviados++;
+                $enviados = $rcptAceptados;
             }
         }
 
@@ -474,9 +485,13 @@ function enviarConMailSistema($datos)
     $boundary = md5(uniqid(time()));
     $asuntoCodificado = '=?UTF-8?B?' . base64_encode($datos['asunto']) . '?=';
 
+    // Construir header To: y Reply-To: con todos los destinatarios
+    $toHeader = implode(', ', $datos['destinatarios']);
+
     $headers = [
         'From: ' . $nombre_remitente . ' <' . $remitente . '>',
-        'Reply-To: ' . $remitente,
+        'To: ' . $toHeader,
+        'Reply-To: ' . $toHeader,
         'MIME-Version: 1.0',
         'Content-Type: multipart/mixed; boundary="' . $boundary . '"',
         'X-Mailer: PHP/' . phpversion()
@@ -523,12 +538,11 @@ function enviarConMailSistema($datos)
 
     $headersStr = implode("\r\n", $headers);
 
-    // Enviar
+    // Enviar UN SOLO correo a todos los destinatarios
+    $toStr = implode(', ', $datos['destinatarios']);
     $enviados = 0;
-    foreach ($datos['destinatarios'] as $destinatario) {
-        if (@mail($destinatario, $asuntoCodificado, $body, $headersStr)) {
-            $enviados++;
-        }
+    if (@mail($toStr, $asuntoCodificado, $body, $headersStr)) {
+        $enviados = count($datos['destinatarios']);
     }
 
     // Restaurar configuración

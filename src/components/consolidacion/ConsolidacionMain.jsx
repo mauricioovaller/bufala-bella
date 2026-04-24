@@ -17,6 +17,7 @@ import {
 } from '../../services/consolidacionService';
 import ModalVisorPreliminar from "../ModalVisorPreliminar";
 import { getDatosSelect } from '../../services/pedidosService';
+import { getPermisosAccionesPorModulo } from '../../services/menuPrincipal/permisosAccionesService';
 import Swal from 'sweetalert2';
 
 export default function ConsolidacionMain() {
@@ -80,6 +81,9 @@ export default function ConsolidacionMain() {
     HorasExtras: '',
     ValorHorasExtras: ''
   });
+
+  // Permisos granulares del módulo ([] = acceso completo)
+  const [permisosAcciones, setPermisosAcciones] = useState([]);
 
   // Estados para aerolíneas y agencias
   const [aerolineas, setAerolineas] = useState([]);
@@ -467,6 +471,12 @@ export default function ConsolidacionMain() {
     cargarAerolineasYAgencias();
   }, []);
 
+  // Cargar permisos granulares del módulo al montar
+  // Si el usuario no tiene registros en PermisosAcciones → [] → acceso completo
+  useEffect(() => {
+    getPermisosAccionesPorModulo('consolidacion').then(setPermisosAcciones);
+  }, []);
+
   const handleFiltroChange = (campo, valor) => {
     setFiltros(prev => ({ ...prev, [campo]: valor }));
   };
@@ -683,6 +693,13 @@ export default function ConsolidacionMain() {
 
     return fechaPedido >= fechaDesde && fechaPedido <= fechaHasta;
   });
+
+  // Permisos derivados para este módulo
+  // true solo si tiene gestionar_fechas_readonly PERO NO gestionar_fechas_full
+  const soloLecturaFechas =
+    permisosAcciones.length > 0 &&
+    permisosAcciones.includes('gestionar_fechas_readonly') &&
+    !permisosAcciones.includes('gestionar_fechas_full');
 
   return (
     <div className="min-h-screen bg-gray-50 py-6">
@@ -970,24 +987,26 @@ export default function ConsolidacionMain() {
                 </div>
               </div>
 
-              {/* 👇 NUEVO: Botón para gestión en lote */}
-              <button
-                onClick={() => setMostrarGestionEnLote(!mostrarGestionEnLote)}
-                disabled={pedidosEnRango.length === 0 || hayPedidosFacturados()}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${pedidosEnRango.length === 0 || hayPedidosFacturados()
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : mostrarGestionEnLote
-                    ? "bg-red-500 hover:bg-red-600 text-white"
-                    : "bg-blue-500 hover:bg-blue-600 text-white"
-                  }`}
-                title={hayPedidosFacturados() ? "No disponible para pedidos facturados" : ""}
-              >
-                {mostrarGestionEnLote ? "❌ Cancelar Lote" : "📦 Gestión en Lote"}
-              </button>
+              {/* Botón para gestión en lote: solo si el usuario tiene acceso completo */}
+              {!soloLecturaFechas && (
+                <button
+                  onClick={() => setMostrarGestionEnLote(!mostrarGestionEnLote)}
+                  disabled={pedidosEnRango.length === 0 || hayPedidosFacturados()}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${pedidosEnRango.length === 0 || hayPedidosFacturados()
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : mostrarGestionEnLote
+                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }`}
+                  title={hayPedidosFacturados() ? "No disponible para pedidos facturados" : ""}
+                >
+                  {mostrarGestionEnLote ? "❌ Cancelar Lote" : "📦 Gestión en Lote"}
+                </button>
+              )}
             </div>
 
-            {/* 👇 NUEVA SECCIÓN: Gestión en Lote */}
-            {mostrarGestionEnLote && (
+            {/* Sección Gestión en Lote: solo si el usuario tiene acceso completo */}
+            {mostrarGestionEnLote && !soloLecturaFechas && (
               <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
                 <h3 className="text-lg font-semibold text-blue-800 mb-3">
                   Actualización en Lote para {pedidosEnRango.length} Pedidos
@@ -1188,7 +1207,7 @@ export default function ConsolidacionMain() {
                         {/* Fecha de Salida - Editable */}
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Fecha Salida</p>
-                          {editandoFecha === pedido.id ? (
+                          {editandoFecha === pedido.id && !soloLecturaFechas ? (
                             <div className="space-y-2">
                               {/* Información de fechas actual vs nueva */}
                               <div className="bg-white rounded-lg p-2 border border-gray-200">
@@ -1239,27 +1258,29 @@ export default function ConsolidacionMain() {
                               <span className="font-medium text-gray-900">
                                 {pedido.fechaSalida || 'No asignada'}
                               </span>
-                              <button
-                                onClick={() => {
-                                  if (tieneFactura(pedido)) {
-                                    setErrorPedidos(`No se puede modificar el pedido ${pedido.numero} porque ya tiene factura: ${pedido.facturaNo}`);
-                                  } else {
-                                    iniciarEdicionFecha(pedido.id, pedido.fechaSalida, pedido);
+                              {!soloLecturaFechas && (
+                                <button
+                                  onClick={() => {
+                                    if (tieneFactura(pedido)) {
+                                      setErrorPedidos(`No se puede modificar el pedido ${pedido.numero} porque ya tiene factura: ${pedido.facturaNo}`);
+                                    } else {
+                                      iniciarEdicionFecha(pedido.id, pedido.fechaSalida, pedido);
+                                    }
+                                  }}
+                                  className={`text-sm transition-colors ${tieneFactura(pedido)
+                                    ? "text-gray-400 cursor-not-allowed"
+                                    : "text-orange-500 hover:text-orange-700"
+                                    }`}
+                                  title={
+                                    tieneFactura(pedido)
+                                      ? `Facturado: ${pedido.facturaNo} - No editable`
+                                      : "Modificar fecha de salida"
                                   }
-                                }}
-                                className={`text-sm transition-colors ${tieneFactura(pedido)
-                                  ? "text-gray-400 cursor-not-allowed"
-                                  : "text-orange-500 hover:text-orange-700"
-                                  }`}
-                                title={
-                                  tieneFactura(pedido)
-                                    ? `Facturado: ${pedido.facturaNo} - No editable`
-                                    : "Modificar fecha de salida"
-                                }
-                                disabled={tieneFactura(pedido)}
-                              >
-                                ✏️
-                              </button>
+                                  disabled={tieneFactura(pedido)}
+                                >
+                                  ✏️
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1330,56 +1351,81 @@ export default function ConsolidacionMain() {
           </div>
         )}
 
-        {/* SECCIÓN DE REPORTES */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
-          <div className="flex items-center mb-6">
-            <div className="w-1 h-8 bg-green-500 rounded-full mr-3"></div>
-            <h2 className="text-xl font-semibold text-gray-800">Reportes por Área</h2>
-          </div>
+        {/* SECCIÓN DE REPORTES: solo visible para usuarios con acceso completo */}
+        {!soloLecturaFechas && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
+            <div className="flex items-center mb-6">
+              <div className="w-1 h-8 bg-green-500 rounded-full mr-3"></div>
+              <h2 className="text-xl font-semibold text-gray-800">Reportes por Área</h2>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {reportes.map((reporte) => (
-              <div
-                key={reporte.id}
-                className={`border-2 border-gray-100 rounded-2xl p-6 transition-all duration-300 hover:shadow-md hover:border-gray-200 ${!reporte.disponible ? "opacity-60" : ""
-                  }`}
-              >
-                <div className="flex items-start space-x-4">
-                  {/* Icono */}
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg ${reporte.color.replace('hover:', '')
-                    }`}>
-                    {reporte.icono}
-                  </div>
-
-                  {/* Contenido */}
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-gray-800">
-                        {reporte.titulo}
-                      </h3>
-                      {!reporte.disponible && (
-                        <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-medium">
-                          Próximamente
-                        </span>
-                      )}
-                      {reporte.disponible && (
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${reporte.id === 'transporte'
-                          ? 'bg-gradient-to-r from-red-100 to-green-100 text-gray-800'
-                          : reporte.tipo === "pdf"
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-green-100 text-green-800'
-                          }`}>
-                          {reporte.id === 'transporte' ? 'PDF + Excel' : reporte.tipo === "pdf" ? 'PDF' : 'Excel'}
-                        </span>
-                      )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {reportes.map((reporte) => (
+                <div
+                  key={reporte.id}
+                  className={`border-2 border-gray-100 rounded-2xl p-6 transition-all duration-300 hover:shadow-md hover:border-gray-200 ${!reporte.disponible ? "opacity-60" : ""
+                    }`}
+                >
+                  <div className="flex items-start space-x-4">
+                    {/* Icono */}
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg ${reporte.color.replace('hover:', '')
+                      }`}>
+                      {reporte.icono}
                     </div>
 
-                    <p className="text-gray-600 text-sm mb-4">
-                      {reporte.descripcion}
-                    </p>
+                    {/* Contenido */}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-semibold text-gray-800">
+                          {reporte.titulo}
+                        </h3>
+                        {!reporte.disponible && (
+                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-medium">
+                            Próximamente
+                          </span>
+                        )}
+                        {reporte.disponible && (
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${reporte.id === 'transporte'
+                            ? 'bg-gradient-to-r from-red-100 to-green-100 text-gray-800'
+                            : reporte.tipo === "pdf"
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-green-100 text-green-800'
+                            }`}>
+                            {reporte.id === 'transporte' ? 'PDF + Excel' : reporte.tipo === "pdf" ? 'PDF' : 'Excel'}
+                          </span>
+                        )}
+                      </div>
 
-                    {reporte.id === 'transporte' ? (
-                      <div className="space-y-3">
+                      <p className="text-gray-600 text-sm mb-4">
+                        {reporte.descripcion}
+                      </p>
+
+                      {reporte.id === 'transporte' ? (
+                        <div className="space-y-3">
+                          <button
+                            onClick={() => handleGenerarReporte(reporte.id)}
+                            disabled={!reporte.disponible || loading}
+                            className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
+                              ? `${reporte.color} text-white shadow-sm hover:shadow-md`
+                              : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              }`}
+                          >
+                            {loading ? "Generando..." :
+                              reporte.disponible ? "📊 Generar Reporte PDF" : "Disponible Próximamente"}
+                          </button>
+                          <button
+                            onClick={handleGenerarExcelTransporte}
+                            disabled={!reporte.disponible || loading}
+                            className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
+                              ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-md'
+                              : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              }`}
+                          >
+                            {loading ? "Generando..." :
+                              reporte.disponible ? "📥 Descargar Excel" : "Disponible Próximamente"}
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           onClick={() => handleGenerarReporte(reporte.id)}
                           disabled={!reporte.disponible || loading}
@@ -1389,39 +1435,16 @@ export default function ConsolidacionMain() {
                             }`}
                         >
                           {loading ? "Generando..." :
-                            reporte.disponible ? "📊 Generar Reporte PDF" : "Disponible Próximamente"}
+                            reporte.disponible ? "Generar Reporte" : "Disponible Próximamente"}
                         </button>
-                        <button
-                          onClick={handleGenerarExcelTransporte}
-                          disabled={!reporte.disponible || loading}
-                          className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
-                            ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-md'
-                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                            }`}
-                        >
-                          {loading ? "Generando..." :
-                            reporte.disponible ? "📥 Descargar Excel" : "Disponible Próximamente"}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleGenerarReporte(reporte.id)}
-                        disabled={!reporte.disponible || loading}
-                        className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${reporte.disponible && !loading
-                          ? `${reporte.color} text-white shadow-sm hover:shadow-md`
-                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          }`}
-                      >
-                        {loading ? "Generando..." :
-                          reporte.disponible ? "Generar Reporte" : "Disponible Próximamente"}
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* SECCIÓN DE RESUMEN ESTADÍSTICO */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-4 sm:p-6 border border-blue-100">
@@ -1522,14 +1545,14 @@ export default function ConsolidacionMain() {
       {/* Modal para Costos de Transporte */}
       {modalCostoAbierto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
-            <div className="bg-green-500 text-white p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+            <div className="bg-green-500 text-white p-4 rounded-t-2xl flex-shrink-0">
               <h2 className="text-xl font-semibold">
                 {costoEditando ? 'Editar Costo' : 'Nuevo Costo de Transporte'}
               </h2>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1607,8 +1630,8 @@ export default function ConsolidacionMain() {
                       onChange={(e) => setFormCosto(prev => ({ ...prev, ValorHorasExtras: e.target.value }))}
                       disabled={formCosto.HorasExtras === '' || parseFloat(formCosto.HorasExtras) <= 0}
                       className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${formCosto.HorasExtras === '' || parseFloat(formCosto.HorasExtras) <= 0
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : ''
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : ''
                         }`}
                       placeholder="0"
                     />
@@ -1637,31 +1660,31 @@ export default function ConsolidacionMain() {
                   </div>
                 </div>
               )}
+            </div>
 
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={cerrarModalCosto}
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={guardarCosto}
-                  disabled={guardandoCosto}
-                  className={`flex-1 py-2 rounded-lg font-medium transition ${guardandoCosto
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-500 hover:bg-green-600 text-white'
-                    }`}
-                >
-                  {guardandoCosto ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
-                    </>
-                  ) : (
-                    'Guardar Costo'
-                  )}
-                </button>
-              </div>
+            <div className="flex gap-3 p-6 pt-4 border-t border-gray-100 flex-shrink-0">
+              <button
+                onClick={cerrarModalCosto}
+                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarCosto}
+                disabled={guardandoCosto}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${guardandoCosto
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+                  }`}
+              >
+                {guardandoCosto ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
+                  </>
+                ) : (
+                  'Guardar Costo'
+                )}
+              </button>
             </div>
           </div>
         </div>

@@ -85,9 +85,15 @@ try {
     $boundary = md5(uniqid(time()));
     $asuntoCodificado = '=?UTF-8?B?' . base64_encode($asunto) . '?=';
 
+    // Incluir todos los destinatarios en Reply-To: para que
+    // al responder el correo se pueda responder a todas las cuentas seleccionadas.
+    // NOTA: No agregar 'To:' aquí porque mail() ya lo establece desde el primer
+    // parámetro — si se duplica en headers aparece dos veces en el correo.
+    $toHeader = implode(', ', $destinatariosValidos);
+
     $headers = [
         'From: ' . $nombre_remitente . ' <' . $remitente . '>',
-        'Reply-To: ' . $remitente,
+        'Reply-To: ' . $toHeader,
         'MIME-Version: 1.0',
         'Content-Type: multipart/mixed; boundary="' . $boundary . '"'
     ];
@@ -131,12 +137,11 @@ try {
 
     $headersStr = implode("\r\n", $headers);
 
-    // Enviar correos
+    // Enviar UN SOLO correo a todos los destinatarios juntos
+    $toStr = implode(', ', $destinatariosValidos);
     $enviados = 0;
-    foreach ($destinatariosValidos as $destinatario) {
-        if (@mail($destinatario, $asuntoCodificado, $body, $headersStr)) {
-            $enviados++;
-        }
+    if (@mail($toStr, $asuntoCodificado, $body, $headersStr)) {
+        $enviados = count($destinatariosValidos);
     }
 
     $enlace->close();

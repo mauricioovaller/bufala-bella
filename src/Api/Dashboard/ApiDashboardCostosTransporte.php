@@ -124,7 +124,7 @@ try {
             DATE_FORMAT(todas_fechas.Fecha, '%d/%m') AS FechaCorta,
             
             -- Costos de transporte (pueden ser NULL)
-            COALESCE(ctd.ValorFlete, 0) AS CostoTransporte,
+            COALESCE((ctd.ValorFlete + ctd.ValorHorasExtras), 0) AS CostoTransporte,
             COALESCE(ctd.CantidadCamiones, 0) AS CantidadCamiones,
             COALESCE(ctd.Observaciones, '') AS Observaciones,
             
@@ -137,7 +137,7 @@ try {
             -- Costo por camión
             CASE 
                 WHEN COALESCE(ctd.CantidadCamiones, 0) > 0 
-                THEN ROUND(COALESCE(ctd.ValorFlete, 0) / ctd.CantidadCamiones, 0)
+                THEN ROUND(COALESCE((ctd.ValorFlete + ctd.ValorHorasExtras), 0) / ctd.CantidadCamiones, 0)
                 ELSE 0 
             END AS CostoPorCamion
             
