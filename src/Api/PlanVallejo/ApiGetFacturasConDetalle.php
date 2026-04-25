@@ -113,6 +113,7 @@ try {
             di.Unidad,
             di.FOB,
             di.VAN,
+            di.VIE,
             di.Porcentaje,
             di.Reposicion,
             p.FOB_Valor,
@@ -146,6 +147,7 @@ try {
             $unidad,
             $fob,
             $van,
+            $vie,
             $porcentaje,
             $reposicion,
             $fobValor,
@@ -170,6 +172,9 @@ try {
             $porcentajeEfectivo = ($porcentaje !== null)
                 ? $porcentaje
                 : ($fobEfectivo != 0 ? round($vanEfectivo / $fobEfectivo, 6) : null);
+            $vieEfectivo = ($vie !== null && $vie != 0)
+                ? $vie
+                : round($fobEfectivo - $vanEfectivo, 4);
 
             $items[] = [
                 'idDetInvoice' => $idDetInvoice,
@@ -192,6 +197,7 @@ try {
                 'unidad' => !empty($unidad) ? $unidad : 'Kilogramo',
                 'fob' => $fobEfectivo,
                 'van' => $vanEfectivo,
+                'vie' => $vieEfectivo,
                 'porcentaje' => $porcentajeEfectivo,
                 'reposicion' => $reposicion,
             ];

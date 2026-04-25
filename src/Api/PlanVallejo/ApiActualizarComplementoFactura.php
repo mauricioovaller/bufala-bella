@@ -22,13 +22,16 @@ if (!$data || !isset($data['items']) || !is_array($data['items'])) {
 }
 
 // Funciones de sanitización
-function limpiar_texto($txt) {
+function limpiar_texto($txt)
+{
     return $txt !== null ? trim($txt) : null;
 }
-function validar_entero($valor) {
+function validar_entero($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
-function validar_flotante($valor) {
+function validar_flotante($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : null;
 }
 
@@ -54,21 +57,22 @@ try {
         Unidad = ?,
         FOB = ?,
         VAN = ?,
+        VIE = ?,
         Porcentaje = ?,
         Reposicion = ?,
         UsuarioModificacion = ?,
         FechaModificacion = NOW()
         WHERE Id_DetInvoice = ?";
-    
+
     $stmt = $enlace->prepare($sqlUpdate);
-    
+
     foreach ($items as $item) {
         $idDetInvoice = validar_entero($item['idDetInvoice'] ?? null);
         if (!$idDetInvoice) {
             $errores[] = "ID de detalle inválido";
             continue;
         }
-        
+
         $dex = limpiar_texto($item['dex'] ?? null);
         $dia = validar_entero($item['dia'] ?? null);
         $mes = validar_entero($item['mes'] ?? null);
@@ -79,11 +83,12 @@ try {
         $unidad = limpiar_texto($item['unidad'] ?? 'Kilogramo');
         $fob = validar_flotante($item['fob'] ?? null);
         $van = validar_flotante($item['van'] ?? null);
+        $vie = validar_flotante($item['vie'] ?? null);
         $porcentaje = validar_flotante($item['porcentaje'] ?? null);
         $reposicion = limpiar_texto($item['reposicion'] ?? 'En Proceso');
-        
+
         $stmt->bind_param(
-            "siiissssdddsii",
+            "siiissssddddsii",
             $dex,
             $dia,
             $mes,
@@ -94,21 +99,22 @@ try {
             $unidad,
             $fob,
             $van,
+            $vie,
             $porcentaje,
             $reposicion,
             $idUsuario,
             $idDetInvoice
         );
-        
+
         if ($stmt->execute()) {
             $actualizados += $stmt->affected_rows;
         } else {
             $errores[] = "Error actualizando ID $idDetInvoice: " . $enlace->error;
         }
     }
-    
+
     $stmt->close();
-    
+
     if (empty($errores)) {
         $enlace->commit();
         echo json_encode([
@@ -124,11 +130,9 @@ try {
             "errores" => $errores
         ]);
     }
-    
 } catch (Exception $e) {
     $enlace->rollback();
     echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
 }
 
 $enlace->close();
-?>

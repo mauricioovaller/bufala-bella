@@ -31,6 +31,11 @@ export default function ProduccionPedidos() {
   const [cargandoListas, setCargandoListas] = useState(false);
   // Estado para cambios locales (ahora incluye cantidades)
   const [itemsEditados, setItemsEditados] = useState({});
+  // Estados de auto-guardado
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState("");
   // Cargar responsables y lotes al montar
   useEffect(() => {
     const cargarListas = async () => {
@@ -180,7 +185,7 @@ export default function ProduccionPedidos() {
 
     // Validar que haya al menos un lote asignado
     const hayAlgunLote = lotes.some((lote) => lote && lote !== "");
-    
+
     // Contar lotes con cantidad asignada (pareados correctamente)
     let lotesConCantidad = 0;
     for (let i = 0; i < 3; i++) {
@@ -299,6 +304,89 @@ export default function ProduccionPedidos() {
       default: return "";
     }
   };
+
+  // Helper: formato de tiempo relativo
+  const getTimeAgo = (date) => {
+    if (!date) return "";
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return "hace unos segundos";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `hace ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    const hours = Math.floor(minutes / 60);
+    return `hace ${hours} ${hours === 1 ? "hora" : "horas"}`;
+  };
+
+  // Auto-guardado silencioso (valida antes de guardar; omite si hay errores)
+  const handleAutoSave = async (showNotification = false) => {
+    if (!autoSaveEnabled || !pedido) return;
+
+    // Validar antes de autoguardar; si hay errores, omitir silenciosamente
+    const errores = validarTodosPedidos();
+    if (errores.length > 0) return;
+
+    setIsAutoSaving(true);
+    setAutoSaveStatus("");
+    try {
+      const items = pedido.items.map((item) => {
+        const editado = itemsEditados[item.idDet] || {};
+        return {
+          idDet: item.idDet,
+          idResponsable: editado.idResponsable || null,
+          lotes: editado.lotes || ["", "", ""],
+          cantidades: editado.cantidades || [0, 0, 0],
+        };
+      });
+
+      const res = await guardarProduccion({
+        tipo: tipoPedido,
+        idPedido: pedido.idPedido,
+        items,
+      });
+
+      if (res.success) {
+        setLastAutoSaveTime(new Date());
+        setAutoSaveStatus("guardado");
+        if (showNotification) {
+          Swal.fire({
+            icon: "success",
+            title: "Auto-guardado",
+            text: "Despacho guardado automáticamente",
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: "top-end",
+          });
+        }
+        console.log("✓ Auto-guardado: despacho guardado");
+      } else {
+        setAutoSaveStatus("error");
+        console.error("Error en auto-guardado:", res.message);
+      }
+    } catch (error) {
+      setAutoSaveStatus("error");
+      console.error("Error de conexión en auto-guardado:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  // Auto-guardado automático cada 30 segundos cuando hay un pedido cargado
+  useEffect(() => {
+    if (!pedido || !autoSaveEnabled) return;
+    const autoSaveInterval = setInterval(() => {
+      handleAutoSave(false);
+    }, 30000);
+    return () => clearInterval(autoSaveInterval);
+  }, [pedido, itemsEditados, autoSaveEnabled]);
+
+  // Limpiar estado de guardado después de 3 segundos
+  useEffect(() => {
+    if (autoSaveStatus === "guardado") {
+      const timeout = setTimeout(() => setAutoSaveStatus(""), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [autoSaveStatus]);
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
@@ -438,7 +526,62 @@ export default function ProduccionPedidos() {
                 Volver a lista
               </button>
             </div>
-            <div className="flex justify-end mb-4">
+            <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-3 mb-4 flex-wrap">
+              {/* Indicador de auto-guardado */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2">
+                  {isAutoSaving ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                      <span className="text-sm text-blue-700 font-medium">Auto-guardando...</span>
+                    </>
+                  ) : autoSaveStatus === "guardado" ? (
+                    <>
+                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-green-700 font-medium">Guardado</span>
+                    </>
+                  ) : autoSaveStatus === "error" ? (
+                    <>
+                      <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-red-700 font-medium">Error al guardar</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-sm text-blue-700">Monitorando cambios</span>
+                    </>
+                  )}
+                </div>
+                {lastAutoSaveTime && (
+                  <span className="text-xs text-gray-600 ml-2">
+                    {getTimeAgo(lastAutoSaveTime)}
+                  </span>
+                )}
+              </div>
+              {/* Botón guardar ahora (silencioso) */}
+              <button
+                onClick={() => handleAutoSave(true)}
+                className="bg-blue-500 text-white rounded-lg px-4 py-2 hover:bg-blue-600 transition font-medium whitespace-nowrap disabled:bg-gray-400"
+                disabled={isAutoSaving || !pedido}
+              >
+                {isAutoSaving ? "Guardando..." : "Guardar Ahora"}
+              </button>
+              {/* Toggle auto-guardado */}
+              <button
+                onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition whitespace-nowrap ${autoSaveEnabled
+                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                title={autoSaveEnabled ? "Auto-guardado activado" : "Auto-guardado desactivado"}
+              >
+                {autoSaveEnabled ? "✓ Auto-guardado" : "⊙ Manual"}
+              </button>
+              {/* Botón guardar completo con validación */}
               <button
                 onClick={handleGuardar}
                 className="bg-orange-500 text-white rounded-lg px-4 py-2 hover:bg-orange-600 transition font-medium"
@@ -569,7 +712,7 @@ export default function ProduccionPedidos() {
                   <div key={item.idDet} className={`border rounded-lg p-3 ${validacion.bgColor}`}>
                     <div className="font-semibold">{item.producto}</div>
                     <div className="text-sm text-gray-600 mb-2">Cantidad disponible: {item.cantidad}</div>
-                    
+
                     <div className="mb-2">
                       <label className="text-xs font-medium">Responsable</label>
                       <select

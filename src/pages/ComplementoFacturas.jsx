@@ -58,13 +58,34 @@ export default function ComplementoFacturas() {
   };
 
   const handleItemChange = (idDetInvoice, campo, valor) => {
-    setItemsEditados((prev) => ({
-      ...prev,
-      [idDetInvoice]: {
-        ...(prev[idDetInvoice] || {}),
-        [campo]: valor,
-      },
-    }));
+    // Para VIE: buscar valores originales fuera del setState
+    let originalFob = "";
+    let originalVan = "";
+    if (campo === "fob" || campo === "van") {
+      for (const factura of facturas) {
+        const found = factura.items.find((i) => i.idDetInvoice === idDetInvoice);
+        if (found) {
+          originalFob = found.fob || "";
+          originalVan = found.van || "";
+          break;
+        }
+      }
+    }
+
+    setItemsEditados((prev) => {
+      const prevItem = prev[idDetInvoice] || {};
+      const newItem = { ...prevItem, [campo]: valor };
+
+      // Auto-calcular VIE = FOB - VAN al cambiar cualquiera de los dos
+      if (campo === "fob" || campo === "van") {
+        const fobVal = campo === "fob" ? valor : (prevItem.fob !== undefined ? prevItem.fob : originalFob);
+        const vanVal = campo === "van" ? valor : (prevItem.van !== undefined ? prevItem.van : originalVan);
+        const vie = (parseFloat(fobVal) || 0) - (parseFloat(vanVal) || 0);
+        newItem.vie = isNaN(vie) ? "" : String(parseFloat(vie.toFixed(4)));
+      }
+
+      return { ...prev, [idDetInvoice]: newItem };
+    });
   };
 
   const handleGuardar = async () => {
@@ -85,6 +106,7 @@ export default function ComplementoFacturas() {
             unidad: getItemValue(item, "unidad") || "Kilogramo",
             fob: getItemValue(item, "fob") || null,
             van: getItemValue(item, "van") || null,
+            vie: getItemValue(item, "vie") || null,
             porcentaje: getItemValue(item, "porcentaje") || null,
             reposicion: getItemValue(item, "reposicion") || "En Proceso",
           });
@@ -137,6 +159,7 @@ export default function ComplementoFacturas() {
               unidad: getItemValue(item, "unidad") || "Kilogramo",
               fob: getItemValue(item, "fob") || null,
               van: getItemValue(item, "van") || null,
+              vie: getItemValue(item, "vie") || null,
               porcentaje: getItemValue(item, "porcentaje") || null,
               reposicion: getItemValue(item, "reposicion") || "En Proceso",
             });
@@ -368,8 +391,8 @@ export default function ComplementoFacturas() {
                 <button
                   onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition whitespace-nowrap ${autoSaveEnabled
-                      ? "bg-green-100 text-green-700 hover:bg-green-200"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   title={autoSaveEnabled ? "Auto-guardado activado" : "Auto-guardado desactivado"}
                 >
@@ -414,6 +437,7 @@ export default function ComplementoFacturas() {
                               <th className="p-2 text-right">Kg</th>
                               <th className="p-2 text-right">FOB</th>
                               <th className="p-2 text-right">VAN</th>
+                              <th className="p-2 text-right">VIE</th>
                               <th className="p-2 text-right">%</th>
                               <th className="p-2 text-left">Reposición</th>
                               <th className="p-2 text-center">Unidades</th>
@@ -427,7 +451,7 @@ export default function ComplementoFacturas() {
                                     <td className="p-2">{item.codigoSiesa}</td>
                                     <td className="p-2 max-w-xs truncate">{item.descripFactura}</td>
                                     <td className="p-2 text-right">{item.kilogramos}</td>
-                                    <td colSpan="12" className="p-2 text-center text-gray-500">
+                                    <td colSpan="13" className="p-2 text-center text-gray-500">
                                       No aplica Plan Vallejo
                                     </td>
                                   </tr>
@@ -441,7 +465,7 @@ export default function ComplementoFacturas() {
                                       type="text"
                                       value={getItemValue(item, "dex")}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "dex", e.target.value)}
-                                      className="border rounded p-1 w-20 text-xs"
+                                      className="border rounded p-1 w-32 text-xs"
                                     />
                                   </td>
                                   <td className="p-2">
@@ -449,7 +473,7 @@ export default function ComplementoFacturas() {
                                       type="number"
                                       value={getItemValue(item, "dia") || fechaParts.dia}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "dia", e.target.value)}
-                                      className="border rounded p-1 w-12 text-xs text-center"
+                                      className="border rounded p-1 w-8 text-xs text-center"
                                       min="1" max="31"
                                     />
                                   </td>
@@ -458,7 +482,7 @@ export default function ComplementoFacturas() {
                                       type="number"
                                       value={getItemValue(item, "mes") || fechaParts.mes}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "mes", e.target.value)}
-                                      className="border rounded p-1 w-12 text-xs text-center"
+                                      className="border rounded p-1 w-8 text-xs text-center"
                                       min="1" max="12"
                                     />
                                   </td>
@@ -467,7 +491,7 @@ export default function ComplementoFacturas() {
                                       type="number"
                                       value={getItemValue(item, "anio") || fechaParts.anio}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "anio", e.target.value)}
-                                      className="border rounded p-1 w-16 text-xs text-center"
+                                      className="border rounded p-1 w-13 text-xs text-center"
                                       min="2000" max="2100"
                                     />
                                   </td>
@@ -476,7 +500,7 @@ export default function ComplementoFacturas() {
                                       type="text"
                                       value={getItemValue(item, "ad") || "03"}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "ad", e.target.value)}
-                                      className="border rounded p-1 w-12 text-xs text-center"
+                                      className="border rounded p-1 w-8 text-xs text-center"
                                       maxLength="3"
                                     />
                                   </td>
@@ -485,7 +509,7 @@ export default function ComplementoFacturas() {
                                       type="text"
                                       value={getItemValue(item, "pais") || "269"}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "pais", e.target.value)}
-                                      className="border rounded p-1 w-12 text-xs text-center"
+                                      className="border rounded p-1 w-8 text-xs text-center"
                                       maxLength="3"
                                     />
                                   </td>
@@ -495,7 +519,7 @@ export default function ComplementoFacturas() {
                                       type="text"
                                       value={getItemValue(item, "cip") || item.codigoCIP || ""}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "cip", e.target.value)}
-                                      className="border rounded p-1 w-12 text-xs text-center"
+                                      className="border rounded p-1 w-8 text-xs text-center"
                                       maxLength="2"
                                     />
                                   </td>
@@ -523,6 +547,15 @@ export default function ComplementoFacturas() {
                                       step="0.01"
                                       value={getItemValue(item, "van")}
                                       onChange={(e) => handleItemChange(item.idDetInvoice, "van", e.target.value)}
+                                      className="border rounded p-1 w-20 text-xs text-right"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={getItemValue(item, "vie")}
+                                      onChange={(e) => handleItemChange(item.idDetInvoice, "vie", e.target.value)}
                                       className="border rounded p-1 w-20 text-xs text-right"
                                     />
                                   </td>
@@ -661,8 +694,8 @@ export default function ComplementoFacturas() {
                                 </div>
                               </div>
 
-                              {/* Fila 3: FOB, VAN, % */}
-                              <div className="grid grid-cols-3 gap-2 mb-2">
+                              {/* Fila 3: FOB, VAN, VIE, % */}
+                              <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
                                   <label className="text-xs font-medium">FOB</label>
                                   <input
@@ -680,6 +713,16 @@ export default function ComplementoFacturas() {
                                     step="0.01"
                                     value={getItemValue(item, "van")}
                                     onChange={(e) => handleItemChange(item.idDetInvoice, "van", e.target.value)}
+                                    className="border rounded p-1 w-full text-xs text-right"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium">VIE</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={getItemValue(item, "vie")}
+                                    onChange={(e) => handleItemChange(item.idDetInvoice, "vie", e.target.value)}
                                     className="border rounded p-1 w-full text-xs text-right"
                                   />
                                 </div>
