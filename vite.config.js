@@ -5,6 +5,13 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   base: "/DatenBankenApp/DiBufala/", // ajusta esta ruta a la carpeta real donde montaste la app
   plugins: [react()],
+  build: {
+    // Elimina console.log (y debugger) automáticamente en el build de producción
+    minify: "esbuild",
+    esbuildOptions: {
+      drop: ["console", "debugger"],
+    },
+  },
   test: {
     globals: true,
     environment: "jsdom",
