@@ -16,6 +16,7 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+mcp-mysql/.env
 MCP_CONFIGURACION_COMPLETA.md
 test_mcp_*.html
 premortem-*.html
