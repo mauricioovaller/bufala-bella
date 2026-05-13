@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Archivos con credenciales o configuración sensible — NUNCA versionar
+.env
+.env.local
+.env.*.local
+MCP_CONFIGURACION_COMPLETA.md
+test_mcp_*.html
+premortem-*.html
+premortem-*.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

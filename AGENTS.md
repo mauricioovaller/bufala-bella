@@ -7,9 +7,29 @@
 ║ ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-**Última actualización:** 21 de Abril de 2026  
-**Versión:** 1.1  
+**Última actualización:** 12 de Mayo de 2026  
+**Versión:** 1.5  
 **Responsable:** Equipo de Desarrollo
+
+---
+
+## ⚡ REGLAS RÁPIDAS — LEER ANTES DE CODIFICAR
+
+> **Para cualquier agente de IA:** antes de escribir código, lee los archivos de reglas específicos listados abajo. Son concisos y contienen las restricciones críticas que aplican a cada tipo de archivo.
+
+| Tipo de archivo    | Archivo de reglas                                  | Contenido                                                                  |
+| ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------- |
+| `src/**/*.jsx`     | `.github/instructions/jsx-react.instructions.md`   | Mobile First, tablas, SweetAlert2, paleta de colores, spinner              |
+| `src/Api/**/*.php` | `.github/instructions/php-backend.instructions.md` | Prohibición `get_result()`, prepared statements, decimales, respuesta JSON |
+
+**Estos archivos son la fuente de verdad de las reglas de codificación.** Este documento (`AGENTS.md`) es la fuente de verdad de arquitectura, patrones y procesos.
+
+> **Integración por agente de IA:**
+>
+> - **GitHub Copilot (VS Code):** lee `.github/copilot-instructions.md` + los `.instructions.md` se inyectan automáticamente según el tipo de archivo editado.
+> - **Claude Code:** lee `CLAUDE.md` en la raíz.
+> - **Cursor:** lee `.cursorrules` en la raíz.
+> - **Cualquier otro agente:** leer este `AGENTS.md` y seguir los links de la tabla de arriba.
 
 ---
 
@@ -31,6 +51,8 @@
 14. [Performance y Optimización](#14-performance-y-optimización)
 15. [Seguridad](#15-seguridad)
 16. [Troubleshooting](#16-troubleshooting)
+17. [MCP - Integración con Base de Datos](#17-mcp---integración-con-base-de-datos)
+18. [Reglas de Diseño e Implementación](#18-reglas-de-diseño-e-implementación)
 
 ---
 
@@ -99,7 +121,8 @@
 ├─ VS Code
 ├─ npm (Package manager)
 ├─ ESLint (Linting)
-└─ npm scripts (Build, dev, test)
+├─ npm scripts (Build, dev, test)
+└─ MCP (Model Context Protocol) ← GitHub Copilot accede a la BD en tiempo real
 ```
 
 ### Testing
@@ -196,7 +219,15 @@ bufala-bella/
 │       ├── CAMBIOS_PRODUCCION.md
 │       └── VERSION_HISTORY.md
 │
-├── 📁 database/                       ⭐ NUEVA: Scripts de BD
+├── 📁 mcp-mysql/                       ⭐ Servidor MCP para GitHub Copilot
+│   ├── index.js                       (Servidor Node.js MCP - conexión BD)
+│   ├── package.json
+│   └── node_modules/
+│
+├── 📁 .vscode/
+│   └── mcp.json                       (Configuración MCP para VS Code)
+│
+├── 📁 database/                       Scripts de BD
 │   └── scripts/
 │       ├── crear_tabla_historial_correos.sql
 │       ├── crear_tabla_configuraciones_sistema.sql
@@ -940,9 +971,9 @@ npx vitest run --grep "validarEmail"
 ### 10.4 Cobertura Actual de Tests
 
 ```
-Total: 191 tests | 15 archivos | 0 fallos (21 Abril 2026)
+Total: 228 tests | 17 archivos | 0 fallos (6 Mayo 2026) ✅
 
-Servicios (10 archivos):
+Servicios (11 archivos):
   correoService.test.js         - validarEmail, parsearEmails, generarNombre...
   clientesService.test.js       - listarClientes, guardar, actualizar, validar
   productosService.test.js      - listarProductos, guardar, actualizar
@@ -953,15 +984,17 @@ Servicios (10 archivos):
   produccionService.test.js     - getLotes, guardarLote, getResponsables
   menuPrincipalService.test.js  - getPermisos, manejo de errores
   consolidacionService.test.js  - generarExcel, generarReportes
+  pedidosChileService.test.js   - getDatosSelect, guardar, actualizar, imprimir
 
-Páginas (4 archivos):
+Páginas (5 archivos):
   Inicio.test.jsx       - renderiza, métricas, actividad reciente
   Clientes.test.jsx     - formulario, listar, toggle vista
   Conductores.test.jsx  - formulario, listar, manejo errores
   Productos.test.jsx    - formulario, listar, manejo errores
+  PedidosChile.test.jsx - toolbar, modal búsqueda, filtrado, carga pedido
 
 Enrutamiento (1 archivo):
-  App.test.jsx          - las 13 rutas de la aplicación
+  App.test.jsx          - las rutas de la aplicación
 ```
 
 ### 10.5 Convenciones para Escribir Tests
@@ -1022,6 +1055,21 @@ describe("MiPagina", () => {
 - El `Layout` usa `<Outlet>` de React Router, no `{children}` — mockear con `vi.importActual`
 - Componentes con vista desktop+mobile renderizarán el mismo texto **dos veces** → usar `getAllByText` en lugar de `getByText`
 - Labels sin `htmlFor` → buscar inputs por `getByPlaceholderText` en lugar de `getByRole`
+- **El primer test de un archivo de páginas puede ser lento** (carga fría del módulo) → usar `async/await` con `findByText` en lugar de `getByText` para evitar timeouts:
+
+```javascript
+// ❌ PUEDE HACER TIMEOUT en el primer test del archivo
+it("renderiza el título", () => {
+  render(<MiPagina />);
+  expect(screen.getByText(/título/i)).toBeInTheDocument();
+});
+
+// ✅ CORRECTO: async + findByText aguanta la carga inicial
+it("renderiza el título", async () => {
+  render(<MiPagina />);
+  expect(await screen.findByText(/título/i)).toBeInTheDocument();
+});
+```
 
 ### 10.6 Checklist Pre-Deploy
 
@@ -1184,13 +1232,17 @@ Descripción clara de qué resuelve
 1. Créate rama feature
    git checkout -b feature/nombre-descriptivo
 
-2. Actualiza AGENTS.md si cambias arquitectura
+2. Implementa siguiendo buenas prácticas
 
-3. Implementa siguiendo buenas prácticas
+3. Escribe los tests (servicios + página)
+   npm test → 0 fallos antes de continuar
 
-4. Testa manualmente
+4. ⭐ DOCUMENTA INMEDIATAMENTE — NO al final, AHORA:
+   a) Actualiza AGENTS.md (sección 10.4 conteo de tests, arquitectura si cambió)
+   b) Registra el cambio en docs/changelog/CAMBIOS_PRODUCCION.md
+   c) Si es un sistema nuevo: crea guía en docs/guides/
 
-5. Commit descriptivo
+5. Commit descriptivo que incluya qué se documentó
 
 6. Push y pull request (si es equipo)
 
@@ -1199,7 +1251,24 @@ Descripción clara de qué resuelve
 8. Merge develop a main cuando esté listo production
 ```
 
-### 13.2 Estructura Mínima
+> ⚠️ **REGLA DE ORO — Documentación Inmediata**
+> La documentación se hace EN EL MISMO MOMENTO que la implementación, no después.
+> Si no hay tiempo para documentar, no hay tiempo para implementar.
+> GitHub Copilot debe siempre proponer la actualización de changelog y AGENTS.md
+> al terminar cualquier implementación, sin esperar a que el desarrollador lo pida.
+
+### 13.2 Qué Documentar y Dónde
+
+| Tipo de cambio              | Dónde documentar                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| Nuevo módulo/página         | AGENTS.md (arquitectura, tests) + `docs/changelog/CAMBIOS_PRODUCCION.md` + guía en `docs/guides/` |
+| Nuevo servicio PHP/JS       | AGENTS.md (sección 10.4) + `docs/changelog/CAMBIOS_PRODUCCION.md`                                 |
+| Tablas SQL nuevas           | `database/scripts/README.md` + AGENTS.md (sección 17.6)                                           |
+| Corrección de bug           | `docs/changelog/CAMBIOS_PRODUCCION.md` con causa y solución                                       |
+| Regla nueva de arquitectura | AGENTS.md (sección 4 o 18 según aplique)                                                          |
+| Cambio en tests             | AGENTS.md sección 10.4 (actualizar conteo)                                                        |
+
+### 13.3 Estructura Mínima
 
 ```
 Cada funcionalidad debe tener:
@@ -1209,8 +1278,9 @@ Cada funcionalidad debe tener:
 ✅ Validaciones robustas
 ✅ Manejo de errores completo
 ✅ UI responsive (mobile + desktop)
-✅ Documentación clara
-✅ Testing manual completado
+✅ Tests automatizados (servicio + página)
+✅ AGENTS.md actualizado (conteo tests, arquitectura)
+✅ Entrada en docs/changelog/CAMBIOS_PRODUCCION.md
 ✅ Commit bien escrito
 ```
 
@@ -1344,6 +1414,135 @@ header('Access-Control-Allow-Origin: https://dominio.com');
 
 ---
 
+## 18. REGLAS DE DISEÑO E IMPLEMENTACIÓN
+
+> Estas reglas son **no negociables**. Se aplican en cada archivo, en cada módulo, en cada cambio. GitHub Copilot debe respetarlas siempre.
+
+### 18.1 PHP — Prohibiciones Estrictas
+
+```php
+// ❌ NUNCA usar get_result() — no está disponible en el servidor de producción
+// (requiere mysqlnd que no está instalado)
+$stmt->get_result(); // ← PROHIBIDO
+
+// ✅ USAR SIEMPRE bind_result() + fetch()
+$stmt = $conn->prepare("SELECT id, nombre FROM Clientes WHERE id = ?");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$stmt->bind_result($id, $nombre);
+$stmt->fetch();
+
+// ✅ O para múltiples filas:
+$resultados = [];
+while ($stmt->fetch()) {
+    $resultados[] = ['id' => $id, 'nombre' => $nombre];
+}
+$stmt->close();
+```
+
+**Motivo:** El servidor de producción no tiene el driver `mysqlnd` habilitado.
+Usar `get_result()` causa error fatal silencioso en producción aunque funcione en local.
+
+### 18.2 Responsividad — Mobile First
+
+La aplicación **debe verse igual de atractiva y funcional en móvil que en pantalla grande**.
+
+```jsx
+// ✅ CORRECTO: Diseño mobile-first con breakpoints Tailwind
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* Se apila en móvil, 2 col en tablet, 3 col en desktop */}
+</div>
+
+// ✅ Texto adaptable
+<h1 className="text-lg md:text-2xl lg:text-3xl font-bold">
+
+// ✅ Botones táctiles (mínimo 44px de alto en móvil)
+<button className="py-2 px-4 md:py-1 md:px-3">
+
+// ✅ Tablas: scroll horizontal en móvil
+<div className="overflow-x-auto">
+  <table className="min-w-full">
+
+// ❌ EVITAR: Diseño fijo que no escala
+<div style={{ width: '800px' }}>
+```
+
+**Checklist de responsividad antes de cada commit:**
+
+- [ ] Probado en viewport 375px (móvil)
+- [ ] Probado en viewport 768px (tablet)
+- [ ] Probado en viewport 1280px+ (desktop)
+- [ ] Sin scroll horizontal no deseado en móvil
+- [ ] Texto legible sin hacer zoom
+- [ ] Botones y campos táctiles con tamaño adecuado
+
+### 18.3 Uniformidad Visual
+
+Todos los módulos deben seguir el mismo lenguaje visual. **No inventar estilos nuevos** — reusar los patrones establecidos.
+
+**Paleta de colores (Tailwind):**
+
+```
+Primario:     blue-600 / blue-700
+Éxito:        green-600 / green-500
+Peligro:      red-600 / red-500
+Advertencia:  yellow-500 / yellow-600
+Neutro:       gray-100 a gray-800
+Fondo cards:  white + shadow-sm o shadow-md
+```
+
+**Estructura estándar de una página/módulo:**
+
+```jsx
+// ✅ Patrón uniforme para todas las páginas
+<div className="p-4 md:p-6">
+  {/* Encabezado */}
+  <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
+    <h1 className="text-xl md:text-2xl font-bold text-gray-800">Título</h1>
+    <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+      Acción Principal
+    </button>
+  </div>
+
+  {/* Filtros/Búsqueda */}
+  <div className="bg-white rounded-lg shadow-sm p-4 mb-4">{/* ... */}</div>
+
+  {/* Contenido principal */}
+  <div className="bg-white rounded-lg shadow-sm">
+    {/* tabla, lista, cards */}
+  </div>
+</div>
+```
+
+**Notificaciones:** Siempre con SweetAlert2, nunca `alert()` nativo:
+
+```javascript
+// ✅ CORRECTO
+Swal.fire({
+  icon: "success",
+  title: "Guardado",
+  text: "Registro guardado correctamente.",
+});
+
+// ❌ PROHIBIDO
+alert("Guardado");
+```
+
+**Estados de carga:** Siempre mostrar feedback visual:
+
+```jsx
+// ✅ Loading spinner uniforme
+{
+  loading && (
+    <div className="flex justify-center items-center py-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
+}
+```
+
+---
+
 ## 16. TROUBLESHOOTING
 
 ### 16.1 Problemas Comunes
@@ -1384,12 +1583,143 @@ if (!documento) {
 
 ---
 
+## 17. MCP - INTEGRACIÓN CON BASE DE DATOS
+
+### ¿Qué es el MCP aquí?
+
+El **Model Context Protocol (MCP)** permite a GitHub Copilot acceder directamente a la base de datos MySQL de Bufala Bella en tiempo real, sin necesidad de preguntar la estructura al desarrollador.
+
+### 17.1 Arquitectura del MCP
+
+```
+VS Code (GitHub Copilot)
+        │
+        ▼
+  .vscode/mcp.json  ←  apunta al servidor local
+        │
+        ▼
+  mcp-mysql/index.js  ←  servidor MCP Node.js
+        │
+        ▼
+  MySQL remoto (datenbankensoluciones.com.co)
+        │
+        ▼
+  Base de datos: datenban_DiBufala
+```
+
+### 17.2 Archivos Clave
+
+| Archivo                            | Propósito                                                         |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `mcp-mysql/index.js`               | Servidor MCP — lógica de conexión y herramientas                  |
+| `mcp-mysql/package.json`           | Dependencias del servidor (`@modelcontextprotocol/sdk`, `mysql2`) |
+| `.vscode/mcp.json`                 | Configuración que VS Code usa para lanzar el servidor             |
+| `docs/development/MCP_DATABASE.md` | Documentación detallada del MCP                                   |
+
+### 17.3 Configuración Activa
+
+**`.vscode/mcp.json`:**
+
+```json
+{
+  "servers": {
+    "mysql-bufala-bella": {
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp-mysql/index.js"]
+    }
+  }
+}
+```
+
+**Credenciales en `mcp-mysql/index.js`:**
+
+```
+Host:     datenbankensoluciones.com.co
+Usuario:  datenban_Dibufala_Prueba
+Base de datos: datenban_DiBufala
+Puerto:   3306
+```
+
+### 17.4 Herramientas Disponibles para Copilot
+
+| Herramienta MCP  | Qué hace                                         |
+| ---------------- | ------------------------------------------------ |
+| `list_tables`    | Lista todas las tablas de la BD (43 tablas)      |
+| `describe_table` | Muestra columnas y tipos de una tabla específica |
+| `query_db`       | Ejecuta consultas SELECT personalizadas          |
+
+> **Seguridad:** Solo se permiten `SELECT`. INSERT, UPDATE, DELETE y DROP están bloqueados.
+
+### 17.5 Cómo Arrancar / Reiniciar el MCP
+
+El servidor MCP se lanza automáticamente cuando VS Code abre el workspace.
+
+Si no responde o hay error:
+
+1. `Ctrl+Shift+P` → **"MCP: Restart Server"**
+2. O: `Ctrl+Shift+P` → **"Developer: Reload Window"**
+
+Para probar manualmente la conexión:
+
+```bash
+cd mcp-mysql
+node -e "import('mysql2/promise').then(async ({default: mysql}) => {
+  const conn = await mysql.createConnection({
+    host: 'TU_HOST_BD',
+    user: 'TU_USUARIO_BD',
+    password: 'TU_PASSWORD_BD',
+    database: 'TU_BASE_DE_DATOS',
+    port: 3306
+  });
+  const [rows] = await conn.execute('SHOW TABLES');
+  console.log('Tablas:', rows.length);
+  await conn.end();
+})"
+```
+
+### 17.6 Tablas Disponibles en la BD (43)
+
+```
+Clientes           Conductores        Productos          Lotes
+Embalajes          Bodegas            Transportadoras    Aerolineas
+Agencias           Ayudantes          Responsables       Consignatarios
+Agrupamientos      ClientesRegion     Permisos           PermisosAcciones
+ConfiguracionesSistema  Comentarios   RegistrosExcel     CostosTransporteDiario
+EncabPedido        DetPedido          ResumenPorPedido   Planillas
+EncabInvoice       DetInvoice         DetInvoiceCopia
+EncabPedidoSample  DetPedidoSample
+ProductosTransitorios
+
+--- Módulo Correos ---
+correos_cuentas_configuracion    correos_cuentas_modulos
+correos_destinatarios            correos_enviados
+correos_envios_log               historial_correos
+plantillas_correo                plantillas_correos_modulos
+documentos_adjuntables
+
+--- Vistas (Views) ---
+vw_correos_predeterminados       vw_correos_resumen
+vw_estadisticas_correos          vw_historial_reciente
+```
+
+### 17.7 Ejemplos de Uso con Copilot
+
+Una vez activo el MCP, GitHub Copilot puede responder preguntas como:
+
+- _"¿Qué columnas tiene la tabla Clientes?"_
+- _"¿Cuántos registros hay en correos_enviados?"_
+- _"Muéstrame la estructura de EncabPedido"_
+- _"¿Qué relaciones tienen DetPedido y EncabPedido?"_
+
+---
+
 ## 📚 REFERENCIAS RÁPIDAS
 
 ### Archivos Importantes
 
 - `docs/guides/GUIA_ENVIO_CORREOS_GENERICO.md` - Cómo usar sistema de correos
 - `docs/guides/GUIA_TESTING_SISTEMA_CORREOS.md` - Pruebas
+- `docs/development/MCP_DATABASE.md` - Configuración MCP con BD
 - `database/scripts/` - Scripts SQL
 - `.env.example` - Variables de entorno
 
@@ -1415,15 +1745,31 @@ git log --oneline # Ver commits
 
 ## ✅ CHECKLIST: ANTES DE HACER COMMIT
 
+**Código:**
+
 - [ ] Código sigue convenciones de nombres
 - [ ] Sin errores en console
 - [ ] Validaciones en lugar
 - [ ] Responsivo en mobile
-- [ ] Documentación actualizada
-- [ ] `npm test` → 0 fallos
-- [ ] Commit message descriptivo
-- [ ] Sin archivos temporales
 - [ ] Sin credenciales en código
+- [ ] Sin archivos temporales
+
+**Tests:**
+
+- [ ] `npm test` → 0 fallos
+- [ ] Tests nuevos creados para la funcionalidad implementada
+- [ ] Conteo de tests en AGENTS.md sección 10.4 actualizado
+
+**Documentación (OBLIGATORIA — no opcional):**
+
+- [ ] AGENTS.md actualizado si hubo cambios de arquitectura o tests
+- [ ] `docs/changelog/CAMBIOS_PRODUCCION.md` con entrada del cambio realizado
+- [ ] Si es módulo nuevo: guía creada en `docs/guides/`
+- [ ] Si hay tablas SQL nuevas: `database/scripts/README.md` actualizado
+
+**Git:**
+
+- [ ] Commit message descriptivo (incluye qué se implementó y qué se documentó)
 
 ---
 
@@ -1444,6 +1790,6 @@ Cuando implementes algo nuevo:
 
 ---
 
-**Última actualización:** 21 de Abril de 2026  
+**Última actualización:** 6 de Mayo de 2026  
 **Mantenido por:** Equipo de Desarrollo  
 **Próxima revisión:** Cuando agregues nueva funcionalidad importante

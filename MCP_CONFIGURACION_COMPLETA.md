@@ -19,9 +19,9 @@ Se ha configurado un **MCP (Model Context Protocol)** que permite al asistente I
 ## ⚙️ Credenciales Configuradas
 
 ```
-✓ Host:           www.datenbankensoluciones.com.co
-✓ Usuario:        datenban_Admin_MCP
-✓ Base de Datos:  dateban_Dibufala
+✓ Host:           [Ver mcp-mysql/index.js — no versionar]
+✓ Usuario:        [Ver mcp-mysql/index.js — no versionar]
+✓ Base de Datos:  [Ver mcp-mysql/index.js — no versionar]
 ✓ Permisos:       Solo lectura (SELECT)
 ✓ Ubicación:      /DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php
 ```
@@ -31,11 +31,11 @@ Se ha configurado un **MCP (Model Context Protocol)** que permite al asistente I
 El archivo `conexionbd.php` se ha actualizado automáticamente con las nuevas credenciales:
 
 ```php
-// Configuración actualizada
-$servidor_bd = "www.datenbankensoluciones.com.co";
-$usuario_bd = "datenban_Admin_MCP";
-$contrasena_bd = "Q!iVse$Y!Jx)U+Lw";
-$base_datos = "dateban_Dibufala";
+// Configuración actualizada — ver credenciales en servidor (no versionar)
+$servidor_bd = getenv('DB_HOST');
+$usuario_bd = getenv('DB_USER');
+$contrasena_bd = getenv('DB_PASSWORD');
+$base_datos = getenv('DB_NAME');
 ```
 
 ---
@@ -265,11 +265,10 @@ No incluyas espacios en blanco
 
 ```
 1. Verifica que el usuario existe:
-   Usuario: datenban_Admin_MCP
-   Contraseña: Q!iVse$Y!Jx)U+Lw
+   Usuario: [ver credenciales en servidor — no están versionadas]
 
 2. Verifica que el usuario tiene permisos SELECT:
-   GRANT SELECT ON dateban_Dibufala.* TO 'datenban_Admin_MCP'@'%';
+   GRANT SELECT ON <base_de_datos>.* TO '<usuario>'@'%';
 
 3. Verifica que la BD existe:
    La BD debe estar en el servidor

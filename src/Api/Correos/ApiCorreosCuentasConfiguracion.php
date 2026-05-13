@@ -589,20 +589,40 @@ function probarConexionSMTP($enlace, $data)
         return;
     }
 
-    // Obtener datos de la cuenta - usar query simple para mejor compatibilidad
-    $sql = "SELECT id, nombre, email_remitente, servidor_smtp, puerto, usuario_smtp, contrasena_smtp, usar_tls, usar_ssl, predeterminada, activa 
+    // Obtener datos de la cuenta usando prepared statement
+    $stmt = $enlace->prepare("SELECT id, nombre, email_remitente, servidor_smtp, puerto, usuario_smtp, contrasena_smtp, usar_tls, usar_ssl, predeterminada, activa 
             FROM correos_cuentas_configuracion 
-            WHERE id = $id AND activa = 1 LIMIT 1";
+            WHERE id = ? AND activa = 1 LIMIT 1");
 
-    $resultado = $enlace->query($sql);
-
-    if (!$resultado || $resultado->num_rows === 0) {
-        echo json_encode(["success" => false, "message" => "Cuenta no encontrada o inactiva"]);
+    if (!$stmt) {
+        echo json_encode(["success" => false, "message" => "Error al preparar consulta"]);
         return;
     }
 
-    $cuenta = $resultado->fetch_assoc();
-    $resultado->free();
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->bind_result($r_id, $r_nombre, $r_email_remitente, $r_servidor_smtp, $r_puerto, $r_usuario_smtp, $r_contrasena_smtp, $r_usar_tls, $r_usar_ssl, $r_predeterminada, $r_activa);
+
+    if (!$stmt->fetch()) {
+        $stmt->close();
+        echo json_encode(["success" => false, "message" => "Cuenta no encontrada o inactiva"]);
+        return;
+    }
+    $stmt->close();
+
+    $cuenta = [
+        'id'               => $r_id,
+        'nombre'           => $r_nombre,
+        'email_remitente'  => $r_email_remitente,
+        'servidor_smtp'    => $r_servidor_smtp,
+        'puerto'           => $r_puerto,
+        'usuario_smtp'     => $r_usuario_smtp,
+        'contrasena_smtp'  => $r_contrasena_smtp,
+        'usar_tls'         => $r_usar_tls,
+        'usar_ssl'         => $r_usar_ssl,
+        'predeterminada'   => $r_predeterminada,
+        'activa'           => $r_activa,
+    ];
 
     // Desencriptar contraseña
     $contrasena = desencriptarContrasena($cuenta['contrasena_smtp']);
