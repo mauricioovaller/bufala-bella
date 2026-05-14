@@ -1,6 +1,70 @@
 # 🔍 MCP - Database Context Protocol
 
-Integración de MCP para visualizar estructura de base de datos.
+Integración de MCP para que GitHub Copilot acceda a la base de datos de Bufala Bella en tiempo real.
+
+---
+
+## ✅ Configuración Activa (Mayo 2026)
+
+### Servidor MCP local (RECOMENDADO)
+
+La solución definitiva usa un servidor MCP Node.js local en la carpeta `mcp-mysql/`.
+
+**Archivos:**
+
+```
+bufala-bella/
+├── mcp-mysql/
+│   ├── index.js          ← Servidor MCP
+│   ├── package.json
+│   └── node_modules/
+└── .vscode/
+    └── mcp.json          ← Apunta a mcp-mysql/index.js
+```
+
+**Credenciales activas en `mcp-mysql/index.js`:**
+
+```js
+const dbConfig = {
+  host: "datenbankensoluciones.com.co",
+  user: "datenban_Dibufala_Prueba",
+  password: "m(?Bw6OOTR9n~b,I",
+  database: "datenban_DiBufala",
+  port: 3306,
+};
+```
+
+**Configuración en `.vscode/mcp.json`:**
+
+```json
+{
+  "servers": {
+    "mysql-bufala-bella": {
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp-mysql/index.js"]
+    }
+  }
+}
+```
+
+**Herramientas disponibles:**
+| Herramienta | Descripción |
+|---|---|
+| `list_tables` | Lista todas las tablas de la BD |
+| `describe_table` | Muestra columnas de una tabla |
+| `query_db` | Ejecuta SELECT personalizados |
+
+**Para reiniciar el MCP:** `Ctrl+Shift+P` → "MCP: Restart Server" (o Reload Window)
+
+**Tablas disponibles (43 en total):**
+
+- Clientes, Conductores, Productos, Lotes, Embalajes
+- EncabPedido, DetPedido, EncabInvoice, DetInvoice
+- Planillas, CostosTransporteDiario, Transportadoras
+- correos_cuentas_configuracion, correos_enviados, historial_correos, plantillas_correo...
+- vw*correos_resumen, vw_historial_reciente *(views)\_
+
+---
 
 ## 📊 ¿Qué es?
 

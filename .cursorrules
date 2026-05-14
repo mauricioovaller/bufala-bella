@@ -1,0 +1,27 @@
+# Bufala Bella — Reglas para Cursor
+
+**Documentación completa:** ver `AGENTS.md` en la raíz.
+
+Stack: React 19 + Vite + Tailwind CSS + PHP 7.4 + MySQL 8.
+
+## PHP (`src/Api/**/*.php`)
+
+- NUNCA usar `get_result()` — no hay `mysqlnd` en producción. Siempre `bind_result()` + `fetch()`.
+- Siempre prepared statements con `bind_param()`. Nunca SQL concatenado.
+- Decimales: `round((float)$valor, 4)`. Nunca `(int)$valor`.
+- Respuesta: `{ success: bool, message: string, datos: array }`.
+
+## React/JSX (`src/**/*.jsx`)
+
+- Mobile First siempre. 375px primero, luego `md:` y `lg:`.
+- Tablas: siempre `<div className="overflow-x-auto"><table>`.
+- Notificaciones: solo `Swal.fire()`. Nunca `alert()`.
+- Inputs pares (fechas, etc.): `grid grid-cols-2` en vez de columna vertical.
+- Paleta Tailwind: primario `blue-600`, éxito `green-600`, peligro `red-600`.
+- Loading: `<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600">`.
+
+## General
+
+- Leer archivos antes de editarlos.
+- `npm test` debe pasar con 0 fallos antes de cada commit.
+- Tests en `src/__tests__/services/` y `src/__tests__/pages/`.

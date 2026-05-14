@@ -1,12 +1,65 @@
-# CAMBIOS IMPLEMENTADOS - MÓDULO PRODUCCIÓN
+# CAMBIOS IMPLEMENTADOS
+
+---
+
+## [2026-05-06] Módulo Pedidos Chile — Implementación Completa
+
+### Descripción
+
+Nuevo módulo para gestionar pedidos de exportación a Chile con lista de empaque en PDF.
+Sigue el mismo patrón de Pedidos Colombia (crear, modificar, buscar, imprimir).
+
+### Archivos creados / modificados
+
+**Base de datos:**
+
+- `database/scripts/crear_tablas_pedidos_chile.sql` — 4 tablas: `ClientesChile`, `ProductosChile`, `EncabPedidoChile`, `DetPedidoChile`. Script ejecutado en producción.
+
+**PHP (Backend):**
+
+- `src/Api/PedidosChile/ApiGetDatosSelect.php` — Clientes, productos, agencias, aerolíneas activos
+- `src/Api/PedidosChile/ApiGetPedidosChile.php` — Lista para modal de búsqueda
+- `src/Api/PedidosChile/ApiGetPedidoChile.php` — Carga pedido específico (encabezado + detalle)
+- `src/Api/PedidosChile/ApiGuardarPedidoChile.php` — INSERT con transacción, retorna CHI-000001
+- `src/Api/PedidosChile/ApiActualizarPedidoChile.php` — UPDATE encabezado + DELETE/INSERT detalle
+- `src/Api/PedidosChile/ApiImprimirListaEmpaqueChile.php` — PDF FPDF A4 horizontal, 17 columnas con totales
+
+**React (Frontend):**
+
+- `src/services/pedidosChileService.js` — 6 funciones: getDatosSelectChile, guardarPedidoChile, getPedidosChile, getPedidoChileEspecifico, actualizarPedidoChile, imprimirPedidoChile
+- `src/components/pedidosChile/PedidoChileHeader.jsx` — 12 campos en 3 filas + observaciones
+- `src/components/pedidosChile/PedidoChileDetail.jsx` — Tabla 17 columnas, auto-fill por producto, cálculos automáticos
+- `src/pages/PedidosChile.jsx` — Página principal: toolbar (Buscar/Refrescar/Nuevo/Guardar/Actualizar/Imprimir), modal búsqueda, ModalVisorPreliminar, totales
+- `src/App.jsx` — Ruta `/pedidos-chile` agregada
+- `src/components/layout.jsx` — Ítem de menú "Pedidos Chile" con ícono Globe
+
+**Tests:**
+
+- `src/__tests__/services/pedidosChileService.test.js` — 23 tests
+- `src/__tests__/pages/PedidosChile.test.jsx` — 15 tests
+- **Total del proyecto: 228 tests ✅ (era 191 antes de este módulo)**
+
+### Notas técnicas
+
+- PHP: usa `bind_result()` en lugar de `get_result()` (regla de producción)
+- FPDF: codificación ISO-8859-1 con `iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $str)`
+- Impresión: móvil → nueva pestaña, escritorio → ModalVisorPreliminar
+- Numeración automática: CHI-NNNNNN (6 dígitos, calculado en el frontend)
+
+---
+
+## [2026-05-06] Módulo Producción — Registro de Cantidades por Lote
 
 ## RESUMEN
+
 Se ha implementado la funcionalidad de registrar cantidad por lote en el módulo de Producción. Ahora, al asignar responsable y lotes a un pedido, se pueden registrar cantidades específicas para cada lote con validación automática.
 
 ## ARCHIVOS MODIFICADOS
 
 ### 1. Frontend: `src/pages/ProduccionPedidos.jsx`
+
 **Cambios principales:**
+
 - ✅ Extendido estado `itemsEditados` para incluir array `cantidades: [0, 0, 0]`
 - ✅ Nuevo handler `handleCantidadLoteChange()` para capturar cambios en cantidades
 - ✅ Nueva función `getCantidadLoteValue()` para obtener cantidad actual de cada lote
@@ -19,13 +72,16 @@ Se ha implementado la funcionalidad de registrar cantidad por lote en el módulo
 - ✅ Mensaje detallado de error al intentar guardar con validación fallida
 
 **Validación en tiempo real:**
+
 - Suma de cantidades se muestra en cada fila: "Total: X / Disponible: Y"
 - Color verde ✓ si suma ≤ cantidad disponible
 - Color rojo ❌ si suma > cantidad disponible (muestra exceso)
 - Al hacer clic en "Guardar", se validan todos los ítems antes de enviar
 
 ### 2. Backend GET: `src/Api/Produccion/ApiGetPedidoProduccion.php`
+
 **Cambios principales:**
+
 - ✅ Agregados campos `CantidadLote1`, `CantidadLote2`, `CantidadLote3` al SELECT
 - ✅ Estos campos se retornan en la respuesta JSON como:
   ```json
@@ -38,7 +94,9 @@ Se ha implementado la funcionalidad de registrar cantidad por lote en el módulo
 - ✅ Los valores se cargan en el estado del componente al abrir un pedido
 
 ### 3. Backend SAVE: `src/Api/Produccion/ApiGuardarProduccion.php`
+
 **Cambios principales:**
+
 - ✅ Ahora recibe estructura de datos: `{ idDet, idResponsable, lotes: [], cantidades: [] }`
 - ✅ Validación en backend:
   - Suma de cantidades ≤ Cantidad del detalle
@@ -52,6 +110,7 @@ Se ha implementado la funcionalidad de registrar cantidad por lote en el módulo
 - ✅ Auditoria: registra usuario y fecha de modificación
 
 ## FUNCIONALIDADES PRESERVADAS ✓
+
 - Selección de Responsable
 - Selección de Lotes (1, 2, 3)
 - Búsqueda de pedidos por rango de fechas
@@ -64,11 +123,13 @@ Se ha implementado la funcionalidad de registrar cantidad por lote en el módulo
 ## FLUJO DE FUNCIONAMIENTO
 
 ### Paso 1: Buscar Pedidos
+
 ```
 Usuario selecciona Tipo, Fecha Desde, Fecha Hasta → Click "Buscar pedidos"
 ```
 
 ### Paso 2: Cargar Pedido
+
 ```
 Click en botón "Cargar" de un pedido
 → API: GET /ApiGetPedidoProduccion.php
@@ -77,6 +138,7 @@ Click en botón "Cargar" de un pedido
 ```
 
 ### Paso 3: Asignar Responsable, Lotes y Cantidades
+
 ```
 Para cada ítem:
 - Seleccionar Responsable (dropdown)
@@ -92,6 +154,7 @@ Al escribir cantidades:
 ```
 
 ### Paso 4: Guardar (CON VALIDACIÓN)
+
 ```
 Click "Guardar Producción"
 → Frontend valida ANTES de enviar:
@@ -110,6 +173,7 @@ Click "Guardar Producción"
 ## ESTRUCTURA DE DATOS
 
 ### Request al Guardar (Frontend → Backend)
+
 ```json
 {
   "tipo": "normal",
@@ -132,6 +196,7 @@ Click "Guardar Producción"
 ```
 
 ### Response al Cargar (Backend → Frontend)
+
 ```json
 {
   "success": true,
@@ -153,16 +218,19 @@ Click "Guardar Producción"
 ## VALIDACIONES
 
 ### Frontend (Tiempo Real)
+
 1. ✓ Cantidades solo aceptan números ≥ 0
 2. ✓ Suma de cantidades se muestra en vivo
 3. ✓ Validación visual con colores
 
 ### Frontend (Al Guardar)
+
 1. ✓ Para cada ítem: suma(cant1, cant2, cant3) ≤ cantidad_disponible
 2. ✓ Si hay error: muestra alerta con lista detallada de productos con problema
 3. ✓ Usuario debe corregir antes de guardar
 
 ### Backend (Al Guardar)
+
 1. ✓ Valida que suma de cantidades ≤ cantidad disponible
 2. ✓ Valida que no se repitan lotes en mismo ítem
 3. ✓ Transacción: si hay error, revierte todos los cambios
@@ -170,6 +238,7 @@ Click "Guardar Producción"
 ## CAMPOS EN BASE DE DATOS
 
 La tabla `DetPedido` (y `DetPedidoSample`) debe tener estos campos (ya existen con valor 0 por defecto):
+
 ```sql
 - CantidadLote1 INT DEFAULT 0
 - CantidadLote2 INT DEFAULT 0
@@ -208,6 +277,7 @@ La tabla `DetPedido` (y `DetPedidoSample`) debe tener estos campos (ya existen c
    - Retorna éxito
 
 **CASO ERROR:** Si usuario intenta asignar 120 unidades (50+40+30):
+
 1. Mensaje en rojo: "Total: 120 / Disponible: 100" ❌ Exceso: 20
 2. Click "Guardar"
 3. Alerta: "Error en validación de cantidades:
@@ -220,6 +290,7 @@ La tabla `DetPedido` (y `DetPedidoSample`) debe tener estos campos (ya existen c
 ## TESTING
 
 ### Casos a Probar
+
 1. ✓ Cargar pedido → Verificar que trae cantidades guardadas
 2. ✓ Asignar responsable + lotes + cantidades válidas → Guardar OK
 3. ✓ Ingresar cantidades que suman más que disponible → Validación error

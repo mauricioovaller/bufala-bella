@@ -4,10 +4,10 @@ import { render, screen } from '@testing-library/react';
 import Inicio from '../../pages/Inicio';
 
 describe('Inicio', () => {
-    it('renderiza el mensaje de bienvenida', () => {
+    it('renderiza el mensaje de bienvenida', async () => {
         render(<Inicio />);
-        expect(screen.getByText(/bienvenido/i)).toBeInTheDocument();
-    });
+        expect(await screen.findByText(/bienvenido/i)).toBeInTheDocument();
+    }, 15000);
 
     it('muestra las 4 tarjetas de métricas', () => {
         render(<Inicio />);

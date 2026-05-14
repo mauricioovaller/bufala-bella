@@ -1,7 +1,7 @@
 // src/components/Layout.jsx
 import React, { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Home, Users, ShoppingCart, Package, Menu, X, LogOut, BarChart3, FileText, FlaskRound, LayoutDashboard, Car, Factory, BookOpenCheck, Mail } from "lucide-react";
+import { Home, Users, ShoppingCart, Package, Menu, X, LogOut, BarChart3, FileText, FlaskRound, LayoutDashboard, Car, Factory, BookOpenCheck, Mail, Globe, ClipboardList } from "lucide-react";
 import { getPermisos } from "../services/menuPrincipal/menuPrincipalService"; // Servicio para obtener permisos
 
 // Todas las opciones del menú (sin filtrar)
@@ -12,12 +12,14 @@ const menuItems = [
   { to: "/productos", icon: <Package size={20} />, label: "Productos" },
   { to: "/configuracion-correos", icon: <Mail size={20} />, label: "Configuración de Correos" },
   { to: "/pedidos", icon: <ShoppingCart size={20} />, label: "Pedidos" },
+  { to: "/pedidos-chile", icon: <Globe size={20} />, label: "Pedidos Chile" },
   { to: "/samples", icon: <FlaskRound size={20} />, label: "Samples" },
   { to: "/produccion", icon: <Factory size={20} />, label: "Despachos" },
   { to: "/consolidacion", icon: <BarChart3 size={20} />, label: "Consolidación" },
   { to: "/facturacion", icon: <FileText size={20} />, label: "Facturación" },
-  { to: "/complemento-facturas", icon: <BookOpenCheck size={20} />, label: "Complemento Facturación" },  
+  { to: "/complemento-facturas", icon: <BookOpenCheck size={20} />, label: "Complemento Facturación" },
   { to: "/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
+  { to: "/reportes", icon: <ClipboardList size={20} />, label: "Reportes" },
 ];
 
 export default function Layout() {
@@ -27,6 +29,31 @@ export default function Layout() {
   // Estados para permisos y carga
   const [permisos, setPermisos] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // ── Banner "Nueva opción: Reportes" ─────────────────────────────────────
+  // Se muestra durante 7 días desde la primera vez que el usuario lo ve.
+  // La fecha de primer aviso se guarda en localStorage.
+  const BANNER_KEY = "banner_reportes_desde";
+  const BANNER_DIAS = 7;
+  const [mostrarBanner, setMostrarBanner] = useState(() => {
+    try {
+      const guardado = localStorage.getItem(BANNER_KEY);
+      if (!guardado) {
+        localStorage.setItem(BANNER_KEY, new Date().toISOString());
+        return true;
+      }
+      const diasTranscurridos =
+        (Date.now() - new Date(guardado).getTime()) / (1000 * 60 * 60 * 24);
+      return diasTranscurridos < BANNER_DIAS;
+    } catch {
+      return false;
+    }
+  });
+
+  const cerrarBanner = () => {
+    setMostrarBanner(false);
+    try { localStorage.setItem(BANNER_KEY, new Date(0).toISOString()); } catch { /* noop */ }
+  };
 
   // Cargar permisos al montar el componente
   useEffect(() => {
@@ -86,14 +113,14 @@ export default function Layout() {
               <nav className="hidden md:flex gap-1 items-center bg-slate-700/50 rounded-2xl p-1 backdrop-blur-sm overflow-x-auto flex-nowrap max-w-[calc(100vw-300px)]">
                 {menuItemsPermitidos.map((item) => {
                   const isActive = location.pathname === item.to ||
-                    (item.to !== "/" && location.pathname.startsWith(item.to));
+                    (item.to !== "/" && location.pathname.startsWith(item.to + "/"));
                   return (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${isActive
-                          ? "bg-white text-slate-900 shadow-lg transform scale-105"
-                          : "text-slate-300 hover:text-white hover:bg-slate-600/50"
+                        ? "bg-white text-slate-900 shadow-lg transform scale-105"
+                        : "text-slate-300 hover:text-white hover:bg-slate-600/50"
                         }`}
                     >
                       {item.icon}
@@ -151,15 +178,15 @@ export default function Layout() {
             <div className="p-4 space-y-2">
               {menuItemsPermitidos.map((item) => {
                 const isActive = location.pathname === item.to ||
-                  (item.to !== "/" && location.pathname.startsWith(item.to));
+                  (item.to !== "/" && location.pathname.startsWith(item.to + "/"));
 
                 return (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     className={`flex items-center gap-4 p-4 rounded-xl text-base font-medium transition-all duration-200 ${isActive
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                        : "text-slate-300 hover:text-white hover:bg-slate-700/50"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50"
                       }`}
                     onClick={() => setMenuOpen(false)}
                   >
@@ -189,6 +216,29 @@ export default function Layout() {
 
       {/* Contenido principal */}
       <main className="pt-20 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        {/* ── Banner "Nueva opción: Reportes" ── */}
+        {mostrarBanner && !cargando && permisos.includes("/reportes") && (
+          <div className="container mx-auto px-4 sm:px-6 pt-4 pb-0">
+            <div className="flex items-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-3 rounded-2xl shadow-lg">
+              <div className="flex-shrink-0 bg-white/20 rounded-xl p-2">
+                <ClipboardList size={20} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm leading-tight">✨ ¡Nueva opción disponible: Reportes!</p>
+                <p className="text-blue-100 text-xs mt-0.5 leading-tight">
+                  Consulta información de despachos por semana al instante. Búscala en el menú.
+                </p>
+              </div>
+              <button
+                onClick={cerrarBanner}
+                className="flex-shrink-0 text-white/70 hover:text-white transition-colors ml-1"
+                aria-label="Cerrar aviso"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="container mx-auto px-4 sm:px-6 py-6">
           <Outlet />
         </div>

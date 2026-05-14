@@ -10,10 +10,12 @@ import PedidosSample from "./pages/PedidosSample";
 import Productos from "./pages/Productos";
 import ComplementoFacturas from "./pages/ComplementoFacturas";
 import ProduccionPedidos from "./pages/ProduccionPedidos";
+import PedidosChile from "./pages/PedidosChile";
 import ConsolidacionMain from "./components/consolidacion/ConsolidacionMain";
 import FacturacionMain from "./components/facturacion/FacturacionMain";
 import DashboardDibufala from "./components/dashboard/DashboardDibufala";
 import ConfiguracionCorreos from "./components/facturacion/ConfiguracionCorreos";
+import Reportes from "./pages/Reportes";
 
 export default function App() {
   return (
@@ -24,13 +26,15 @@ export default function App() {
         <Route path="conductores" element={<Conductores />} />
         <Route path="productos" element={<Productos />} />
         <Route path="pedidos" element={<Pedidos />} />
+        <Route path="pedidos-chile" element={<PedidosChile />} />
         <Route path="configuracion-correos" element={<ConfiguracionCorreos />} />
         <Route path="samples" element={<PedidosSample />} />
         <Route path="produccion" element={<ProduccionPedidos />} />
         <Route path="consolidacion" element={<ConsolidacionMain />} />
         <Route path="facturacion" element={<FacturacionMain />} />
-        <Route path="complemento-facturas" element={<ComplementoFacturas />} />        
+        <Route path="complemento-facturas" element={<ComplementoFacturas />} />
         <Route path="dashboard" element={<DashboardDibufala />} />
+        <Route path="reportes" element={<Reportes />} />
       </Route>
 
       {/* 👉 Redirigir index.html a la ruta raíz */}
