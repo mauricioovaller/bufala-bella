@@ -43,7 +43,13 @@ Todo componente debe verse igual de funcional en móvil (375px) que en desktop.
 
 ---
 
-## 2. Uniformidad Visual (OBLIGATORIO)
+## 2. Codificación de texto (tildes, ñ y caracteres especiales)
+
+La aplicación usa UTF-8. Conservar tildes, `ñ` y caracteres especiales tal como llegan de la API; no aplicar conversiones en React, porque el navegador renderiza UTF-8 nativamente.
+
+---
+
+## 3. Uniformidad Visual (OBLIGATORIO)
 
 No inventar estilos nuevos. Reusar la paleta y estructura establecida.
 
@@ -77,7 +83,7 @@ No inventar estilos nuevos. Reusar la paleta y estructura establecida.
 
 ---
 
-## 3. Notificaciones — Solo SweetAlert2 (OBLIGATORIO)
+## 4. Notificaciones — Solo SweetAlert2 (OBLIGATORIO)
 
 ```javascript
 // ✅ CORRECTO
@@ -89,7 +95,7 @@ alert("Guardado");
 
 ---
 
-## 4. Estado de carga — Siempre feedback visual
+## 5. Estado de carga — Siempre feedback visual
 
 ```jsx
 // ✅ Spinner uniforme del proyecto
@@ -104,7 +110,7 @@ alert("Guardado");
 
 ---
 
-## 5. Manejo de estado async
+## 6. Manejo de estado async
 
 ```javascript
 const [datos, setDatos] = useState(null);

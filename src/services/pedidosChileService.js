@@ -1,119 +1,406 @@
-// src/services/pedidosChileService.js
-// Servicio para el módulo Pedidos Chile
-// Base URL apunta a la carpeta Api/PedidosChile/ en el servidor
-
-const BASE_URL =
-  "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile";
-
-/**
- * Carga los datos para los selects del formulario:
- * clientesChile, productosChile, agencias, aerolineas
- */
-export async function getDatosSelectChile() {
+//src/services/pedidosChileService.js
+export async function getDatosSelect() {
   try {
-    const res = await fetch(`${BASE_URL}/ApiGetDatosSelect.php`, {
-      method: "POST",
-    });
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiGetDatosSelect.php",
+      {
+        method: "POST",
+      },
+    );
     return await res.json();
   } catch (err) {
-    console.error("Error al cargar datos iniciales Chile:", err);
+    console.error("Error al cargar datos iniciales:", err);
     throw err;
   }
 }
 
-/**
- * Guarda un nuevo pedido Chile
- * @param {Object} encabezado - Datos del encabezado
- * @param {Array}  detalle    - Líneas del detalle
- * @returns {Object} { success, idPedido, numero }
- */
-export async function guardarPedidoChile(encabezado, detalle) {
+export async function getClienteRegion(clienteId) {
   try {
-    const res = await fetch(`${BASE_URL}/ApiGuardarPedidoChile.php`, {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiGetClienteRegion.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ clienteId }),
+      },
+    );
+    return await res.json();
+  } catch (err) {
+    console.error("Error al cargar datos iniciales:", err);
+    throw err;
+  }
+}
+
+export async function validarPurchaseOrder(
+  purchaseOrder,
+  pedidoIdActual = null,
+) {
+  try {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiValidarNumeroOrdenChile.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          purchaseOrder,
+          pedidoIdActual,
+        }),
+      },
+    );
+    return await res.json();
+  } catch (err) {
+    console.error("Error al validar Purchase Order:", err);
+    throw err;
+  }
+}
+
+export async function guardarPedido(encabezado, detalle) {
+  try {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiGuardarPedidoChile.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ encabezado, detalle }),
+      },
+    );
+    return await res.json();
+  } catch (err) {
+    console.error("Error al guardar el pedido:", err);
+    throw err;
+  }
+}
+
+export async function getPedidos(termino = "") {
+  try {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiGetPedidosChile.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ termino }),
+      },
+    );
+    return await res.json();
+  } catch (err) {
+    console.error("Error al cargar datos iniciales:", err);
+    throw err;
+  }
+}
+
+export async function getPedidoEspecifico(idPedido) {
+  try {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiGetPedidoChile.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idPedido }),
+      },
+    );
+    return await res.json();
+  } catch (err) {
+    console.error("Error al guardar el pedido:", err);
+    throw err;
+  }
+}
+
+export async function actualizarPedido(encabezado, detalle) {
+  try {
+    const res = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiActualizarPedidoChile.php",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ encabezado, detalle }),
+      },
+    );
+    return await res.json();
+  } catch (err) {
+    console.error("Error al guardar el pedido:", err);
+    throw err;
+  }
+}
+
+export async function anularPedido(idPedido) {
+  try {
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiAnularPedidoChile.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idPedido }),
+      },
+    );
+    return await response.json();
+  } catch (err) {
+    console.error("Error al anular el pedido:", err);
+    throw err;
+  }
+}
+
+export async function imprimirPedidoChile(idPedido, tipoDocumento = "pedido") {
+  try {
+    // Mapear los tipos de documento a los endpoints correspondientes
+    const endpoints = {
+      pedido:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirPedidoChile.php",
+bol: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirBOLChile.php",
+    listaempaque:
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirListaEmpaqueChile.php",
+    listaempaqueprecios:
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirListaEmpaquePreciosChile.php",
+    };
+
+    const endpoint = endpoints[tipoDocumento] || endpoints.pedido;
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ encabezado, detalle }),
+      body: JSON.stringify({ idPedido: idPedido }),
     });
-    return await res.json();
-  } catch (err) {
-    console.error("Error al guardar pedido Chile:", err);
-    throw err;
-  }
-}
 
-/**
- * Retorna la lista de todos los pedidos Chile (para el modal de búsqueda)
- * @returns {Object} { success, pedidos: [] }
- */
-export async function getPedidosChile() {
-  try {
-    const res = await fetch(`${BASE_URL}/ApiGetPedidosChile.php`, {
-      method: "POST",
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Error al cargar pedidos Chile:", err);
-    throw err;
-  }
-}
-
-/**
- * Retorna un pedido Chile completo (encabezado + detalle) por ID
- * @param {number} idPedido
- * @returns {Object} { success, encabezado, detalle }
- */
-export async function getPedidoChileEspecifico(idPedido) {
-  try {
-    const res = await fetch(`${BASE_URL}/ApiGetPedidoChile.php`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idPedido }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Error al cargar pedido Chile:", err);
-    throw err;
-  }
-}
-
-/**
- * Actualiza un pedido Chile existente
- * @param {Object} encabezado - Debe incluir idPedido
- * @param {Array}  detalle
- * @returns {Object} { success }
- */
-export async function actualizarPedidoChile(encabezado, detalle) {
-  try {
-    const res = await fetch(`${BASE_URL}/ApiActualizarPedidoChile.php`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ encabezado, detalle }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Error al actualizar pedido Chile:", err);
-    throw err;
-  }
-}
-
-/**
- * Genera e imprime la Lista de Empaque Chile en PDF
- * @param {number} idPedido
- * @returns {Blob} PDF binario
- */
-export async function imprimirPedidoChile(idPedido) {
-  try {
-    const res = await fetch(`${BASE_URL}/ApiImprimirListaEmpaqueChile.php`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idPedido }),
-    });
-    if (!res.ok) {
+    if (!response.ok) {
       throw new Error("Error al generar el PDF");
     }
-    return await res.blob();
-  } catch (err) {
-    console.error("Error en imprimirPedidoChile:", err);
-    throw err;
+
+    return await response.blob();
+  } catch (error) {
+    console.error("Error en imprimirPedido:", error);
+    throw error;
   }
 }
+
+// 👇 FUNCIÓN MEJORADA PARA IMPRESIÓN MÚLTIPLE DE TODOS LOS REPORTES
+export async function imprimirPedidosChileMultiples(filtros) {
+  try {
+    // Mapear los tipos de documento a los endpoints correspondientes
+    const endpoints = {
+      pedido:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirMultiplesPedidosChile.php",
+      bol: "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirMultiplesBOLChile.php",
+      listaempaque:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirMultiplesListaEmpaqueChile.php",
+      listaempaqueprecios:
+        "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiImprimirMultiplesListaEmpaquePreciosChile.php",
+    };
+
+    const endpoint = endpoints[filtros.tipoDocumento] || endpoints.pedido;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filtros),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Error al generar el PDF múltiple de ${filtros.tipoDocumento}`,
+      );
+    }
+
+    return await response.blob();
+  } catch (error) {
+    console.error("Error en imprimirPedidosMultiples:", error);
+    throw error;
+  }
+}
+
+// 👇 FUNCIÓN ACTUALIZADA PARA CONTAR PEDIDOS SEGÚN FILTROS (AHORA SOPORTA DOS MODOS)
+export async function contarPedidosChilePorFiltro(filtros) {
+  try {
+    // Preparar datos según el modo
+    const datosEnvio = {
+      modo: filtros.modo || "porFechas",
+      tipoDocumento: filtros.tipoDocumento || "listaempaque",
+      bodegaId: filtros.bodegaId || "",
+      // Solo enviar los parámetros correspondientes al modo
+      ...(filtros.modo === "porFechas"
+        ? {
+            fechaDesde: filtros.fechaDesde || "",
+            fechaHasta: filtros.fechaHasta || "",
+          }
+        : {
+            numeroDesde: filtros.numeroDesde || 0,
+            numeroHasta: filtros.numeroHasta || 0,
+          }),
+    };
+
+    console.log("Enviando datos a ApiContarPedidos:", datosEnvio);
+
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiContarPedidosChile.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(datosEnvio),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status}`);
+    }
+
+    const resultado = await response.json();
+
+    if (!resultado.success) {
+      throw new Error(resultado.message || "Error al contar pedidos");
+    }
+
+    return resultado;
+  } catch (error) {
+    console.error("Error en contarPedidosPorFiltro:", error);
+    // Devolver un error estructurado
+    return {
+      success: false,
+      message: error.message || "Error al contar pedidos",
+      total: 0,
+    };
+  }
+}
+
+// También puedes mantener la función original por compatibilidad
+export async function imprimirBOL(idPedido) {
+  return await imprimirPedidoChile(idPedido, "bol");
+}
+
+export async function imprimirListaEmpaque(idPedido) {
+  return await imprimirPedidoChile(idPedido, "listaempaque");
+}
+
+const STORAGE_KEY = "demo_pedidos_v1";
+
+/**
+ * Estructura guardada:
+ * [
+ *   { id, header: {...}, items: [...] , createdAt }
+ * ]
+ */
+
+function _readAll() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function _writeAll(list) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export default {
+  async getAll() {
+    return _readAll();
+  },
+
+  async getById(id) {
+    const all = _readAll();
+    return all.find((x) => x.id === id) || null;
+  },
+
+  async save(order) {
+    // Si order.id existe -> actualizar, si no -> crear nuevo
+    const all = _readAll();
+    if (!order.id) {
+      order.id = `${Date.now()}`; // id simple
+      order.createdAt = new Date().toISOString();
+      all.push(order);
+    } else {
+      const idx = all.findIndex((x) => x.id === order.id);
+      if (idx >= 0) all[idx] = order;
+      else {
+        order.createdAt = new Date().toISOString();
+        all.push(order);
+      }
+    }
+    _writeAll(all);
+    return order;
+  },
+
+  async remove(id) {
+    const all = _readAll();
+    const filtered = all.filter((x) => x.id !== id);
+    _writeAll(filtered);
+    return true;
+  },
+};
+
+// 👇 FUNCIÓN MEJORADA: Obtener lista de pedidos por rango (fechas o números)
+export async function getRangoPedidosChile(filtros) {
+  try {
+    console.log("Enviando datos a ApiGetRangoPedidos.php:", filtros);
+
+    // Asegurar que tenemos todos los campos necesarios
+    const datosEnvio = {
+      modo: filtros.modo || "porNumeros",
+      bodegaId: filtros.bodegaId || "",
+      tipoDocumento: filtros.tipoDocumento || "listaempaque",
+    };
+
+    // Agregar parámetros según el modo
+    if (filtros.modo === "porFechas") {
+      if (!filtros.fechaDesde || !filtros.fechaHasta) {
+        throw new Error("Fechas requeridas para modo por fechas");
+      }
+      datosEnvio.fechaDesde = filtros.fechaDesde;
+      datosEnvio.fechaHasta = filtros.fechaHasta;
+    } else {
+      // Modo por números
+      if (!filtros.numeroDesde || !filtros.numeroHasta) {
+        throw new Error("Números de pedido requeridos para modo por números");
+      }
+      datosEnvio.numeroDesde = parseInt(filtros.numeroDesde);
+      datosEnvio.numeroHasta = parseInt(filtros.numeroHasta);
+    }
+
+    console.log("Datos enviados a API:", datosEnvio);
+
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosChile/ApiGetRangoPedidosChile.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(datosEnvio),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status}`);
+    }
+
+    const resultado = await response.json();
+    console.log("Respuesta de ApiGetRangoPedidos.php:", resultado);
+
+    if (!resultado.success) {
+      throw new Error(resultado.message || "Error al obtener pedidos");
+    }
+
+    return resultado;
+  } catch (error) {
+    console.error("Error en getRangoPedidos:", error);
+    // Devolver un error estructurado
+    return {
+      success: false,
+      message: error.message || "Error al obtener pedidos",
+      total: 0,
+      pedidos: [],
+    };
+  }
+}
+
+// Alias exports para compatibilidad con tests existentes
+export const getDatosSelectChile = getDatosSelect;
+export const guardarPedidoChile = guardarPedido;
+export const getPedidosChile = getPedidos;
+export const getPedidoChileEspecifico = getPedidoEspecifico;
+export const actualizarPedidoChile = actualizarPedido;

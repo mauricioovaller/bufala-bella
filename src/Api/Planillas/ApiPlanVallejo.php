@@ -20,22 +20,33 @@ if (!isset($input['id_factura']) || empty($input['id_factura'])) {
 
 $id_factura = intval($input['id_factura']);
 
-// 🔴 CONSULTA 1: ENCABEZADO DE FACTURA Y DATOS PARA PLAN VALLEJO
+// DETECTAR SI ES FACTURA CHILE
+$sqlCheck = "SELECT Id_EncabInvoice FROM EncabInvoiceChile WHERE Id_EncabInvoice = ?";
+$stmtCheck = $enlace->prepare($sqlCheck);
+$stmtCheck->bind_param("i", $id_factura);
+$stmtCheck->execute();
+$stmtCheck->store_result();
+$esChile = $stmtCheck->num_rows > 0;
+$stmtCheck->close();
+
+$tblEnc = $esChile ? 'EncabInvoiceChile' : 'EncabInvoice';
+$tblDet = $esChile ? 'DetInvoiceChile' : 'DetInvoice';
+$tblPlan = $esChile ? 'PlanillasChile' : 'Planillas';
+$tblProd = $esChile ? 'ProductosChile' : 'Productos';
+$pref = 'FEX-';
+
+// CONSULTA 1: ENCABEZADO DE FACTURA Y DATOS PARA PLAN VALLEJO
 $sqlEncabezado = "SELECT
                     enc.Id_EncabInvoice AS id_factura,
-                    CONCAT('FEX-', enc.Id_EncabInvoice) AS numero_factura,
+                    CONCAT('{$pref}', enc.Id_EncabInvoice) AS numero_factura,
                     enc.CantidadEstibas,
                     ROUND(SUM(det.Kilogramos), 2) AS tot_kgm_netos_factura,
-                    -- DATOS DE PLANILLA PARA PLACA
                     pl.Placa
-                FROM
-                    EncabInvoice enc
-                INNER JOIN DetInvoice det ON enc.Id_EncabInvoice = det.Id_EncabInvoice
-                LEFT JOIN Planillas pl ON enc.Id_Planilla = pl.Id_Planilla
-                WHERE
-                    enc.Id_EncabInvoice = ?
-                GROUP BY 
-                    enc.Id_EncabInvoice, enc.CantidadEstibas, pl.Placa";
+                FROM {$tblEnc} enc
+                INNER JOIN {$tblDet} det ON enc.Id_EncabInvoice = det.Id_EncabInvoice
+                LEFT JOIN {$tblPlan} pl ON enc.Id_Planilla = pl.Id_Planilla
+                WHERE enc.Id_EncabInvoice = ?
+                GROUP BY enc.Id_EncabInvoice, enc.CantidadEstibas, pl.Placa";
 
 $stmtEncabezado = $enlace->prepare($sqlEncabezado);
 $stmtEncabezado->bind_param("i", $id_factura);
@@ -53,7 +64,7 @@ if (!$stmtEncabezado->fetch()) {
 }
 $stmtEncabezado->close();
 
-// 🔴 CONSULTA 2: DETALLE DE PRODUCTOS CON PLAN VALLEJO
+// CONSULTA 2: DETALLE DE PRODUCTOS CON PLAN VALLEJO
 $sqlDetalle = "SELECT
                 det.Item,
                 prd.CodigoCIP,
@@ -61,12 +72,9 @@ $sqlDetalle = "SELECT
                 det.CantidadEmbalaje AS Unidades,
                 det.Kilogramos,
                 det.Cajas
-            FROM
-                DetInvoice det
-            INNER JOIN Productos prd ON det.Codigo_Siesa = prd.Codigo_Siesa
-            WHERE
-                det.Id_EncabInvoice = ?
-                AND prd.PlanVallejo <> 0
+            FROM {$tblDet} det
+            INNER JOIN {$tblProd} prd ON det.Codigo_Siesa = prd.Codigo_Siesa
+            WHERE det.Id_EncabInvoice = ? AND prd.PlanVallejo <> 0
             ORDER BY det.Item";
 
 $stmtDetalle = $enlace->prepare($sqlDetalle);

@@ -3,9 +3,9 @@ import Swal from 'sweetalert2';
 import { contarPedidosPorFiltro as contarPedidosService } from '../services/pedidosService';
 import { getRangeSamples as contarSamplesService } from '../services/pedidosSampleService';
 
-const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas, tipoOrden = 'pedidos' }) => {
-  // Seleccionar el servicio correcto según el tipo de orden
-  const contarPedidosPorFiltro = tipoOrden === 'samples' ? contarSamplesService : contarPedidosService;
+const ModalImpresionMultiple = ({ isOpen, onClose, onImprimir, bodegas = [], tipoOrden = 'pedidos', contarPedidosFn }) => {
+  // Usar servicio inyectado o el default según tipo
+  const contarPedidosPorFiltro = contarPedidosFn || (tipoOrden === 'samples' ? contarSamplesService : contarPedidosService);
   // Estado para seleccionar modo
   const [modoGeneracion, setModoGeneracion] = useState('porFechas'); // 'porFechas' o 'porNumeros'
   

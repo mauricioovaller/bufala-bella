@@ -95,6 +95,11 @@ export const APPS_CONFIG = {
     colorCompras: "#F59E0B", // amber
     colorVentas: "#EF4444", // rojo
   },
+  chile: {
+    nombre: "Dibufala Chile",
+    colorCompras: "#10B981", // verde esmeralda
+    colorVentas: "#F59E0B", // ámbar
+  },
 };
 
 export const fetchVentasRegionCliente = async (
@@ -139,10 +144,20 @@ export const fetchClientesProducto = async (
  * @param {string} app - Identificador de la aplicación (ej: 'dibufala')
  * @param {string} fechaInicio - Fecha de inicio (YYYY-MM-DD)
  * @param {string} fechaFin - Fecha de fin (YYYY-MM-DD)
+ * @param {string} tipoPedido - Tipo de pedido: 'chile' filtra costos Chile, '' o 'normal' usa el comportamiento actual
  * @returns {Promise<Object>} Datos para gráficos y KPIs
  */
-export const fetchCostosTransporte = async (app, fechaInicio, fechaFin) => {
+export const fetchCostosTransporte = async (app, fechaInicio, fechaFin, tipoPedido = "") => {
   try {
+    const bodyData = {
+      app: app,
+      fechaInicio: fechaInicio,
+      fechaFin: fechaFin,
+    };
+    if (tipoPedido) {
+      bodyData.tipoPedido = tipoPedido;
+    }
+
     const response = await fetch(
       `${API_BASE}/ApiDashboardCostosTransporte.php`,
       {
@@ -150,11 +165,7 @@ export const fetchCostosTransporte = async (app, fechaInicio, fechaFin) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          app: app,
-          fechaInicio: fechaInicio,
-          fechaFin: fechaFin,
-        }),
+        body: JSON.stringify(bodyData),
       },
     );
 
@@ -346,6 +357,38 @@ const generarDatosPrueba = (fechaInicio, fechaFin) => {
 };
 
 /**
+ * Obtiene datos consolidados de costos de transporte aéreo
+ * @param {string} fechaInicio - Fecha de inicio (YYYY-MM-DD)
+ * @param {string} fechaFin - Fecha de fin (YYYY-MM-DD)
+ * @returns {Promise<Object>} Datos de costos aéreos
+ */
+export const fetchCostosAereo = async (fechaInicio, fechaFin) => {
+  try {
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporteAereo/ApiGetCostosAereo.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fechaDesde: fechaInicio, fechaHasta: fechaFin }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error response:", errorText);
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en los datos recibidos");
+    return data;
+  } catch (error) {
+    console.error("Error fetching costos aéreos:", error);
+    throw error;
+  }
+};
+
+/**
  * Configuración de colores para la sección de transporte
  */
 export const TRANSPORTE_CONFIG = {
@@ -360,10 +403,159 @@ export const TRANSPORTE_CONFIG = {
 /**
  * Configuración de dimensiones para gráficos de transporte
  */
+export const fetchIndicadoresOTIF = async (fechaDesde, fechaHasta) => {
+  try {
+    const response = await fetch(`${API_BASE}/ApiIndicadoresOTIF.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fechaDesde, fechaHasta }),
+    });
+
+    if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error al obtener indicadores OTIF");
+    return data;
+  } catch (error) {
+    console.error("Error en fetchIndicadoresOTIF:", error);
+    throw new Error(`No se pudieron obtener los indicadores OTIF: ${error.message}`);
+  }
+};
+
+export const fetchDetalleIndicadorOTIF = async (fechaDesde, fechaHasta, tipo) => {
+  try {
+    const response = await fetch(`${API_BASE}/ApiDetalleIndicadoresOTIF.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fechaDesde, fechaHasta, tipo }),
+    });
+
+    if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error al obtener detalle del indicador OTIF");
+    return data;
+  } catch (error) {
+    console.error(`Error en fetchDetalleIndicadorOTIF (${tipo}):`, error);
+    throw new Error(`No se pudieron obtener los detalles del indicador: ${error.message}`);
+  }
+};
+
 export const TRANSPORTE_DIMENSIONS = {
   CHART_HEIGHT: "200px",
   CHART_HEIGHT_MOBILE: "170px",
   CHART_CONTAINER_HEIGHT: "h-[550px]",
   CHART_CONTAINER_HEIGHT_MOBILE: "h-[480px]",
   KPI_CARD_HEIGHT: "120px",
+};
+
+// ============================================================================
+// SERVICIOS PARA DASHBOARD CHILE
+// ============================================================================
+
+/**
+ * Obtiene los datos de ventas Chile para el dashboard
+ * @param {string} fechaInicio - Fecha de inicio (YYYY-MM-DD)
+ * @param {string} fechaFin - Fecha de fin (YYYY-MM-DD)
+ * @returns {Promise<Object>} Datos de ventas Chile (misma estructura que fetchDashboardData)
+ */
+export const fetchDashboardDataChile = async (fechaInicio, fechaFin) => {
+  try {
+    const response = await fetch(`${API_BASE}/datos_chile.php`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        app: "chile",
+        fechaInicio: fechaInicio,
+        fechaFin: fechaFin,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Error en la respuesta del servidor");
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Error en los datos recibidos");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error fetching dashboard data Chile:", error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene los indicadores OTIF de pedidos Chile
+ * @param {string} fechaDesde - Fecha de inicio (YYYY-MM-DD)
+ * @param {string} fechaHasta - Fecha de fin (YYYY-MM-DD)
+ * @returns {Promise<Object>} Indicadores OTIF Chile
+ */
+export const fetchIndicadoresOTIFChile = async (fechaDesde, fechaHasta) => {
+  try {
+    const response = await fetch(`${API_BASE}/ApiIndicadoresOTIF_chile.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fechaDesde, fechaHasta }),
+    });
+
+    if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error al obtener indicadores OTIF Chile");
+    return data;
+  } catch (error) {
+    console.error("Error en fetchIndicadoresOTIFChile:", error);
+    throw new Error(`No se pudieron obtener los indicadores OTIF Chile: ${error.message}`);
+  }
+};
+
+/**
+ * Obtiene el detalle de un indicador OTIF de pedidos Chile
+ * @param {string} fechaDesde - Fecha de inicio (YYYY-MM-DD)
+ * @param {string} fechaHasta - Fecha de fin (YYYY-MM-DD)
+ * @param {string} tipo - "inFull" o "onTime"
+ * @returns {Promise<Object>} Detalle del indicador OTIF Chile
+ */
+export const fetchDetalleIndicadorOTIFChile = async (fechaDesde, fechaHasta, tipo) => {
+  try {
+    const response = await fetch(`${API_BASE}/ApiDetalleIndicadoresOTIF_chile.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fechaDesde, fechaHasta, tipo }),
+    });
+
+    if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error al obtener detalle del indicador OTIF Chile");
+    return data;
+  } catch (error) {
+    console.error(`Error en fetchDetalleIndicadorOTIFChile (${tipo}):`, error);
+    throw new Error(`No se pudieron obtener los detalles del indicador: ${error.message}`);
+  }
+};
+
+/**
+ * Obtiene los clientes Chile que compraron un producto específico (drill-down)
+ * @param {number} idProducto - ID del producto
+ * @param {string} fechaInicio - Fecha de inicio (YYYY-MM-DD)
+ * @param {string} fechaFin - Fecha de fin (YYYY-MM-DD)
+ * @returns {Promise<Object>} Clientes del producto Chile
+ */
+export const fetchClientesProductoChile = async (
+  idProducto,
+  fechaInicio,
+  fechaFin,
+) => {
+  const response = await fetch(`${API_BASE}/ApiClientesProducto_chile.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idProducto, fechaInicio, fechaFin }),
+  });
+  if (!response.ok) throw new Error("Error al obtener clientes por producto Chile");
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message);
+  return data;
 };

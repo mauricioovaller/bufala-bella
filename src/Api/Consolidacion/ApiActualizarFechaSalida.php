@@ -28,19 +28,22 @@ if (!$data) {
 }
 
 // Funciones de sanitización
-function limpiar_texto($txt) {
+function limpiar_texto($txt)
+{
     return htmlspecialchars(trim($txt), ENT_QUOTES, "UTF-8");
 }
 
-function validar_entero($valor) {
+function validar_entero($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
 
-function validar_fecha($fecha) {
+function validar_fecha($fecha)
+{
     if (empty($fecha)) {
         return null;
     }
-    
+
     // Verificar formato YYYY-MM-DD
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
         $fecha_obj = DateTime::createFromFormat('Y-m-d', $fecha);
@@ -48,11 +51,12 @@ function validar_fecha($fecha) {
             return $fecha;
         }
     }
-    
+
     return null;
 }
 
-function validar_tipo_pedido($tipo) {
+function validar_tipo_pedido($tipo)
+{
     $tipos_validos = ['normal', 'sample', null];
     return in_array($tipo, $tipos_validos) ? $tipo : null;
 }
@@ -82,20 +86,20 @@ try {
         $stmtVerificarNormal->bind_param("i", $pedidoId);
         $stmtVerificarNormal->execute();
         $stmtVerificarNormal->store_result();
-        
+
         if ($stmtVerificarNormal->num_rows > 0) {
             $tipoPedido = 'normal';
             $stmtVerificarNormal->close();
         } else {
             $stmtVerificarNormal->close();
-            
+
             // Buscar en pedidos sample
             $sqlVerificarSample = "SELECT Id_EncabPedido FROM EncabPedidoSample WHERE Id_EncabPedido = ?";
             $stmtVerificarSample = $enlace->prepare($sqlVerificarSample);
             $stmtVerificarSample->bind_param("i", $pedidoId);
             $stmtVerificarSample->execute();
             $stmtVerificarSample->store_result();
-            
+
             if ($stmtVerificarSample->num_rows > 0) {
                 $tipoPedido = 'sample';
                 $stmtVerificarSample->close();
@@ -113,7 +117,7 @@ try {
         $stmtVerificar->bind_param("i", $pedidoId);
         $stmtVerificar->execute();
         $stmtVerificar->store_result();
-        
+
         if ($stmtVerificar->num_rows === 0) {
             echo json_encode(["success" => false, "message" => "Pedido no encontrado en la tabla {$tabla}"]);
             exit;
@@ -127,27 +131,40 @@ try {
     // Iniciar transacción
     $enlace->begin_transaction();
 
-    // Obtener la fecha actual antes de actualizar (para el log)
-    $sqlFechaActual = "SELECT FechaSalida FROM {$tabla} WHERE Id_EncabPedido = ?";
+    // Obtener la fecha actual antes de actualizar (para el log y el tracking)
+    $sqlFechaActual = "SELECT FechaSalida, FechaSalida_Orig FROM {$tabla} WHERE Id_EncabPedido = ?";
     $stmtFechaActual = $enlace->prepare($sqlFechaActual);
     $stmtFechaActual->bind_param("i", $pedidoId);
     $stmtFechaActual->execute();
-    $stmtFechaActual->bind_result($fechaAnterior);
+    $stmtFechaActual->bind_result($fechaAnterior, $fechaSalidaOrig);
     $stmtFechaActual->fetch();
     $stmtFechaActual->close();
+
+    // Guardar FechaSalida_Orig solo en la primera modificación
+    $cambioRealFecha = ($nuevaFechaSalida !== $fechaAnterior);
+    $debeGuardarOrig = $cambioRealFecha && ($fechaSalidaOrig === null || $fechaSalidaOrig === '');
+    if ($debeGuardarOrig) {
+        $sqlGuardarOrig = "UPDATE {$tabla}
+                           SET FechaSalida_Orig = ?, FechaModificacion = NOW()
+                           WHERE Id_EncabPedido = ?";
+        $stmtGuardarOrig = $enlace->prepare($sqlGuardarOrig);
+        $stmtGuardarOrig->bind_param("si", $fechaAnterior, $pedidoId);
+        $stmtGuardarOrig->execute();
+        $stmtGuardarOrig->close();
+    }
 
     // Actualizar solo la fecha de salida del pedido
     $sqlActualizar = "UPDATE {$tabla} 
                       SET FechaSalida = ?                          
                       WHERE Id_EncabPedido = ?";
-    
+
     $stmtActualizar = $enlace->prepare($sqlActualizar);
     $stmtActualizar->bind_param("si", $nuevaFechaSalida, $pedidoId);
     $stmtActualizar->execute();
 
     // Verificar si se actualizó correctamente
     if ($stmtActualizar->affected_rows > 0) {
-        
+
         // Insertar en log de cambios (opcional pero recomendado)
         // Primero verificamos si existe la tabla de logs
         $tablaLogExiste = $enlace->query("SHOW TABLES LIKE 'LogCambiosPedidos'");
@@ -155,7 +172,7 @@ try {
             $sqlLog = "INSERT INTO LogCambiosPedidos 
                        (Id_EncabPedido, TipoPedido, CampoModificado, ValorAnterior, ValorNuevo, Usuario, FechaCambio) 
                        VALUES (?, ?, 'FechaSalida', ?, ?, 'Sistema', NOW())";
-            
+
             $stmtLog = $enlace->prepare($sqlLog);
             $valorAnterior = $fechaAnterior ? $fechaAnterior : 'NULL';
             $tipoPedidoLog = $tipoPedido === 'sample' ? 'sample' : 'normal';
@@ -163,32 +180,30 @@ try {
             $stmtLog->execute();
             $stmtLog->close();
         }
-        
+
         $enlace->commit();
-        
+
         echo json_encode([
-            "success" => true, 
+            "success" => true,
             "message" => "Fecha de salida actualizada correctamente",
             "pedidoId" => $pedidoId,
             "tipoPedido" => $tipoPedido,
             "nuevaFechaSalida" => $nuevaFechaSalida,
             "fechaActualizacion" => date('Y-m-d H:i:s')
         ]);
-        
     } else {
         // Si no hubo cambios, puede ser porque la fecha era la misma
         $enlace->rollback();
         echo json_encode([
-            "success" => true, 
+            "success" => true,
             "message" => "La fecha de salida ya estaba establecida en el valor solicitado",
             "pedidoId" => $pedidoId,
             "tipoPedido" => $tipoPedido,
             "fechaSalida" => $nuevaFechaSalida
         ]);
     }
-    
-    $stmtActualizar->close();
 
+    $stmtActualizar->close();
 } catch (Exception $e) {
     if (isset($enlace)) {
         $enlace->rollback();
@@ -200,4 +215,3 @@ try {
 if (isset($enlace)) {
     $enlace->close();
 }
-?>

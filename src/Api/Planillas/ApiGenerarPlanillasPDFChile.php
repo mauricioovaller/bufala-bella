@@ -1,0 +1,273 @@
+<?php
+error_reporting(0);
+ini_set('display_errors', 0);
+
+require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");
+include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
+$enlace->set_charset("utf8mb4");
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    die("Método no permitido. Usa POST.");
+}
+
+$input = json_decode(file_get_contents("php://input"), true);
+
+if (!isset($input['tipo_carta']) || !in_array($input['tipo_carta'], ['carta-aerolinea', 'carta-policia'])) {
+    http_response_code(400);
+    die("Tipo de carta no válido. Debe ser 'carta-aerolinea' o 'carta-policia'.");
+}
+
+if (!isset($input['id_planilla']) || empty($input['id_planilla'])) {
+    http_response_code(400);
+    die("ID de planilla no válido.");
+}
+
+$con_firma = isset($input['con_firma']) ? (bool)$input['con_firma'] : true;
+$tipo_carta = $input['tipo_carta'];
+$id_planilla = intval($input['id_planilla']);
+$mercancia_ids = isset($input['mercancia_ids']) ? $input['mercancia_ids'] : null;
+
+function mesEnEspanol($fecha)
+{
+    if (empty($fecha)) return 'Fecha no disponible';
+    $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+              '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+    $partes = explode(' de ', $fecha);
+    if (count($partes) === 3 && isset($meses[$partes[1]])) return $partes[0] . ' de ' . $meses[$partes[1]] . ' de ' . $partes[2];
+    return $fecha;
+}
+
+$sqlPlanilla = "SELECT
+    pln.Id_Planilla,
+    DATE_FORMAT(pln.Fecha, '%d de %m de %Y') AS fecha_formateada,
+    pln.Facturas,
+    pln.GuiaMaster,
+    pln.GuiaHija,
+    pln.TotalPiezas,
+    pln.Precinto,
+    pln.Vehiculo,
+    pln.Placa,
+    cli.Nombre AS ConsignatarioFinal,
+    aer.NOMAEROLINEA AS Aerolinea,
+    age.NOMAGENCIA AS AgenciaCarga,
+    con.Nombre AS NombreConductor,
+    con.NoDocumento AS CedulaConductor,
+    con_ayu.Nombre AS NombreAyudante,
+    con_ayu.NoDocumento AS CedulaAyudante
+FROM PlanillasChile pln
+LEFT JOIN ClientesChile cli ON pln.Id_Cliente = cli.Id_Cliente
+LEFT JOIN Aerolineas aer ON pln.IdAerolinea = aer.IdAerolinea
+LEFT JOIN Agencias age ON pln.IdAgencia = age.IdAgencia
+LEFT JOIN Conductores con ON pln.Id_Conductor = con.Id_Conductor
+LEFT JOIN Conductores con_ayu ON pln.Id_Ayudante = con_ayu.Id_Conductor
+WHERE pln.Id_Planilla = ?";
+
+$stmtPlanilla = $enlace->prepare($sqlPlanilla);
+if (!$stmtPlanilla) { http_response_code(500); die("Error en la consulta: " . $enlace->error); }
+
+$stmtPlanilla->bind_param("i", $id_planilla);
+$stmtPlanilla->execute();
+$stmtPlanilla->store_result();
+
+if ($stmtPlanilla->num_rows === 0) { http_response_code(404); die("Planilla no encontrada. ID: " . $id_planilla); }
+
+$stmtPlanilla->bind_result($id_planilla, $fecha_formateada, $facturas, $guia_master, $guia_hija, $total_piezas, $precinto, $vehiculo, $placa, $consignatario_final, $aerolinea, $agencia_carga, $nombre_conductor, $cedula_conductor, $nombre_ayudante, $cedula_ayudante);
+$stmtPlanilla->fetch();
+$stmtPlanilla->close();
+
+$fecha_formateada = mesEnEspanol($fecha_formateada);
+if (empty($nombre_ayudante) || trim($nombre_ayudante) === '') { $nombre_ayudante = 'N/A'; $cedula_ayudante = 'N/A'; }
+
+// Determinar items de mercancia a mostrar
+$mercancia_textos = [];
+if (!empty($mercancia_ids) && is_array($mercancia_ids)) {
+    $ids_placeholder = str_repeat('?,', count($mercancia_ids) - 1) . '?';
+    $sqlItems = "SELECT Texto FROM documentos_chile_items WHERE Tipo = 'mercancia' AND Id IN ($ids_placeholder) AND Activo = 1 ORDER BY Orden";
+    $stmtItems = $enlace->prepare($sqlItems);
+    $stmtItems->bind_param(str_repeat('i', count($mercancia_ids)), ...$mercancia_ids);
+    $stmtItems->execute();
+    $stmtItems->bind_result($textoItem);
+    while ($stmtItems->fetch()) { $mercancia_textos[] = $textoItem; }
+    $stmtItems->close();
+} else {
+    // Fallback: mostrar ambos por defecto
+    $sqlItems = "SELECT Texto FROM documentos_chile_items WHERE Tipo = 'mercancia' AND Activo = 1 ORDER BY Orden";
+    $stmtItems = $enlace->prepare($sqlItems);
+    $stmtItems->execute();
+    $stmtItems->bind_result($textoItem);
+    while ($stmtItems->fetch()) { $mercancia_textos[] = $textoItem; }
+    $stmtItems->close();
+}
+
+class PDF_Chile extends FPDF
+{
+    function Header()
+    {
+        $logoPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalaFactura.jpg";
+        if (file_exists($logoPath)) $this->Image($logoPath, 15, 10, 40);
+        $this->SetFont('Helvetica', 'B', 10);
+        $this->SetXY(90, 10);
+        $this->Cell(60, 4, 'BUFALABELLA S.A.S', 0, 1, 'C');
+        $this->SetFont('Helvetica', '', 9);
+        $this->SetX(90);
+        $this->Cell(60, 4, 'Nit. 900.254.183-4', 0, 1, 'C');
+        $this->Ln(8);
+    }
+    function Footer()
+    {
+        global $con_firma;
+        $this->SetY(-70);
+        $this->SetFont('Helvetica', 'B', 10);
+        $this->Cell(0, 6, 'Atentamente,', 0, 1, 'L');
+        $this->Ln(30);
+        $this->SetFont('Helvetica', 'B', 10);
+        $this->Cell(0, 6, utf8_decode('John Jairo Vera Riaño'), 0, 1, 'L');
+        $this->SetFont('Helvetica', '', 9);
+        $this->Cell(0, 5, utf8_decode('C.C. 11.449.717 de Facatativá'), 0, 1, 'L');
+        $this->Cell(0, 5, 'Coordinador de Exportaciones', 0, 1, 'L');
+        $this->SetFont('Helvetica', 'B', 7);
+        $this->Cell(80, 4, utf8_decode('Address. Autopista Medellín Km 18 El Rosal, Cundinamarca-Colombia'), 0, 0, 'C');
+        $this->Cell(53, 4, 'E-Mail. exportaciones@bufalabella.com', 0, 0, 'R');
+        $this->Cell(65, 4, 'Phone. (60) 1 9172185/5466633', 0, 1, 'C');
+        $this->SetFont('Helvetica', 'B', 7);
+        $this->Cell(80, 4, utf8_decode('Calle 93 Bis No. 19-50 Of. 305 Bogotá, Colombia'), 0, 0, 'C');
+        $this->Cell(53, 4, '', 0, 0, 'C');
+        $this->Cell(65, 4, 'Movil. (57) 321 242 45 52', 0, 1, 'C');
+        if ($con_firma) {
+            $firmaPath = $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/firma.jpg";
+            if (file_exists($firmaPath)) $this->Image($firmaPath, 10, $this->GetY() - 50, 50);
+        }
+    }
+}
+
+$pdf = new PDF_Chile('P', 'mm', 'Letter');
+$pdf->SetMargins(10, 10, 10);
+$pdf->AliasNbPages();
+$pdf->AddPage();
+
+$pdf->SetFont('Helvetica', 'B', 10);
+$pdf->Cell(0, 6, utf8_decode('Bogotá, ') . $fecha_formateada, 0, 1, 'L');
+$pdf->Ln(2);
+
+$pdf->SetFont('Helvetica', 'B', 10);
+$pdf->Cell(0, 6, utf8_decode('Señores:'), 0, 1, 'L');
+if ($tipo_carta == 'carta-aerolinea') {
+    $pdf->SetFont('Helvetica', 'B', 10);
+    $pdf->Cell(0, 4, $aerolinea, 0, 1, 'L');
+    $pdf->SetFont('Helvetica', '', 10);
+    $pdf->Cell(0, 4, 'Aeropuerto el Dorado', 0, 1, 'L');
+    $pdf->Cell(0, 4, utf8_decode('Bogotá'), 0, 1, 'L');
+} else {
+    $pdf->SetFont('Helvetica', 'B', 10);
+    $pdf->Cell(0, 4, utf8_decode('Dirección Antinarcóticos'), 0, 1, 'L');
+    $pdf->Cell(0, 4, utf8_decode('Base Operativa Aeropuerto el Dorado Bogotá'), 0, 1, 'L');
+    $pdf->Cell(0, 4, utf8_decode('Bogotá'), 0, 1, 'L');
+}
+$pdf->Ln(1);
+
+$pdf->SetFont('Helvetica', 'B', 10);
+$pdf->Cell(188, 6, 'Referencia: Carta de Responsabilidad', 0, 1, 'R');
+$pdf->Ln(2);
+
+$pdf->SetFont('Helvetica', '', 9);
+$texto_intro = "Yo, John Jairo Vera Riaño, identificado con número de cédula No. 11.449.717 expedida en Facatativá en mi condición de Coordinador de Exportaciones de la empresa BUFALABELLA S.A.S. con Nit No. 900.254.183-4 y número teléfonico 5466633, certifico que el contenido de la presente carga se ajusta a:";
+$pdf->MultiCell(0, 4, utf8_decode($texto_intro));
+$pdf->Ln(2);
+
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(0, 6, 'Factura No. ' . $facturas . ' -  GUIA MASTER: ' . $guia_master . ' -   GUIA HIJA: ' . $guia_hija, 0, 1, 'L');
+$pdf->Ln(2);
+$pdf->Cell(0, 6, utf8_decode('Correspondiente a nuestro despacho así:'), 0, 1, 'L');
+$pdf->Ln(2);
+
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'CONSIGNATARIO FINAL', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $consignatario_final, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'DESTINO', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, 'Santiago de Chile /Chile', 0, 1, 'L');
+$pdf->Ln(0);
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, utf8_decode('DESCRIPCIÓN GENERAL DE LA MERCANCIA'), 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+foreach ($mercancia_textos as $i => $txt) {
+    if ($i === 0) {
+        $pdf->Cell(0, 5, utf8_decode($txt), 0, 1, 'L');
+    } else {
+        $pdf->SetFont('Helvetica', 'B', 9);
+        $pdf->Cell(75, 5, '', 0, 0, 'L');
+        $pdf->SetFont('Helvetica', '', 9);
+        $pdf->Cell(0, 5, utf8_decode($txt), 0, 1, 'L');
+    }
+}
+$pdf->Ln(0);
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'TOTAL DE PIEZAS', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $total_piezas, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'SELLOS PRECINTOS', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $precinto, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'AGENCIA DE CARGA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, utf8_decode($agencia_carga), 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'AEROLINEA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, utf8_decode($aerolinea), 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'EMPRESA TRANSPORTADORA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, 'PARTICULAR', 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'NOMBRE DEL CONDUCTOR', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, utf8_decode($nombre_conductor), 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $cedula_conductor, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'NOMBRE DEL AYUDANTE', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, utf8_decode($nombre_ayudante), 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $cedula_ayudante, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'NUMERO DE CELULAR O TELEFONO FIJO', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, '3212424552', 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'TIPO VEHICULO', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $vehiculo, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'PLACA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $placa, 0, 1, 'L');
+$pdf->SetFont('Helvetica', 'B', 9);
+$pdf->Cell(75, 5, 'No PLANILLA DE CARGA', 0, 0, 'L');
+$pdf->SetFont('Helvetica', '', 9);
+$pdf->Cell(0, 5, $id_planilla, 0, 1, 'L');
+
+$pdf->Ln(2);
+
+$texto_responsabilidad = "Nos hacemos responsables por el contenido de esta carga ante las autoridades colombianas, extranjeras y ante el transportador en caso que se encuentren sustancias o elementos narcóticos, explosivos ilícitos o prohibidos estipulados en las normas internacionales a excepción de aquellos que expresamente se han declarado como tal armas o partes de ellas, municiones, material de guerra o sus partes u otros elementos que no cumplan con las obligaciones legales establecidas para este tipo de carga, siempre que se conserve sus empaques, características y sellos originales con las que sea entregada al transportador. El embarque ha sido preparado en lugares con óptimas condiciones de seguridad y ha sido protegido de toda intervención ilícita durante su preparación, embalaje, almacenamiento y transportador aéreo hacia las instalaciones de la aerolínea y cumple con todos los requisitos exigidos por la ley y normas fitosanitarias.";
+
+$pdf->SetFont('Helvetica', '', 10);
+$pdf->MultiCell(0, 4, utf8_decode($texto_responsabilidad));
+$pdf->Ln(2);
+
+$nombre_archivo = 'CartaResponsabilidad_' . ($tipo_carta == 'carta-aerolinea' ? 'Aerolinea' : 'Policia') . '_Chile_' . $id_planilla . '.pdf';
+
+while (ob_get_level()) ob_end_clean();
+$pdf->Output('I', $nombre_archivo);
+exit();
+?>

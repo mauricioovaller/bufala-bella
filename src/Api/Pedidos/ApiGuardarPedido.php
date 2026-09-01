@@ -26,20 +26,25 @@ if (!$data) {
 }
 
 // Funciones de sanitización
-function limpiar_texto($txt) {
+function limpiar_texto($txt)
+{
     return trim($txt); // 👈 SOLO trim, sin htmlspecialchars
 }
-function limpiar_descripcion($txt) {
+function limpiar_descripcion($txt)
+{
     // 👈 Para campos de descripción, solo trim y mantener caracteres especiales
     return trim($txt);
 }
-function validar_entero($valor) {
+function validar_entero($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
-function validar_flotante($valor) {
+function validar_flotante($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : null;
 }
-function validar_tinyint($valor) {
+function validar_tinyint($valor)
+{
     // Para TINYINT: convertir boolean a 1/0, cualquier valor truthy a 1, falsy a 0
     if ($valor === true || $valor === 1 || $valor === '1' || $valor === -1) {
         return 1;
@@ -73,83 +78,115 @@ $comentariosSeleccionados = $encabezado["comentariosSeleccionados"] ?? [];
 $comentarioPrimario = validar_tinyint($comentariosSeleccionados["incluirPrimario"] ?? false);
 $comentarioSecundario = validar_tinyint($comentariosSeleccionados["incluirSecundario"] ?? false);
 
-// Validaciones obligatorias
+// ✅ PASO 1: Validaciones obligatorias del encabezado
 if (!$idCliente || !$idTransportadora || !$idBodega || !$fechaOrden || empty($detalle)) {
-    echo json_encode(["success" => false, "message" => "Faltan datos obligatorios"]);
+    echo json_encode(["success" => false, "message" => "Faltan datos obligatorios del encabezado"]);
     exit;
 }
 
+// ✅ PASO 2: Validar TODOS los detalles ANTES de iniciar transacción
+// Esto evita consumir IDs en caso de datos inválidos
+$detallesValidados = [];
+foreach ($detalle as $index => $item) {
+    $idProducto = validar_entero($item["producto"] ?? null);
+    $descripcion = limpiar_descripcion($item["descripcion"] ?? "");
+    $idEmbalaje = validar_entero($item["embalaje"] ?? null);
+    $cantidad = validar_flotante($item["cantidad"] ?? null);
+    $pesoNeto = validar_flotante($item["pesoNeto"] ?? null);
+    $pesoBruto = validar_flotante($item["pesoBruto"] ?? null);
+    $precio = validar_flotante($item["precio"] ?? null);
+
+    // Validación completa del item
+    if (!$idProducto || !$descripcion || !$idEmbalaje || !$cantidad || !$precio) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Datos inválidos en detalle #{$index}: producto, descripción, embalaje, cantidad y precio son obligatorios"
+        ]);
+        exit;
+    }
+
+    // Guardar item validado
+    $detallesValidados[] = [
+        "idProducto" => $idProducto,
+        "descripcion" => $descripcion,
+        "idEmbalaje" => $idEmbalaje,
+        "cantidad" => $cantidad,
+        "pesoNeto" => $pesoNeto,
+        "pesoBruto" => $pesoBruto,
+        "precio" => $precio
+    ];
+}
+
+// ✅ PASO 3: Iniciar transacción SOLO si TODO está validado
 try {
     $enlace->begin_transaction();
 
-    // 👇 MODIFICADO: Insertar encabezado con los nuevos campos TINYINT
+    // Insertar encabezado
     $sqlEnc = "INSERT INTO EncabPedido 
         (Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones, ComentarioPrimario, ComentarioSecundario) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmtEnc = $enlace->prepare($sqlEnc);
-    $stmtEnc->bind_param("iiiissssssdiisssii", 
-        $idCliente, 
-        $idClienteRegion, 
-        $idTransportadora, 
-        $idBodega, 
-        $purchaseOrder, 
-        $fechaOrden, 
-        $fechaSalida, 
-        $fechaEnroute, 
-        $fechaDelivery, 
-        $fechaIngreso, 
-        $cantidadEstibas, 
-        $idAerolinea, 
-        $idAgencia, 
-        $guiaMaster, 
-        $guiaHija, 
+    $stmtEnc->bind_param(
+        "iiiissssssdiisssii",
+        $idCliente,
+        $idClienteRegion,
+        $idTransportadora,
+        $idBodega,
+        $purchaseOrder,
+        $fechaOrden,
+        $fechaSalida,
+        $fechaEnroute,
+        $fechaDelivery,
+        $fechaIngreso,
+        $cantidadEstibas,
+        $idAerolinea,
+        $idAgencia,
+        $guiaMaster,
+        $guiaHija,
         $observaciones,
-        $comentarioPrimario,    // 👈 TINYINT: 1 o 0
-        $comentarioSecundario   // 👈 TINYINT: 1 o 0
+        $comentarioPrimario,
+        $comentarioSecundario
     );
     $stmtEnc->execute();
 
     if ($stmtEnc->affected_rows <= 0) {
-        throw new Exception("Error al insertar el encabezado");
+        throw new Exception("No se pudo insertar el encabezado del pedido");
     }
 
     $idEncabPedido = $enlace->insert_id;
 
-    // Insertar detalle (sin cambios)
+    // Insertar detalles (sin validaciones, ya fueron validados)
     $sqlDet = "INSERT INTO DetPedido 
         (Id_EncabPedido, Id_Producto, Descripcion, Id_Embalaje, Cantidad, PesoNeto, PesoBruto, PrecioUnitario) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     $stmtDet = $enlace->prepare($sqlDet);
 
-    foreach ($detalle as $item) {
-        $idProducto = validar_entero($item["producto"] ?? null);
-        $descripcion = limpiar_descripcion($item["descripcion"] ?? ""); // 👈 Usar limpiar_descripcion
-        $idEmbalaje = validar_entero($item["embalaje"] ?? null);
-        $cantidad = validar_flotante($item["cantidad"] ?? null);
-        $pesoNeto = validar_flotante($item["pesoNeto"] ?? null);
-        $pesoBruto = validar_flotante($item["pesoBruto"] ?? null);
-        $precio = validar_flotante($item["precio"] ?? null);
-
-        if (!$idProducto || !$descripcion || !$idEmbalaje || !$cantidad || !$precio) {
-            throw new Exception("Datos inválidos en detalle");
-        }
-
-        $stmtDet->bind_param("iisidddd", $idEncabPedido, $idProducto, $descripcion, $idEmbalaje, $cantidad, $pesoNeto, $pesoBruto, $precio);
+    foreach ($detallesValidados as $item) {
+        $stmtDet->bind_param(
+            "iisidddd",
+            $idEncabPedido,
+            $item["idProducto"],
+            $item["descripcion"],
+            $item["idEmbalaje"],
+            $item["cantidad"],
+            $item["pesoNeto"],
+            $item["pesoBruto"],
+            $item["precio"]
+        );
         $stmtDet->execute();
 
         if ($stmtDet->affected_rows <= 0) {
-            throw new Exception("Error al insertar detalle");
+            throw new Exception("No se pudo insertar un detalle del pedido");
         }
     }
 
     $enlace->commit();
 
     echo json_encode(["success" => true, "idPedido" => $idEncabPedido]);
-
 } catch (Exception $e) {
     $enlace->rollback();
+    error_log("Error en ApiGuardarPedido.php - " . $e->getMessage());
     echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
 }
 
 $enlace->close();
-?>

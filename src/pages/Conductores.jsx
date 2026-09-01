@@ -173,7 +173,7 @@ export default function Conductores() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fadeIn">
             {/* Formulario */}
             <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
                 <h2 className="text-xl font-semibold mb-4 text-slate-700">

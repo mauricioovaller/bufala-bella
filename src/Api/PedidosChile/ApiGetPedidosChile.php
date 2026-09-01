@@ -1,39 +1,60 @@
 <?php
-// src/Api/PedidosChile/ApiGetPedidosChile.php
-// Retorna la lista de todos los pedidos Chile para el modal de búsqueda
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
+header("Content-Type: application/json");
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     echo json_encode(["success" => false, "message" => "Método no permitido"]);
-    http_response_code(405);
     exit;
 }
 
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
-$enlace->set_charset("utf8mb4");
 
-$query = "SELECT e.Id_EncabPedidoChile,
-                 c.Nombre        AS NombreCliente,
-                 e.NumeroOrden,
-                 e.FechaRecepcionOrden,
-                 e.GuiaAerea,
-                 e.Estado
-          FROM EncabPedidoChile e
-          JOIN ClientesChile c ON e.Id_ClienteChile = c.Id_ClienteChile
-          ORDER BY e.Id_EncabPedidoChile DESC";
-
-$result = $enlace->query($query);
-$pedidos = [];
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $pedidos[] = $row;
-    }
+if ($enlace->connect_error) {
+    echo json_encode(["success" => false, "message" => "Error de conexión: " . $enlace->connect_error]);
+    exit;
 }
 
-echo json_encode([
-    'success' => true,
-    'pedidos' => $pedidos,
-]);
+// Leer término de búsqueda (opcional)
+$json = file_get_contents("php://input");
+$data = json_decode($json, true);
+$termino = isset($data["termino"]) ? trim($data["termino"]) : "";
+
+// Si no hay término, no devolver todos los registros (evita cargas pesadas)
+if ($termino === "") {
+    echo json_encode(["success" => true, "pedidos" => [], "message" => "Ingrese un criterio de búsqueda"]);
+    exit;
+}
+
+$patron = "%" . $termino . "%";
+
+// Consulta solo lo necesario para listar, filtrando por el término
+$sql = "SELECT e.Id_EncabPedido AS idPedido, e.FechaOrden, e.PurchaseOrder, e.Estado, c.Nombre
+        FROM EncabPedidoChile e
+        INNER JOIN ClientesChile c ON e.Id_Cliente = c.Id_Cliente
+        WHERE e.Id_EncabPedido LIKE ?
+           OR c.Nombre LIKE ?
+           OR e.FechaOrden LIKE ?
+           OR e.PurchaseOrder LIKE ?
+        ORDER BY e.Id_EncabPedido DESC
+        LIMIT 200";
+
+$stmt = $enlace->prepare($sql);
+$stmt->bind_param("ssss", $patron, $patron, $patron, $patron);
+$stmt->execute();
+$stmt->bind_result($idPedido, $fechaOrden, $purchaseOrder, $estado, $nombre);
+
+$pedidos = [];
+while ($stmt->fetch()) {
+    $pedidos[] = [
+        "idPedido" => $idPedido,
+        "FechaOrden" => $fechaOrden,
+        "PurchaseOrder" => $purchaseOrder ?? "",
+        "Estado" => $estado ?? "Activo",
+        "Nombre" => $nombre
+    ];
+}
+$stmt->close();
+
+echo json_encode(["success" => true, "pedidos" => $pedidos]);
 
 $enlace->close();
+?>

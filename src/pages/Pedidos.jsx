@@ -14,6 +14,7 @@ import {
   getPedidos,
   getPedidoEspecifico,
   actualizarPedido,
+  anularPedido,
   imprimirPedido,
   imprimirPedidosMultiples,
   getRangoPedidos,
@@ -21,6 +22,7 @@ import {
 
 const comentariosPorCliente = {
   "11": "Indicaciones Especiales: CON CODIGO DE BARRAS",
+  "12": "Indicaciones especiales: CON GTIN CODIGO DE BARRAS",
 };
 
 function todayISODate() {
@@ -55,7 +57,7 @@ export default function Pedidos() {
     comentarios: "",
     cantidadEstibas: 1,
     aerolineaId: "107",
-    agenciaId: "44",
+    agenciaId: "73",
     noGuia: "",
     guiaHija: "",
   });
@@ -117,10 +119,8 @@ export default function Pedidos() {
   const [urlPDF, setUrlPDF] = useState(null);
   const [mostrarModal, setMostrarModal] = useState(false);
 
-  // --------------------------------------------------------------
-  // 👇 NUEVO: Estado para controlar el guardado (evita doble clic)
-  // --------------------------------------------------------------
   const [isSaving, setIsSaving] = useState(false);
+  const [pedidoAnulado, setPedidoAnulado] = useState(false);
 
   // --------------------------------------------------------------
   // Refs para validaciones
@@ -549,12 +549,13 @@ export default function Pedidos() {
       cantidadEstibas: 1,
       bodegaId: "",
       aerolineaId: "107",
-      agenciaId: "44",
+      agenciaId: "73",
       noGuia: "",
       guiaHija: "",
     });
     setItems([]);
     setRegiones([]);
+    setPedidoAnulado(false);
     setComentariosSeleccionados({
       incluirPrimario: true,
       incluirSecundario: true
@@ -562,20 +563,77 @@ export default function Pedidos() {
     itemRefs.current = [];
   }
 
-  async function handleOpenModal() {
-    setShowModal(true);
-    setCargandoPedidos(true);
-    setFiltroPedidos("");
+  async function handleAnular() {
+    if (!header.id) {
+      Swal.fire("Aviso", "No hay pedido para anular.", "info");
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "¿Anular Pedido?",
+      html: `
+        <div class="text-left">
+          <p class="mb-2">¿Está seguro de anular el pedido <strong>${header.numero}</strong>?</p>
+          <p class="text-sm text-red-600">Esta acción no se puede deshacer.</p>
+        </div>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, Anular",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#6b7280",
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
-      const res = await getPedidos();
+      Swal.fire({
+        title: "Anulando pedido...",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
+
+      const res = await anularPedido(header.id);
+      Swal.close();
+
+      if (res.success) {
+        setPedidoAnulado(true);
+        Swal.fire("Anulado", "Pedido anulado correctamente.", "success");
+      } else {
+        Swal.fire("Error", res.message || "No se pudo anular el pedido.", "error");
+      }
+    } catch (err) {
+      console.error("Error al anular:", err);
+      Swal.fire("Error", "Ocurrió un error al anular el pedido.", "error");
+    }
+  }
+
+  async function handleOpenModal() {
+    setShowModal(true);
+    setPedidos([]);
+    setFiltroPedidos("");
+    setCargandoPedidos(false);
+  }
+
+  // 🔴 Búsqueda server-side: solo trae los pedidos que coinciden con el término
+  async function handleBuscarPedidosModal() {
+    const termino = filtroPedidos.toString().trim();
+    if (!termino) {
+      Swal.fire("Aviso", "Escriba un número, cliente, fecha o P.O. para buscar", "warning");
+      return;
+    }
+
+    setCargandoPedidos(true);
+    try {
+      const res = await getPedidos(termino);
       if (res.success) {
         setPedidos(res.pedidos || []);
       } else {
         Swal.fire("Error", "No se pudieron cargar los pedidos", "error");
       }
     } catch (err) {
-      console.error("Error cargando pedidos:", err);
+      console.error("Error buscando pedidos:", err);
       Swal.fire("Error", "Error al obtener pedidos", "error");
     } finally {
       setCargandoPedidos(false);
@@ -588,6 +646,7 @@ export default function Pedidos() {
     setFiltroPedidos("");
   };
 
+  // Filtro local adicional sobre los resultados ya cargados del servidor
   const pedidosFiltrados = pedidos.filter((p) => {
     if (!filtroPedidos) return true;
     const f = filtroPedidos.toString().trim().toLowerCase();
@@ -703,10 +762,10 @@ export default function Pedidos() {
       setHeader((p) => ({ ...p, ...mappedHeader }));
       setItems(mappedItems);
       setComentariosSeleccionados(comentariosCargados);
+      setPedidoAnulado(apiHeader.Estado === "Anulado");
       itemRefs.current = [];
 
       cerrarModalBuscarPedidos();
-      Swal.fire("Cargado", "Pedido cargado correctamente.", "success");
     } catch (err) {
       console.error("Error en handleSelectPedido:", err);
       Swal.fire("Error", "Error al obtener el pedido", "error");
@@ -1181,10 +1240,18 @@ export default function Pedidos() {
   if (errorDatos) return <p className="text-red-600 text-center py-4">{errorDatos}</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Barra de acciones */}
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-        <h2 className="text-xl font-semibold mb-4 text-slate-700">Gestión de Pedidos</h2>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-xl font-semibold text-slate-700">Gesti&oacute;n de Pedidos</h2>
+          {header.id && pedidoAnulado && (
+            <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Anulado</span>
+          )}
+          {header.id && !pedidoAnulado && (
+            <span className="bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full">Activo</span>
+          )}
+        </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={handleOpenModal}
@@ -1230,6 +1297,21 @@ export default function Pedidos() {
             Imprimir Múltiple
           </button>
         </div>
+
+        {/* Acciones Destructivas */}
+        {header.id && !pedidoAnulado && (
+          <div className="mt-3 pt-3 border-t border-gray-200 flex justify-end">
+            <button
+              onClick={handleAnular}
+              className="px-3 py-1.5 text-sm border border-red-300 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 hover:border-red-400 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Anular Pedido
+            </button>
+          </div>
+        )}
       </div>
 
       <PedidoHeader
@@ -1265,11 +1347,20 @@ export default function Pedidos() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                 <input
                   type="text"
-                  placeholder="Filtrar por ID, cliente, fecha o P.O. ..."
+                  placeholder="Número, cliente, fecha o P.O. ..."
                   className="border rounded px-3 py-2 flex-1 min-w-[200px]"
                   value={filtroPedidos}
                   onChange={(e) => setFiltroPedidos(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleBuscarPedidosModal();
+                  }}
                 />
+                <button
+                  onClick={handleBuscarPedidosModal}
+                  className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                >
+                  🔍 Buscar
+                </button>
                 <button
                   onClick={cerrarModalBuscarPedidos}
                   className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 transition"
@@ -1280,10 +1371,10 @@ export default function Pedidos() {
             </div>
 
             {cargandoPedidos ? (
-              <div className="text-center py-8">Cargando pedidos...</div>
+              <div className="text-center py-8">Buscando pedidos...</div>
             ) : pedidosFiltrados.length === 0 ? (
               <div className="text-center py-8 text-gray-600 border-2 border-dashed rounded-lg bg-gray-50">
-                {filtroPedidos ? "No se encontraron pedidos con ese filtro." : "No hay pedidos registrados."}
+                {filtroPedidos ? "No se encontraron pedidos con ese filtro." : "Escriba un número, cliente, fecha o P.O. y presione Buscar para encontrar pedidos."}
               </div>
             ) : (
               <div className="overflow-auto max-h-96">
@@ -1297,17 +1388,27 @@ export default function Pedidos() {
                         <th className="py-2 px-2 font-semibold">Fecha Orden</th>
                         <th className="py-2 px-2 font-semibold">P.O.</th>
                         <th className="py-2 px-2 font-semibold">Región</th>
+                        <th className="py-2 px-2 font-semibold">Estado</th>
                         <th className="py-2 px-2 font-semibold text-right">Acción</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pedidosFiltrados.map((p) => (
-                        <tr key={p.idPedido} className="hover:bg-gray-50 border-b">
+                      {pedidosFiltrados.map((p) => {
+                        const esAnulado = p.Estado === "Anulado";
+                        return (
+                        <tr key={p.idPedido} className={`hover:bg-gray-50 border-b ${esAnulado ? "bg-red-50 opacity-70" : ""}`}>
                           <td className="py-2 px-2 font-medium">{p.idPedido}</td>
                           <td className="py-2 px-2">{p.Nombre}</td>
                           <td className="py-2 px-2">{p.FechaOrden}</td>
                           <td className="py-2 px-2">{p.PurchaseOrder || "-"}</td>
                           <td className="py-2 px-2">{p.Region}</td>
+                          <td className="py-2 px-2">
+                            {esAnulado ? (
+                              <span className="inline-block bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded-full">Anulado</span>
+                            ) : (
+                              <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">Activo</span>
+                            )}
+                          </td>
                           <td className="py-2 px-2 text-right">
                             <button
                               className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
@@ -1317,17 +1418,19 @@ export default function Pedidos() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Cards para móviles */}
                 <div className="block md:hidden space-y-3">
-                  {pedidosFiltrados.map((p) => (
+                  {pedidosFiltrados.map((p) => {
+                    const esAnulado = p.Estado === "Anulado";
+                    return (
                     <div
                       key={p.idPedido}
-                      className="border rounded-lg p-4 shadow-sm bg-white"
+                      className={`border rounded-lg p-4 shadow-sm ${esAnulado ? "bg-red-50 border-red-200" : "bg-white"}`}
                     >
                       <div className="space-y-2">
                         <div className="flex justify-between items-start">
@@ -1335,12 +1438,19 @@ export default function Pedidos() {
                             <span className="font-semibold text-gray-700">ID:</span>
                             <p className="text-gray-900 font-medium">PED-{String(p.idPedido).padStart(6, "0")}</p>
                           </div>
-                          <button
-                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
-                            onClick={() => handleSelectPedido(p.idPedido)}
-                          >
-                            Cargar
-                          </button>
+                          <div className="flex flex-col items-end gap-1">
+                            {esAnulado ? (
+                              <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded-full">Anulado</span>
+                            ) : (
+                              <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">Activo</span>
+                            )}
+                            <button
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
+                              onClick={() => handleSelectPedido(p.idPedido)}
+                            >
+                              Cargar
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <span className="font-semibold text-gray-700">Cliente:</span>
@@ -1362,7 +1472,7 @@ export default function Pedidos() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
             )}

@@ -52,12 +52,16 @@ export async function guardarSample(encabezado, detalle) {
   }
 }
 
-export async function getSamples() {
+export async function getSamples(termino = "") {
   try {
     const res = await fetch(
       "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosSample/ApiGetSamples.php",
       {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ termino }),
       }
     );
     return await res.json();
@@ -105,7 +109,22 @@ export async function actualizarSample(encabezado, detalle) {
   }
 }
 
-// En services/pedidosService.js - AGREGAR ESTAS FUNCIONES:
+export async function anularSample(idPedido) {
+  try {
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/PedidosSample/ApiAnularSample.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idPedido }),
+      },
+    );
+    return await response.json();
+  } catch (err) {
+    console.error("Error al anular el sample:", err);
+    throw err;
+  }
+}
 
 export async function imprimirSample(idPedido, tipoDocumento = "pedido") {
   try {

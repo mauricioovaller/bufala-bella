@@ -9,13 +9,55 @@ import {
   parsearListaEmails,
   validarEmail,
   generarVariablesFactura,
-  generarNombreFactura
+  generarNombreFactura,
+  normalizarNumeroFactura
 } from '../../services/correoService';
 import { enviarCorreoGenerico } from '../../services/envioCorreosGenericoService';
-import { generarFacturaPDF } from '../../services/facturacionService';
-import { generarCartaResponsabilidad, generarReporteDespacho, generarPlanVallejo } from '../../services/planillasService';
+import { generarFacturaPDF, generarFacturaPDFChile } from '../../services/facturacionService';
+import {
+  generarCartaResponsabilidad,
+  generarReporteDespacho,
+  generarPlanVallejo,
+  generarCartaResponsabilidadChile,
+  generarReporteDespachoChile,
+  generarPlanVallejoChile,
+  generarAutodeclaracionChile,
+  generarPlanillaDespachoChile,
+  generarCartaDatalogerChile,
+  generarSolicitudICAChile,
+  generarCertificadoTratamientoChile,
+  generarTablaHCLacteosChile
+} from '../../services/planillasService';
 import DestinatariosSelector from './DestinatariosSelector';
 import Swal from 'sweetalert2';
+
+// Documentos disponibles segun el tipo de factura.
+// Chile expone todos los anexos solicitados por el usuario.
+const construirDocumentosDisponibles = (factura) => {
+  const esChile = factura?.tipoPedido === 'chile';
+
+  const documentosBase = [
+    { id: 'factura', nombre: 'Factura PDF', seleccionado: true, obligatorio: true, generando: false },
+    { id: 'carta-policia', nombre: 'Carta para Policía', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'carta-aerolinea', nombre: 'Carta para Aerolínea', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'plan-vallejo', nombre: 'Plan Vallejo', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'reporte-despacho', nombre: 'Reporte Despacho', seleccionado: false, obligatorio: false, generando: false }
+  ];
+
+  if (!esChile) {
+    return documentosBase;
+  }
+
+  return [
+    ...documentosBase,
+    { id: 'autodeclaracion-chile', nombre: 'Autodeclaración Chile', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'planilla-aerolinea', nombre: 'Planilla Aerolínea', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'carta-dataloger', nombre: 'Carta Dataloger', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'solicitud-ica', nombre: 'Solicitud ICA', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'certificado-tratamiento', nombre: 'Certificado Tratamiento Térmico', seleccionado: false, obligatorio: false, generando: false },
+    { id: 'tabla-hc-lacteos', nombre: 'Tabla HC Lácteos', seleccionado: false, obligatorio: false, generando: false }
+  ];
+};
 
 const EnviarCorreoFacturaModal = ({
   factura,
@@ -33,14 +75,8 @@ const EnviarCorreoFacturaModal = ({
   const [cuerpo, setCuerpo] = useState('');
   const [plantillaId, setPlantillaId] = useState(null);
 
-  // Estados para documentos adjuntos
-  const [documentosDisponibles, setDocumentosDisponibles] = useState([
-    { id: 'factura', nombre: 'Factura PDF', seleccionado: true, obligatorio: true, generando: false },
-    { id: 'carta-policia', nombre: 'Carta para Policía', seleccionado: false, obligatorio: false, generando: false },
-    { id: 'carta-aerolinea', nombre: 'Carta para Aerolínea', seleccionado: false, obligatorio: false, generando: false },
-    { id: 'plan-vallejo', nombre: 'Plan Vallejo', seleccionado: false, obligatorio: false, generando: false },
-    { id: 'reporte-despacho', nombre: 'Reporte de Despacho', seleccionado: false, obligatorio: false, generando: false }
-  ]);
+  // Estados para documentos adjuntos (se construyen según el tipo de factura al abrir)
+  const [documentosDisponibles, setDocumentosDisponibles] = useState([]);
 
   // Estados para archivos generados
   const [archivosGenerados, setArchivosGenerados] = useState({});
@@ -87,6 +123,9 @@ const EnviarCorreoFacturaModal = ({
   const cargarDatosIniciales = async () => {
     setLoading(true);
     try {
+      setDocumentosDisponibles(construirDocumentosDisponibles(factura));
+      setArchivosGenerados({});
+
       // Cargar destinatarios predeterminados
       const respuestaDestinatarios = await obtenerDestinatariosPredeterminados();
       if (respuestaDestinatarios.success) {
@@ -144,6 +183,98 @@ const EnviarCorreoFacturaModal = ({
     );
   };
 
+  // Genera el archivo (blob) y nombre para un documento, según el tipo de factura.
+  // Chile usa sus propios endpoints y expone los anexos adicionales.
+  const generarArchivoDocumento = async (tipoDocumento, datos) => {
+    const esChile = datos?.tipoPedido === 'chile';
+    const numeroFactura = normalizarNumeroFactura(datos.numero) || datos.id || 'documento';
+    let archivoBlob;
+    let nombreArchivo;
+
+    switch (tipoDocumento) {
+      case 'factura':
+        archivoBlob = esChile
+          ? await generarFacturaPDFChile(datos.id)
+          : await generarFacturaPDF(datos.id, datos.tipoPedido || 'normal');
+        nombreArchivo = generarNombreFactura(datos);
+        break;
+
+      case 'carta-policia':
+        if (!datos.Id_Planilla) {
+          throw new Error('La factura no tiene planilla asociada para generar carta de policía');
+        }
+        archivoBlob = esChile
+          ? await generarCartaResponsabilidadChile('carta-policia', datos.Id_Planilla, true)
+          : await generarCartaResponsabilidad('carta-policia', datos.Id_Planilla, true);
+        nombreArchivo = `carta-policia-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'carta-aerolinea':
+        if (!datos.Id_Planilla) {
+          throw new Error('La factura no tiene planilla asociada para generar carta de aerolínea');
+        }
+        archivoBlob = esChile
+          ? await generarCartaResponsabilidadChile('carta-aerolinea', datos.Id_Planilla, true)
+          : await generarCartaResponsabilidad('carta-aerolinea', datos.Id_Planilla, true);
+        nombreArchivo = `carta-aerolinea-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'plan-vallejo':
+        archivoBlob = esChile
+          ? await generarPlanVallejoChile(datos.id)
+          : await generarPlanVallejo(datos.id);
+        nombreArchivo = `plan-vallejo-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'reporte-despacho':
+        archivoBlob = esChile
+          ? await generarReporteDespachoChile(datos.id)
+          : await generarReporteDespacho(datos.id);
+        nombreArchivo = `reporte-despacho-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'autodeclaracion-chile':
+        archivoBlob = await generarAutodeclaracionChile(datos.id);
+        nombreArchivo = `autodeclaracion-chile-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'planilla-aerolinea':
+        archivoBlob = await generarPlanillaDespachoChile(datos.id);
+        nombreArchivo = `planilla-aerolinea-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'carta-dataloger':
+        archivoBlob = await generarCartaDatalogerChile(datos.id);
+        nombreArchivo = `carta-dataloger-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'solicitud-ica':
+        archivoBlob = await generarSolicitudICAChile(datos.id);
+        nombreArchivo = `solicitud-ica-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'certificado-tratamiento':
+        archivoBlob = await generarCertificadoTratamientoChile(datos.id);
+        nombreArchivo = `certificado-tratamiento-factura-${numeroFactura}.pdf`;
+        break;
+
+      case 'tabla-hc-lacteos':
+        archivoBlob = await generarTablaHCLacteosChile(datos.id);
+        nombreArchivo = `tabla-hc-lacteos-factura-${numeroFactura}.pdf`;
+        break;
+
+      default:
+        throw new Error('Tipo de documento no válido');
+    }
+
+    // Los generadores de planillas pueden devolver {success:false} en lugar de lanzar error
+    if (!archivoBlob || archivoBlob.success === false) {
+      throw new Error(archivoBlob?.message || `El documento ${tipoDocumento} no se pudo generar`);
+    }
+
+    return { blob: archivoBlob, nombre: nombreArchivo };
+  };
+
   // Generar un documento específico
   const generarDocumento = async (tipoDocumento) => {
     try {
@@ -156,54 +287,9 @@ const EnviarCorreoFacturaModal = ({
         )
       );
 
-      let archivoBlob;
-      let nombreArchivo;
-
-      switch (tipoDocumento) {
-        case 'factura':
-          console.log(`📄 Generando factura PDF para ID: ${factura.id}, tipo: ${factura.tipoPedido || 'normal'}`);
-          archivoBlob = await generarFacturaPDF(factura.id, factura.tipoPedido || 'normal');
-          nombreArchivo = generarNombreFactura(factura);
-          console.log(`✅ Factura generada: ${nombreArchivo}, tamaño: ${archivoBlob.size} bytes`);
-          break;
-
-        case 'carta-policia':
-          if (!factura.Id_Planilla) {
-            throw new Error('La factura no tiene planilla asociada para generar carta de policía');
-          }
-          console.log(`📄 Generando carta policía para planilla: ${factura.Id_Planilla}`);
-          archivoBlob = await generarCartaResponsabilidad('carta-policia', factura.Id_Planilla, true);
-          nombreArchivo = `carta-policia-factura-${factura.numero}.pdf`;
-          console.log(`✅ Carta policía generada: ${nombreArchivo}`);
-          break;
-
-        case 'carta-aerolinea':
-          if (!factura.Id_Planilla) {
-            throw new Error('La factura no tiene planilla asociada para generar carta de aerolínea');
-          }
-          console.log(`📄 Generando carta aerolínea para planilla: ${factura.Id_Planilla}`);
-          archivoBlob = await generarCartaResponsabilidad('carta-aerolinea', factura.Id_Planilla, true);
-          nombreArchivo = `carta-aerolinea-factura-${factura.numero}.pdf`;
-          console.log(`✅ Carta aerolínea generada: ${nombreArchivo}`);
-          break;
-
-        case 'plan-vallejo':
-          console.log(`📄 Generando plan vallejo para factura: ${factura.id}`);
-          archivoBlob = await generarPlanVallejo(factura.id);
-          nombreArchivo = `plan-vallejo-factura-${factura.numero}.pdf`;
-          console.log(`✅ Plan vallejo generado: ${nombreArchivo}`);
-          break;
-
-        case 'reporte-despacho':
-          console.log(`📄 Generando reporte despacho para factura: ${factura.id}`);
-          archivoBlob = await generarReporteDespacho(factura.id);
-          nombreArchivo = `reporte-despacho-factura-${factura.numero}.pdf`;
-          console.log(`✅ Reporte despacho generado: ${nombreArchivo}`);
-          break;
-
-        default:
-          throw new Error('Tipo de documento no válido');
-      }
+      const resultadoDocumento = await generarArchivoDocumento(tipoDocumento, factura);
+      const archivoBlob = resultadoDocumento.blob;
+      const nombreArchivo = resultadoDocumento.nombre;
 
       // Verificar que el blob sea válido
       if (!archivoBlob || archivoBlob.size === 0) {
@@ -355,30 +441,7 @@ const EnviarCorreoFacturaModal = ({
 
       // Generador de documentos específico para facturación
       const generadorFacturacion = async (tipoDocumento, datos) => {
-        let blob;
-
-        switch (tipoDocumento) {
-          case 'factura':
-            blob = await generarFacturaPDF(datos.id, datos.tipoPedido || 'normal');
-            break;
-          case 'carta-policia':
-            if (!datos.Id_Planilla) throw new Error('Sin planilla asociada');
-            blob = await generarCartaResponsabilidad('carta-policia', datos.Id_Planilla, true);
-            break;
-          case 'carta-aerolinea':
-            if (!datos.Id_Planilla) throw new Error('Sin planilla asociada');
-            blob = await generarCartaResponsabilidad('carta-aerolinea', datos.Id_Planilla, true);
-            break;
-          case 'plan-vallejo':
-            blob = await generarPlanVallejo(datos.id);
-            break;
-          case 'reporte-despacho':
-            blob = await generarReporteDespacho(datos.id);
-            break;
-          default:
-            throw new Error('Tipo de documento desconocido');
-        }
-
+        const { blob } = await generarArchivoDocumento(tipoDocumento, datos);
         return blob;
       };
 
@@ -386,7 +449,7 @@ const EnviarCorreoFacturaModal = ({
       const resultado = await enviarCorreoGenerico({
         modulo: 'facturacion',
         referencia_id: factura.id,
-        referencia_numero: factura.numero,
+        referencia_numero: normalizarNumeroFactura(factura.numero),
         destinatarios: destinatarios,
         documentos_seleccionados: documentosDisponibles
           .filter(d => d.seleccionado)
@@ -473,7 +536,7 @@ const EnviarCorreoFacturaModal = ({
             </div>
             <div className="mt-2">
               <p className="text-sm text-blue-700">
-                Factura: <span className="font-semibold">{factura.numero}</span> |
+                Factura: <span className="font-semibold">{normalizarNumeroFactura(factura.numero)}</span> |
                 Cliente: <span className="font-semibold">{factura.cliente}</span> |
                 Valor: <span className="font-semibold">${factura.valorTotal?.toLocaleString('es-CO') || '0'}</span>
               </p>

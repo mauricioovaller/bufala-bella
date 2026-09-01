@@ -166,12 +166,74 @@ if ($stmtS) {
     $stmtS->close();
 }
 
+/*
+ * Consulta de Notas Crédito:
+ * Misma estructura que pedidos regulares pero sobre EncabNotaCredito + DetNotaCredito
+ * Los valores son NEGATIVOS (se restan del total)
+ */
+$sqlNC = "SELECT
+            cli.Nombre                           AS cliente,
+            COALESCE(clr.Region, 'Sin región')   AS region,
+            prd.DescripProducto                  AS descripcion,
+            IFNULL(emb.Descripcion, '')          AS unidades,
+            YEAR(dnc.FechaSalidaPedido)          AS anio,
+            WEEK(dnc.FechaSalidaPedido, 3)       AS semana,
+            MIN(dnc.FechaSalidaPedido)           AS fecha_inicio_semana,
+            SUM(dnc.CantidadCredito) * -1        AS cajas
+        FROM EncabNotaCredito encNC
+        INNER JOIN Clientes cli          ON encNC.Id_Cliente        = cli.Id_Cliente
+        INNER JOIN DetNotaCredito dnc    ON encNC.Id_EncabNotaCredito = dnc.Id_EncabNotaCredito
+        INNER JOIN Productos prd         ON dnc.Id_Producto         = prd.Id_Producto
+        LEFT JOIN Embalajes emb          ON dnc.Id_Embalaje         = emb.Id_Embalaje
+        -- Obtener la region desde el pedido original (evita duplicacion por cliente multi-region)
+        LEFT JOIN EncabPedido ep         ON dnc.Id_EncabPedido      = ep.Id_EncabPedido
+        LEFT JOIN ClientesRegion clr     ON ep.Id_ClienteRegion     = clr.Id_ClienteRegion
+        WHERE dnc.FechaSalidaPedido BETWEEN ? AND ?
+          AND encNC.Estado = 'Activo'
+        GROUP BY
+            cli.Nombre,
+            COALESCE(clr.Region, 'Sin región'),
+            prd.DescripProducto,
+            IFNULL(emb.Descripcion, ''),
+            YEAR(dnc.FechaSalidaPedido),
+            WEEK(dnc.FechaSalidaPedido, 3)
+        ORDER BY
+            cli.Nombre ASC,
+            COALESCE(clr.Region, 'Sin región') ASC,
+            prd.DescripProducto ASC,
+            IFNULL(emb.Descripcion, '') ASC,
+            anio ASC,
+            semana ASC";
+
+$filasNC = [];
+$stmtNC = $enlace->prepare($sqlNC);
+
+if ($stmtNC) {
+    $stmtNC->bind_param("ss", $fechaDesde, $fechaHasta);
+    $stmtNC->execute();
+    $stmtNC->bind_result($ncCliente, $ncRegion, $ncDescripcion, $ncUnidades, $ncAnio, $ncSemana, $ncFechaInicioSemana, $ncCajas);
+    while ($stmtNC->fetch()) {
+        $filasNC[] = [
+            "cliente"           => $ncCliente,
+            "region"            => $ncRegion,
+            "descripcion"       => $ncDescripcion,
+            "unidades"          => $ncUnidades,
+            "anio"              => (int)$ncAnio,
+            "semana"            => (int)$ncSemana,
+            "fechaInicioSemana" => $ncFechaInicioSemana,
+            "cajas"             => round((float)$ncCajas, 4)
+        ];
+    }
+    $stmtNC->close();
+}
+
 $enlace->close();
 
 echo json_encode([
     "success"      => true,
     "datos"        => $filas,
     "datosSamples" => $filasSamples,
+    "datosNC"      => $filasNC,
     "fechaDesde"   => $fechaDesde,
     "fechaHasta"   => $fechaHasta,
     "total"        => count($filas)

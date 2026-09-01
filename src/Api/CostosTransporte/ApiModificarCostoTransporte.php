@@ -32,6 +32,7 @@ function limpiar_texto($texto)
 }
 
 $idCosto = $data["id"] ?? 0;
+$tipoPedido = $data["TipoPedido"] ?? null;
 $cantidadCamiones = $data["CantidadCamiones"] ?? null;
 $valorFlete = $data["ValorFlete"] ?? null;
 $observaciones = limpiar_texto($data["Observaciones"] ?? "");
@@ -46,11 +47,11 @@ if (!is_numeric($idCosto) || $idCosto <= 0) {
 }
 
 // Verificar que el registro exista
-$sqlCheck = "SELECT Fecha FROM CostosTransporteDiario WHERE Id_CostoTransporte = ?";
+$sqlCheck = "SELECT Fecha, TipoPedido FROM CostosTransporteDiario WHERE Id_CostoTransporte = ?";
 $stmtCheck = $enlace->prepare($sqlCheck);
 $stmtCheck->bind_param("i", $idCosto);
 $stmtCheck->execute();
-$stmtCheck->bind_result($fechaExistente);
+$stmtCheck->bind_result($fechaExistente, $tipoExistente);
 $stmtCheck->fetch();
 $stmtCheck->close();
 
@@ -60,7 +61,45 @@ if (!$fechaExistente) {
 }
 
 // Si se proporciona Fecha, validar que exista en EncabInvoice y no esté duplicada
+// Validar tipo de pedido si viene en la peticion
+if ($tipoPedido !== null && !in_array($tipoPedido, ['normal', 'chile'], true)) {
+    echo json_encode(["success" => false, "message" => "Tipo de pedido no vÃ¡lido"]);
+    exit;
+}
+
+$tipoEfectivo = $tipoPedido !== null ? $tipoPedido : $tipoExistente;
+
 $nuevaFecha = $data["Fecha"] ?? null;
+
+// Si solo cambia el tipo de pedido, validar la fecha actual contra el nuevo tipo
+if ($nuevaFecha === null && $tipoPedido !== null && $tipoPedido !== $tipoExistente) {
+    $tablaFacturasTipo = $tipoEfectivo === 'chile' ? 'EncabInvoiceChile' : 'EncabInvoice';
+    $sqlCheckTipo = "SELECT COUNT(*) FROM {$tablaFacturasTipo} WHERE Fecha = ?";
+    $stmtCheckTipo = $enlace->prepare($sqlCheckTipo);
+    $stmtCheckTipo->bind_param("s", $fechaExistente);
+    $stmtCheckTipo->execute();
+    $stmtCheckTipo->bind_result($countTipo);
+    $stmtCheckTipo->fetch();
+    $stmtCheckTipo->close();
+
+    if ($countTipo == 0) {
+        echo json_encode(["success" => false, "message" => "No existen facturas tipo $tipoEfectivo para la fecha $fechaExistente"]);
+        exit;
+    }
+
+    $sqlCheckDupTipo = "SELECT Id_CostoTransporte FROM CostosTransporteDiario WHERE Fecha = ? AND TipoPedido = ? AND Id_CostoTransporte != ?";
+    $stmtCheckDupTipo = $enlace->prepare($sqlCheckDupTipo);
+    $stmtCheckDupTipo->bind_param("ssi", $fechaExistente, $tipoEfectivo, $idCosto);
+    $stmtCheckDupTipo->execute();
+    $stmtCheckDupTipo->store_result();
+    if ($stmtCheckDupTipo->num_rows > 0) {
+        echo json_encode(["success" => false, "message" => "Ya existe otro registro de costo tipo $tipoEfectivo para la fecha $fechaExistente"]);
+        $stmtCheckDupTipo->close();
+        exit;
+    }
+    $stmtCheckDupTipo->close();
+}
+
 if ($nuevaFecha !== null) {
     // Validar formato
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $nuevaFecha)) {
@@ -69,7 +108,8 @@ if ($nuevaFecha !== null) {
     }
 
     // Validar que exista en EncabInvoice
-    $sqlCheckFecha = "SELECT COUNT(*) FROM EncabInvoice WHERE Fecha = ?";
+    $tablaFacturas = $tipoEfectivo === 'chile' ? 'EncabInvoiceChile' : 'EncabInvoice';
+    $sqlCheckFecha = "SELECT COUNT(*) FROM {$tablaFacturas} WHERE Fecha = ?";
     $stmtCheckFecha = $enlace->prepare($sqlCheckFecha);
     $stmtCheckFecha->bind_param("s", $nuevaFecha);
     $stmtCheckFecha->execute();
@@ -83,9 +123,9 @@ if ($nuevaFecha !== null) {
     }
 
     // Validar que no exista otro registro con la misma fecha (excluyendo el actual)
-    $sqlCheckDuplicado = "SELECT Id_CostoTransporte FROM CostosTransporteDiario WHERE Fecha = ? AND Id_CostoTransporte != ?";
+    $sqlCheckDuplicado = "SELECT Id_CostoTransporte FROM CostosTransporteDiario WHERE Fecha = ? AND TipoPedido = ? AND Id_CostoTransporte != ?";
     $stmtCheckDuplicado = $enlace->prepare($sqlCheckDuplicado);
-    $stmtCheckDuplicado->bind_param("si", $nuevaFecha, $idCosto);
+    $stmtCheckDuplicado->bind_param("ssi", $nuevaFecha, $tipoEfectivo, $idCosto);
     $stmtCheckDuplicado->execute();
     $stmtCheckDuplicado->store_result();
 
@@ -106,6 +146,12 @@ if ($nuevaFecha !== null) {
     $campos[] = "Fecha = ?";
     $tipos .= "s";
     $valores[] = $nuevaFecha;
+}
+
+if ($tipoPedido !== null) {
+    $campos[] = "TipoPedido = ?";
+    $tipos .= "s";
+    $valores[] = $tipoPedido;
 }
 
 if ($cantidadCamiones !== null) {

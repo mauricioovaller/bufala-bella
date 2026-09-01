@@ -7,8 +7,8 @@
 ║ ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-**Última actualización:** 12 de Mayo de 2026  
-**Versión:** 1.5  
+**Última actualización:** 19 de Agosto de 2026  
+**Versión:** 1.8  
 **Responsable:** Equipo de Desarrollo
 
 ---
@@ -21,6 +21,18 @@
 | ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------- |
 | `src/**/*.jsx`     | `.github/instructions/jsx-react.instructions.md`   | Mobile First, tablas, SweetAlert2, paleta de colores, spinner              |
 | `src/Api/**/*.php` | `.github/instructions/php-backend.instructions.md` | Prohibición `get_result()`, prepared statements, decimales, respuesta JSON |
+
+**Reglas universales (aplican a TODO):**
+
+- 📱 **Mobile First obligatorio** — toda UI debe verse bien en 375px y mejor en 1280px+
+- 📋 **Tabla desktop + cards móvil** como patrón para listados
+- 🔄 **No romper funcionalidad existente** — extender, no reescribir
+- 🔤 **Codificación de texto obligatoria** — preservar correctamente tildes, ñ y caracteres especiales en BD, APIs, PDFs y frontend
+- 📝 **Documentar en el momento** — AGENTS.md + CAMBIOS_PRODUCCION.md en cada cambio
+- 🎨 **Paleta uniforme** — usar colores del sistema, no inventar nuevos estilos
+- 🗂️ **Verificar antes de crear** — ANTES de crear cualquier archivo en una carpeta de módulo (`Api/`, `components/`, `services/`, `pages/`), verificar con `glob` si la carpeta ya existe y qué archivos contiene. NUNCA crear carpetas nuevas si el módulo ya existe bajo otro nombre.
+- ✨ **Diseño profesional y atractivo** — PDFs con barras de color corporativo, tipografía jerarquizada, espacios balanceados, bordes sutiles; UI con sombras, transiciones y estados visuales claros
+- 🗄️ **Verificar con MCP antes de escribir SQL** — usar `SHOW COLUMNS FROM tabla` para confirmar nombres exactos de columnas antes de cualquier SELECT, INSERT, UPDATE o DELETE
 
 **Estos archivos son la fuente de verdad de las reglas de codificación.** Este documento (`AGENTS.md`) es la fuente de verdad de arquitectura, patrones y procesos.
 
@@ -710,6 +722,10 @@ Responsabilidad: Gestión de facturas electrónicas
 Componentes: EnviarCorreoFacturaModal, ListaFacturasGeneradas
 Servicios: facturacionService, envioCorreosGenericoService
 Documentos: PDF facturas, cartas, reportes
+Enviar (Consultar): para facturas Chile usa generarFacturaPDFChile y expone los 10 anexos
+(Carta Aerolínea/Policía, Reporte Despacho, Plan Vallejo, Autodeclaración, Planilla Aerolínea,
+Carta Dataloger, Solicitud ICA, Certificado Tratamiento Térmico, Tabla HC Lácteos).
+El número de factura Chile se normaliza a FEX- (sin CHI-FEX-) en adjuntos, asunto y cuerpo.
 ```
 
 #### Pedidos
@@ -719,6 +735,18 @@ Responsabilidad: Gestión de pedidos de clientes
 Componentes: PedidoDetail, ListaPedidos
 Servicios: pedidosService
 Próxima funcionalidad: Envío de correos con documentos
+Pedidos Chile (Lista de Empaque / con Precios, individual y múltiple): columna de totales
+(Peso Escurrido, Peso Bruto, Estibas) antes de "Recibido y aprobado por"; fechas con u8()
+para acentos/ñ correctos.
+Agencia por defecto en pedidos (Normales, Samples y Chile): FREIGHTWISE, IdAgencia = 73.
+Agencia por defecto en Facturación: FREIGHTWISE (73) al iniciar; al seleccionar pedidos se toma
+la agencia del primer pedido seleccionado (autocompletado con prioridad).
+Factura PDF Chile: si el cliente contiene "Cencosud" usa Valor_Kilo/Valor_Total sin flete
+y omite la línea "Flete Internacional" (solo en ApiGenerarFacturaPDFChile.php).
+Productos (Normales/Chile): campos decimales aceptan punto o coma mientras se escribe y se
+normalizan a número con punto al guardar (sanearDecimalEscritura / decimalANumero).
+Clientes: el texto de regiones/direcciones se guarda tal cual (sin htmlspecialchars);
+ClientesChile igual (Nombre, Direccion, Ciudad, etc.); usar prepared statements para seguridad.
 ```
 
 #### Consolidación
@@ -727,6 +755,12 @@ Próxima funcionalidad: Envío de correos con documentos
 Responsabilidad: Consolidación de envíos
 Componentes: ConsolidacionMain
 Servicios: consolidacionService
+  - Pestanas: Pedidos Locales | Pedidos Chile | Consolidado
+  - Locales = normales + samples (comportamiento actual)
+  - Chile = tablas EncabPedidoChile/DetPedidoChile/ProductosChile
+  - Consolidado = un documento con secciones Locales y Chile
+  - El selector afecta: Gestion de Fechas, Reportes por Area, Resumen del Periodo y Costos de Transporte
+  - Costos terrestres y aereos separados por TipoPedido (normal/chile)
 Próxima funcionalidad: Envío de correos con documentos
 ```
 
@@ -742,6 +776,20 @@ Características:
   - Selección flexible de destinatarios
   - Plantillas reutilizables
   - Historial centralizado en BD
+```
+
+#### Dashboard (Colombia | Chile)
+
+```
+Responsabilidad: Graficar información de ventas, OTIF, transporte y compras
+Componentes: DashboardDibufala (pestañas 🇨🇴 Colombia | 🇨🇱 Chile), DashboardChile
+Servicios: dashboardService (fetchDashboardData, fetchDashboardDataChile, fetchIndicadoresOTIF, fetchIndicadoresOTIFChile, fetchCostosTransporte con tipoPedido)
+Endpoints: datos.php, datos_chile.php, ApiIndicadoresOTIF(_chile).php, ApiDetalleIndicadoresOTIF(_chile).php, ApiClientesProducto(_chile).php, ApiDashboardCostosTransporte.php (param tipoPedido)
+Características:
+  - Tab Chile usa tablas: EncabPedidoChile, DetPedidoChile, ProductosChile, ClientesChile, EncabNotaCreditoChile, DetNotaCreditoChile
+  - Clasificación productos Chile: PlanVallejo (0/1) en vez de Org/NoOrg
+  - CostosTransporteDiario tiene columna TipoPedido (default 'normal') para separar Chile vs Colombia
+  - Sin drill-down de regiones para Chile (ClientesChile no tiene ClientesRegion)
 ```
 
 ### 7.2 Jerarquía de Componentes
@@ -971,11 +1019,12 @@ npx vitest run --grep "validarEmail"
 ### 10.4 Cobertura Actual de Tests
 
 ```
-Total: 228 tests | 17 archivos | 0 fallos (6 Mayo 2026) ✅
+Total: 221 tests | 17 archivos | 0 fallos (8 Agosto 2026) ✅
 
 Servicios (11 archivos):
   correoService.test.js         - validarEmail, parsearEmails, generarNombre...
   clientesService.test.js       - listarClientes, guardar, actualizar, validar
+  comentariosService.test.js    - listarComentarios, obtener, guardar, modificar
   productosService.test.js      - listarProductos, guardar, actualizar
   facturacionService.test.js    - obtenerPedidos, guardarFactura
   pedidosService.test.js        - getDatosSelect, guardar, actualizar
@@ -984,7 +1033,6 @@ Servicios (11 archivos):
   produccionService.test.js     - getLotes, guardarLote, getResponsables
   menuPrincipalService.test.js  - getPermisos, manejo de errores
   consolidacionService.test.js  - generarExcel, generarReportes
-  pedidosChileService.test.js   - getDatosSelect, guardar, actualizar, imprimir
 
 Páginas (5 archivos):
   Inicio.test.jsx       - renderiza, métricas, actividad reciente
@@ -1418,6 +1466,16 @@ header('Access-Control-Allow-Origin: https://dominio.com');
 
 > Estas reglas son **no negociables**. Se aplican en cada archivo, en cada módulo, en cada cambio. GitHub Copilot debe respetarlas siempre.
 
+### 18.0 Regla de oro de codificación de texto (tildes, ñ y caracteres especiales)
+
+Todo campo de texto que se muestre o imprima debe manejar correctamente tildes, `ñ` y caracteres especiales:
+
+- **PHP con FPDF:** las fuentes internas de FPDF (`Helvetica`, `Times`, `Courier`) son **Latin-1**, no UTF-8. Todo texto con tildes o `ñ` que se pase a `Cell()` o `MultiCell()` debe convertirse con `utf8_decode((string)$valor)`. Nunca imprimir texto UTF-8 crudo en un PDF.
+- **Conexión a BD:** ejecutar siempre `$enlace->set_charset('utf8mb4')` después de conectar, porque los datos se almacenan en UTF-8.
+- **APIs JSON:** responder con `json_encode($payload, JSON_UNESCAPED_UNICODE)` para no escapar tildes, `ñ` ni otros caracteres especiales.
+- **Frontend (React):** la aplicación y la BD usan UTF-8; no convertir texto en el frontend, porque el navegador renderiza UTF-8 nativamente.
+- **Verificación:** al tocar un PDF, revisar nombres de cliente, aerolínea, agencia, ciudad, dirección, razón social y demás campos con tildes o `ñ`. Si aparecen caracteres extraños, revisar la conversión con `utf8_decode`.
+
 ### 18.1 PHP — Prohibiciones Estrictas
 
 ```php
@@ -1540,6 +1598,118 @@ alert("Guardado");
   );
 }
 ```
+
+### 18.4 Transacciones BD — Validación Previa (CRÍTICO - No consume IDs)
+
+**Regla de Oro:** Validar **TODOS** los datos ANTES de `begin_transaction()`
+
+MySQL consume el autoincremento cuando `INSERT` se ejecuta. Si luego haces `ROLLBACK`, ese ID se pierde. Solución: validar TODO ANTES de la transacción.
+
+```php
+// ❌ INCORRECTO — Consume IDs innecesarios si falla
+try {
+    $enlace->begin_transaction();
+
+    // INSERT encabezado ← CONSUME ID aquí
+    $stmt = $enlace->prepare("INSERT INTO EncabPedido (...) VALUES (...)");
+    $stmt->execute();
+
+    // Validar detalles aquí (demasiado tarde)
+    foreach ($detalles as $det) {
+        if (!validarDatos($det)) {
+            throw new Exception("Datos inválidos");
+        }
+    }
+
+    $enlace->commit();
+} catch (Exception $e) {
+    $enlace->rollback();  // ← ID ya se consumió, no se devuelve
+}
+
+// ✅ CORRECTO — Validar ANTES de la transacción
+// Paso 1: Validar encabezado
+if (!$cliente || !$transportadora || !$bodega) {
+    echo json_encode(['success' => false, 'message' => 'Datos obligatorios faltantes']);
+    exit;  // Sin consumir IDs
+}
+
+// Paso 2: Validar TODOS los detalles
+foreach ($detalles as $index => $det) {
+    if (!$det['producto'] || !$det['cantidad'] || !$det['precio']) {
+        echo json_encode([
+            'success' => false,
+            'message' => "Detalle #{$index} incompleto"
+        ]);
+        exit;  // Sin consumir IDs
+    }
+}
+
+// Paso 3: SOLO AHORA iniciar transacción
+try {
+    $enlace->begin_transaction();
+
+    // INSERT encabezado (sabemos que es válido)
+    $stmt = $enlace->prepare("INSERT INTO EncabPedido (...) VALUES (...)");
+    $stmt->execute();
+    $idEncab = $enlace->insert_id;
+
+    // INSERT detalles (sin validaciones, ya pasaron)
+    foreach ($detalles as $det) {
+        $stmt = $enlace->prepare("INSERT INTO DetPedido (...) VALUES (...)");
+        $stmt->execute();
+    }
+
+    $enlace->commit();
+    echo json_encode(['success' => true, 'idPedido' => $idEncab]);
+
+} catch (Exception $e) {
+    $enlace->rollback();
+    error_log("Error: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+}
+```
+
+### 18.5 Verificación de Columnas SQL con MCP (OBLIGATORIO — Antes de escribir SQL)
+
+**Regla de Oro:** Antes de escribir CUALQUIER sentencia SQL (SELECT, INSERT, UPDATE, DELETE, ALTER), usar el MCP (`query_db` con `SHOW COLUMNS FROM tabla`) para verificar los nombres exactos de las columnas de la(s) tabla(s) involucrada(s). No asumir nombres.
+
+```sql
+-- PASO 1 (OBLIGATORIO antes de escribir SQL): Consultar estructura con MCP
+SHOW COLUMNS FROM NombreTabla;
+
+-- PASO 2 (verificar también columnas de tablas relacionadas):
+SHOW COLUMNS FROM OtraTabla;
+
+-- PASO 3: Solo después, escribir las sentencias SQL con los nombres exactos
+```
+
+**Motivo:** Los nombres de columnas en producción pueden diferir de los esperados por cambios previos (renombres, migraciones, alteraciones manuales). Errores como `Unknown column 'X' in 'SELECT'` son evitables al 100% con esta verificación previa.
+
+**Archivos aplicados (ejemplo de errores evitados):**
+
+- `src/Api/Produccion/ApiGetPedidoProduccion.php` — columna `FechaElaboracion` no existía aún en `DetPedidoChile`
+- `src/Api/PedidosChile/ApiGetDatosSelect.php` — columna `DiasFechaSalida` no existe en `ClientesChile`
+- `src/Api/PedidosChile/ApiGuardarPedidoChile.php` — columna `Id_EncabPedidoChile` renombrada a `Id_EncabPedido`
+
+### 18.6 Validación de existencia de columnas nuevas antes de usarlas (OPCIONAL pero recomendado)
+
+Cuando se agregan columnas nuevas mediante ALTER TABLE, verificar con MCP que el ALTER se haya ejecutado exitosamente antes de escribir consultas que las referencien:
+
+```sql
+-- Verificar que la columna ya existe
+SHOW COLUMNS FROM DetPedidoChile LIKE 'FechaElaboracion';
+```
+
+**Motivo:** En producción, sucedieron huecos de IDs (13643, 13644, 13645 faltaban). Esto ocurre cuando INSERT consume el ID pero luego ROLLBACK revierte la fila pero no devuelve el ID.
+
+**Archivos aplicados:**
+
+- `src/Api/Pedidos/ApiGuardarPedido.php`
+- `src/Api/PedidosSample/ApiGuardarSample.php`
+- `src/Api/PedidosChile/ApiGuardarPedidoChile.php`
+- `src/Api/PedidosSample/ApiActualizarSample.php`
+
+**Referencias completas:** Ver `docs/guides/GUIA_TRANSACCIONES_BD.md`
 
 ---
 
@@ -1677,18 +1847,25 @@ node -e "import('mysql2/promise').then(async ({default: mysql}) => {
 })"
 ```
 
-### 17.6 Tablas Disponibles en la BD (43)
+### 17.6 Tablas Disponibles en la BD (48)
 
 ```
 Clientes           Conductores        Productos          Lotes
 Embalajes          Bodegas            Transportadoras    Aerolineas
 Agencias           Ayudantes          Responsables       Consignatarios
 Agrupamientos      ClientesRegion     Permisos           PermisosAcciones
-ConfiguracionesSistema  Comentarios   RegistrosExcel     CostosTransporteDiario
+ConfiguracionesSistema  Comentarios   RegistrosExcel     CostosTransporteDiario  (+TipoPedido) 2026-08-08
+CostosTransporteAereo                  ── (+1) 2026-05-22
 EncabPedido        DetPedido          ResumenPorPedido   Planillas
 EncabInvoice       DetInvoice         DetInvoiceCopia
 EncabPedidoSample  DetPedidoSample
 ProductosTransitorios
+documentos_chile_items                 ── (+1) 2026-07-29
+
+--- Tablas Chile (Módulo Dashboard y operación) ---
+ClientesChile      ProductosChile     EncabPedidoChile   DetPedidoChile
+EncabInvoiceChile  DetInvoiceChile    PlanillasChile
+EncabNotaCreditoChile  DetNotaCreditoChile               ── (+2) 2026-08-08
 
 --- Módulo Correos ---
 correos_cuentas_configuracion    correos_cuentas_modulos
@@ -1722,6 +1899,7 @@ Una vez activo el MCP, GitHub Copilot puede responder preguntas como:
 - `docs/development/MCP_DATABASE.md` - Configuración MCP con BD
 - `database/scripts/` - Scripts SQL
 - `.env.example` - Variables de entorno
+- `.opencode/skills/bufala-modulo-chile/SKILL.md` - Skill para módulos tipo "Nacional + Chile" (CRUD, pestañas, dashboards)
 
 ### Links Útiles
 
@@ -1790,6 +1968,6 @@ Cuando implementes algo nuevo:
 
 ---
 
-**Última actualización:** 6 de Mayo de 2026  
+**Última actualización:** 29 de Julio de 2026  
 **Mantenido por:** Equipo de Desarrollo  
 **Próxima revisión:** Cuando agregues nueva funcionalidad importante

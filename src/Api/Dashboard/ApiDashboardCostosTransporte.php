@@ -38,6 +38,7 @@ if (json_last_error() !== JSON_ERROR_NONE) {
 $fechaInicio = $input['fechaInicio'] ?? date('Y-m-01');
 $fechaFin = $input['fechaFin'] ?? date('Y-m-d');
 $app = $input['app'] ?? 'dibufala';
+$tipoPedido = isset($input['tipoPedido']) ? trim($input['tipoPedido']) : '';
 
 // Validar formato de fechas
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
@@ -115,7 +116,16 @@ try {
     
     // =================================================================
     // 2. CONSULTA PRINCIPAL: COSTOS DE TRANSPORTE + ESTIBAS PAGAS
+    //    - tipoPedido='chile'  -> CostosTransporteDiario.TipoPedido='chile' + estibas de EncabPedidoChile
+    //    - tipoPedido='' o 'normal' -> comportamiento actual (sin filtro de tipo / Colombia)
     // =================================================================
+    
+    // Determinar filtro de tabla de costos y tablas de estibas según el tipo de pedido
+    $esChile = ($tipoPedido === 'chile');
+    $filtroCostosDiario = $esChile ? " AND ctd.TipoPedido = 'chile'" : "";
+    $tablaEncabEstibas = $esChile ? 'EncabPedidoChile' : 'EncabPedido';
+    $tablaDetEstibas = $esChile ? 'DetPedidoChile' : 'DetPedido';
+
     $sql = "
         SELECT 
             -- Fecha (siempre de todas_fechas)
@@ -152,7 +162,7 @@ try {
             WHERE DATE_ADD(?, INTERVAL t4.i*1000 + t3.i*100 + t2.i*10 + t1.i DAY) <= ?
         ) todas_fechas
         
-        LEFT JOIN CostosTransporteDiario ctd ON todas_fechas.Fecha = ctd.Fecha
+        LEFT JOIN CostosTransporteDiario ctd ON todas_fechas.Fecha = ctd.Fecha{$filtroCostosDiario}
         
         LEFT JOIN (
             -- Subconsulta para estibas pagas por fecha
@@ -169,8 +179,8 @@ try {
                         WHEN SUM(det.Cantidad) < 20 THEN 0 
                         ELSE enc.CantidadEstibas 
                     END AS EstibasPagas
-                FROM EncabPedido enc
-                INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
+                FROM {$tablaEncabEstibas} enc
+                INNER JOIN {$tablaDetEstibas} det ON enc.Id_EncabPedido = det.Id_EncabPedido
                 WHERE enc.FechaSalida BETWEEN ? AND ?
                     AND enc.Estado = 'Activo'
                 GROUP BY enc.Id_EncabPedido, enc.FechaSalida, enc.CantidadEstibas
@@ -324,11 +334,70 @@ try {
     }
     
     // =================================================================
+    // 3.5 COSTOS DE TRANSPORTE AEREO
+    // =================================================================
+    $sqlAereo = "
+        SELECT
+            cta.Fecha,
+            SUM(ROUND(cta.ValorFleteUSD * cta.TRM, 0)) AS TotalCostoAereoCOP,
+            SUM(cta.PesoCobrado) AS TotalPesoCobrado,
+            COUNT(*) AS TotalRegistros
+        FROM CostosTransporteAereo cta
+        WHERE cta.Fecha BETWEEN ? AND ?
+        GROUP BY cta.Fecha
+        ORDER BY cta.Fecha ASC
+    ";
+
+    $stmtAereo = $enlace->prepare($sqlAereo);
+    $stmtAereo->bind_param("ss", $fechaInicio, $fechaFin);
+    $stmtAereo->execute();
+    $stmtAereo->bind_result($fechaAereo, $totalCostoAereo, $totalPesoAereo, $totalRegAereo);
+
+    $datosAereo = [];
+    $totalCostoAereoGeneral = 0;
+    $totalPesoAereoGeneral = 0;
+    while ($stmtAereo->fetch()) {
+        $totalCostoAereoGeneral += (float)$totalCostoAereo;
+        $totalPesoAereoGeneral += (float)$totalPesoAereo;
+        $datosAereo[] = [
+            'fecha' => $fechaAereo,
+            'fechaCorta' => date('d/m', strtotime($fechaAereo)),
+            'totalCostoAereoCOP' => (float)$totalCostoAereo,
+            'totalPesoCobrado' => (float)$totalPesoAereo,
+            'totalRegistros' => (int)$totalRegAereo,
+            'costoAereoFormateado' => '$' . number_format($totalCostoAereo, 0, ',', '.')
+        ];
+    }
+    $stmtAereo->close();
+
+    // KPI aéreo
+    $kpiAereo = [];
+    if ($totalCostoAereoGeneral > 0) {
+        $kpiAereo['costoAereoTotal'] = [
+            'valor' => (float)$totalCostoAereoGeneral,
+            'formateado' => '$' . number_format($totalCostoAereoGeneral, 0, ',', '.'),
+            'icono' => '✈️',
+            'titulo' => 'Costo Total Aéreo',
+            'descripcion' => 'Sumatoria de todos los costos de transporte aéreo en COP',
+            'color' => '#0EA5E9'
+        ];
+        $kpiAereo['pesoCobradoTotal'] = [
+            'valor' => (float)$totalPesoAereoGeneral,
+            'formateado' => number_format($totalPesoAereoGeneral, 2, ',', '.') . ' kg',
+            'icono' => '⚖️',
+            'titulo' => 'Peso Cobrado Total',
+            'descripcion' => 'Sumatoria del peso cobrado por las aerolíneas',
+            'color' => '#0284C7'
+        ];
+    }
+
+    // =================================================================
     // 4. PREPARAR RESPUESTA
     // =================================================================
     $response = [
         'success' => true,
         'app' => $app,
+        'tipoPedido' => $tipoPedido !== '' ? $tipoPedido : 'normal',
         'periodo' => [
             'inicio' => $fechaInicio,
             'fin' => $fechaFin
@@ -347,6 +416,13 @@ try {
             'totalCamiones' => (int)$totalCamiones
         ],
         'kpis' => $kpis,
+        'aereo' => [
+            'datos' => $datosAereo,
+            'totalCostoAereoCOP' => (float)$totalCostoAereoGeneral,
+            'totalPesoCobrado' => (float)$totalPesoAereoGeneral,
+            'totalCostoAereoFormateado' => '$' . number_format($totalCostoAereoGeneral, 0, ',', '.'),
+            'kpis' => $kpiAereo
+        ],
         'graficos' => [
             'fletes' => $datosFletes,
             'estibas' => $datosEstibas,

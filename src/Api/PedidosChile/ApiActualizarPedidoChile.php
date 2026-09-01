@@ -1,17 +1,21 @@
 <?php
-// src/Api/PedidosChile/ApiActualizarPedidoChile.php
-// Actualiza un pedido Chile existente: header + borra detalle viejo + inserta nuevo detalle
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Origin: *");
+header("Content-Type: application/json");
 
+// Solo POST permitido
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     echo json_encode(["success" => false, "message" => "Método no permitido"]);
     exit;
 }
 
+// Conexión a la base de datos
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
-$enlace->set_charset("utf8mb4");
 
+if ($enlace->connect_error) {
+    echo json_encode(["success" => false, "message" => "Error de conexión: " . $enlace->connect_error]);
+    exit;
+}
+
+// Leer JSON
 $json = file_get_contents("php://input");
 $data = json_decode($json, true);
 
@@ -20,41 +24,60 @@ if (!$data) {
     exit;
 }
 
-function limpiar($txt)
+// Funciones de sanitización
+function limpiar_texto($txt)
 {
-    return trim((string)$txt);
-}
-function val_int($v)
-{
-    return filter_var($v, FILTER_VALIDATE_INT)   !== false ? intval($v)   : null;
-}
-function val_float($v)
-{
-    return filter_var($v, FILTER_VALIDATE_FLOAT) !== false ? floatval($v) : null;
-}
-function val_date($v)
-{
-    return (!empty($v) && $v !== '0000-00-00') ? limpiar($v) : null;
+    return trim($txt); // 👈 SOLO trim, sin htmlspecialchars
 }
 
-$enc = $data["encabezado"] ?? [];
-$det = $data["detalle"]    ?? [];
+function limpiar_descripcion($txt)
+{
+    // 👈 Para campos de descripción, solo trim y mantener caracteres especiales
+    return trim($txt);
+}
+function validar_entero($valor)
+{
+    return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
+}
+function validar_flotante($valor)
+{
+    return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : null;
+}
+function validar_tinyint($valor)
+{
+    // Para TINYINT: convertir boolean a 1/0, cualquier valor truthy a 1, falsy a 0
+    if ($valor === true || $valor === 1 || $valor === '1' || $valor === -1) {
+        return 1;
+    }
+    return 0;
+}
 
-$idPedido             = val_int($enc["idPedido"]             ?? null);
-$idClienteChile       = val_int($enc["clienteId"]            ?? null);
-$numeroOrden          = limpiar($enc["numeroOrden"]           ?? "");
-$fechaRecepcionOrden  = limpiar($enc["fechaRecepcionOrden"]   ?? "");
-$fechaSolicitudEntrega = limpiar($enc["fechaSolicitudEntrega"] ?? "");
-$fechaFinalEntrega    = limpiar($enc["fechaFinalEntrega"]     ?? "");
-$cantidadEstibas      = val_float($enc["cantidadEstibas"]     ?? 0) ?? 0;
-$guiaAerea            = limpiar($enc["guiaAerea"]             ?? "");
-$idAgencia            = val_int($enc["idAgencia"]             ?? 0) ?? 0;
-$idAerolinea          = val_int($enc["idAerolinea"]           ?? 0) ?? 0;
-$descuentoComercial   = val_float($enc["descuentoComercial"]  ?? 0) ?? 0;
-$observaciones        = limpiar($enc["observaciones"]         ?? "");
-$facturaNo            = limpiar($enc["facturaNo"]             ?? "");
+// Extraer datos
+$encabezado = $data["encabezado"] ?? [];
+$detalle = $data["detalle"] ?? [];
 
-if (!$idPedido || !$idClienteChile || !$fechaRecepcionOrden || empty($det)) {
+$idPedido = validar_entero($encabezado["pedidoId"] ?? null);
+$idCliente = validar_entero($encabezado["clienteId"] ?? null);
+$idAerolinea = validar_entero($encabezado["aerolineaId"] ?? null);
+$idAgencia = validar_entero($encabezado["agenciaId"] ?? null);
+$purchaseOrder = limpiar_texto($encabezado["purchaseOrder"] ?? "");
+$fechaOrden = limpiar_texto($encabezado["fechaOrden"] ?? "");
+$fechaSalida = limpiar_texto($encabezado["fechaSalida"] ?? "");
+$fechaEnroute = limpiar_texto($encabezado["fechaEnroute"] ?? "");
+$fechaDelivery = limpiar_texto($encabezado["fechaDelivery"] ?? "");
+$fechaIngreso = limpiar_texto($encabezado["fechaIngreso"] ?? "");
+$cantidadEstibas = validar_flotante($encabezado["cantidadEstibas"] ?? null);
+$observaciones = limpiar_texto($encabezado["comentarios"] ?? "");
+$guiaMaster = limpiar_texto($encabezado["noGuia"] ?? "");
+$guiaHija = limpiar_texto($encabezado["guiaHija"] ?? "");
+
+// 👇 NUEVO: Extraer y convertir comentarios seleccionados a TINYINT
+$comentariosSeleccionados = $encabezado["comentariosSeleccionados"] ?? [];
+$comentarioPrimario = validar_tinyint($comentariosSeleccionados["incluirPrimario"] ?? false);
+$comentarioSecundario = validar_tinyint($comentariosSeleccionados["incluirSecundario"] ?? false);
+
+// Validaciones obligatorias
+if (!$idCliente || !$fechaOrden || empty($detalle)) {
     echo json_encode(["success" => false, "message" => "Faltan datos obligatorios"]);
     exit;
 }
@@ -62,95 +85,245 @@ if (!$idPedido || !$idClienteChile || !$fechaRecepcionOrden || empty($det)) {
 try {
     $enlace->begin_transaction();
 
-    // ── UPDATE EncabPedidoChile ───────────────────────────────────────────
-    // Tipos: i s s s s d s i i d s s | i (WHERE)  → "issssdsiidss" + "i" = 13 vars
-    $sqlUpd = "UPDATE EncabPedidoChile
-               SET Id_ClienteChile=?, NumeroOrden=?, FechaRecepcionOrden=?,
-                   FechaSolicitudEntrega=?, FechaFinalEntrega=?, CantidadEstibas=?,
-                   GuiaAerea=?, IdAgencia=?, IdAerolinea=?,
-                   DescuentoComercial=?, Observaciones=?, FacturaNo=?
-               WHERE Id_EncabPedidoChile=?";
+    // ── 1. TRACKING ENCABEZADO: leer fechas actuales antes de actualizar ──
+    $dbFechaOrden = null;
+    $dbFechaSalida = null;
+    $dbFechaEnroute = null;
+    $dbFechaDelivery = null;
+    $dbFechaIngreso = null;
+    $dbFechaOrdenOrig = null;
 
-    $stmtUpd = $enlace->prepare($sqlUpd);
-    $stmtUpd->bind_param(
-        "issssdsiidssi",
-        $idClienteChile,
-        $numeroOrden,
-        $fechaRecepcionOrden,
-        $fechaSolicitudEntrega,
-        $fechaFinalEntrega,
-        $cantidadEstibas,
-        $guiaAerea,
-        $idAgencia,
-        $idAerolinea,
-        $descuentoComercial,
-        $observaciones,
-        $facturaNo,
-        $idPedido
+    $stmtLecEnc = $enlace->prepare(
+        "SELECT FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, FechaOrden_Orig
+         FROM EncabPedidoChile WHERE Id_EncabPedido = ?"
     );
-    $stmtUpd->execute();
-    $stmtUpd->close();
+    $stmtLecEnc->bind_param("i", $idPedido);
+    $stmtLecEnc->execute();
+    $stmtLecEnc->bind_result($dbFechaOrden, $dbFechaSalida, $dbFechaEnroute, $dbFechaDelivery, $dbFechaIngreso, $dbFechaOrdenOrig);
+    $stmtLecEnc->fetch();
+    $stmtLecEnc->close();
 
-    // ── DELETE detalle antiguo ────────────────────────────────────────────
-    $stmtDel = $enlace->prepare("DELETE FROM DetPedidoChile WHERE Id_EncabPedidoChile=?");
-    $stmtDel->bind_param("i", $idPedido);
-    $stmtDel->execute();
-    $stmtDel->close();
+    $fechasChanged = (
+        $fechaOrden   !== $dbFechaOrden   ||
+        $fechaSalida  !== $dbFechaSalida  ||
+        $fechaEnroute !== $dbFechaEnroute ||
+        $fechaDelivery !== $dbFechaDelivery ||
+        $fechaIngreso !== $dbFechaIngreso
+    );
 
-    // ── INSERT detalle nuevo ──────────────────────────────────────────────
-    $sqlDet = "INSERT INTO DetPedidoChile
-               (Id_EncabPedidoChile, Id_ProductoChile, Descripcion, CodigoCliente, CodigoSiesa,
-                Lote, FechaElaboracion, FechaVencimiento,
-                PesoNetoGr, CantidadCajas, EnvaseInternoxCaja,
-                PesoEscurridoKg, FactorPesoBruto, ValorXKilo)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-    $stmtDet = $enlace->prepare($sqlDet);
-
-    foreach ($det as $item) {
-        $idProd    = val_int($item["productoId"]          ?? null);
-        $desc      = limpiar($item["descripcion"]          ?? "");
-        $codCli    = limpiar($item["codigoCliente"]        ?? "");
-        $codSiesa  = limpiar($item["codigoSiesa"]          ?? "");
-        $lote      = limpiar($item["lote"]                 ?? "");
-        $fechaElab = val_date($item["fechaElaboracion"]    ?? "");
-        $fechaVenc = val_date($item["fechaVencimiento"]    ?? "");
-        $pesoNetoGr = val_float($item["pesoNetoGr"]       ?? 0) ?? 0;
-        $cantCajas  = val_float($item["cantidadCajas"]    ?? 0) ?? 0;
-        $envase     = val_int($item["envaseInternoxCaja"]  ?? 0) ?? 0;
-        $pesoEsc    = val_float($item["pesoEscurridoKg"]  ?? 0) ?? 0;
-        $factor     = val_float($item["factorPesoBruto"]  ?? 0) ?? 0;
-        $valorKilo  = val_float($item["valorxKilo"]        ?? 0) ?? 0;
-
-        if (!$idProd || !$cantCajas) {
-            throw new Exception("Datos de detalle inválidos");
+    // Solo guardar originales en la primera modificación
+    if ($fechasChanged && ($dbFechaOrdenOrig === null || $dbFechaOrdenOrig === '')) {
+        $stmtFecOrig = $enlace->prepare(
+             "UPDATE EncabPedidoChile
+              SET FechaOrden_Orig = ?, FechaSalida_Orig = ?, FechaEnroute_Orig = ?,
+                  FechaDelivery_Orig = ?, FechaIngreso_Orig = ?, FechaModificacion = NOW()
+              WHERE Id_EncabPedido = ?"
+            );
+            $stmtFecOrig->bind_param("sssssi", $dbFechaOrden, $dbFechaSalida, $dbFechaEnroute, $dbFechaDelivery, $dbFechaIngreso, $idPedido);
+            $stmtFecOrig->execute();
+            $stmtFecOrig->close();
         }
 
-        $stmtDet->bind_param(
-            "iissssssddiddd",
-            $idPedido,
-            $idProd,
-            $desc,
-            $codCli,
-            $codSiesa,
-            $lote,
-            $fechaElab,
-            $fechaVenc,
-            $pesoNetoGr,
-            $cantCajas,
-            $envase,
-            $pesoEsc,
-            $factor,
-            $valorKilo
-        );
-        $stmtDet->execute();
+        // ── 2. UPDATE ENCABEZADO ──────────────────────────────────────────────
+        $sqlEnc = "UPDATE EncabPedidoChile  
+            SET Id_Cliente = ?, PurchaseOrder = ?, FechaOrden = ?, FechaSalida = ?, FechaEnroute = ?, FechaDelivery = ?, FechaIngreso = ?, CantidadEstibas = ?, IdAerolinea = ?, IdAgencia = ?, GuiaMaster = ?, GuiaHija = ?, Observaciones = ?, ComentarioPrimario = ?, ComentarioSecundario = ?
+            WHERE Id_EncabPedido = ?";
+    $stmtEnc = $enlace->prepare($sqlEnc);
+    $stmtEnc->bind_param(
+        "issssssdiisssiii",
+        $idCliente,
+        $purchaseOrder,
+        $fechaOrden,
+        $fechaSalida,
+        $fechaEnroute,
+        $fechaDelivery,
+        $fechaIngreso,
+        $cantidadEstibas,
+        $idAerolinea,
+        $idAgencia,
+        $guiaMaster,
+        $guiaHija,
+        $observaciones,
+        $comentarioPrimario,
+        $comentarioSecundario,
+        $idPedido
+    );
+    $stmtEnc->execute();
+    $stmtEnc->close();
 
-        if ($stmtDet->affected_rows <= 0) {
-            throw new Exception("Error al insertar línea de detalle");
+    // ── 3. OBTENER IDs ACTUALES EN BD PARA ESTE PEDIDO ───────────────────
+    $idsEnBD = [];
+    $stmtIdsActuales = $enlace->prepare(
+        "SELECT Id_DetPedido FROM DetPedidoChile WHERE Id_EncabPedido = ?"
+    );
+    $stmtIdsActuales->bind_param("i", $idPedido);
+    $stmtIdsActuales->execute();
+    $stmtIdsActuales->bind_result($idDetTemp);
+    while ($stmtIdsActuales->fetch()) {
+        $idsEnBD[] = $idDetTemp;
+    }
+    $stmtIdsActuales->close();
+
+    // ── 4. IDs VÁLIDOS QUE VIENEN EN EL PAYLOAD ──────────────────────────
+    $idsEntrantes = [];
+    foreach ($detalle as $item) {
+        $idDet = validar_entero($item["id"] ?? null);
+        if ($idDet && $idDet > 0 && in_array($idDet, $idsEnBD)) {
+            $idsEntrantes[] = $idDet;
         }
     }
 
-    $stmtDet->close();
+    // ── 5. ÍTEMS A ELIMINAR: en BD pero no en el payload ─────────────────
+    $idsEliminar = array_diff($idsEnBD, $idsEntrantes);
+
+    foreach ($idsEliminar as $idEliminar) {
+        $eId = null;
+        $eProd = null;
+        $eDesc = null;
+        $eEmb = null;
+        $eCant = null;
+        $ePesoN = null;
+        $ePesoB = null;
+        $ePrec = null;
+
+        $stmtLeerElim = $enlace->prepare(
+            "SELECT Id_DetPedido, Id_Producto, Descripcion, Id_Embalaje,
+                    Cantidad, PesoNeto, PesoBruto, PrecioUnitario
+             FROM DetPedidoChile WHERE Id_DetPedido = ?"
+        );
+        $stmtLeerElim->bind_param("i", $idEliminar);
+        $stmtLeerElim->execute();
+        $stmtLeerElim->bind_result($eId, $eProd, $eDesc, $eEmb, $eCant, $ePesoN, $ePesoB, $ePrec);
+        $stmtLeerElim->fetch();
+        $stmtLeerElim->close();
+
+        if ($eId) {
+            $stmtInsElim = $enlace->prepare(
+                "INSERT INTO pedidos_items_eliminados
+                 (Id_DetPedido_Orig, Id_EncabPedido, Id_Producto, Descripcion,
+                  Id_Embalaje, Cantidad, PesoNeto, PesoBruto, PrecioUnitario)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+            $stmtInsElim->bind_param("iiisidddd", $eId, $idPedido, $eProd, $eDesc, $eEmb, $eCant, $ePesoN, $ePesoB, $ePrec);
+            $stmtInsElim->execute();
+            $stmtInsElim->close();
+
+            $stmtDelItem = $enlace->prepare("DELETE FROM DetPedidoChile WHERE Id_DetPedido = ?");
+            $stmtDelItem->bind_param("i", $idEliminar);
+            $stmtDelItem->execute();
+            $stmtDelItem->close();
+        }
+    }
+
+    // ── 6. PROCESAR CADA ÍTEM: UPDATE (existente) o INSERT (nuevo) ───────
+    foreach ($detalle as $item) {
+        $idDetItem  = validar_entero($item["id"] ?? null);
+        $idProducto = validar_entero($item["producto"] ?? null);
+        $descripcion = limpiar_descripcion($item["descripcion"] ?? "");
+        $idEmbalaje = validar_entero($item["embalaje"] ?? null);
+        $cantidad   = validar_flotante($item["cantidad"] ?? null);
+        $pesoNeto   = validar_flotante($item["pesoNeto"] ?? null);
+        $pesoBruto  = validar_flotante($item["pesoBruto"] ?? null);
+        $precio     = validar_flotante($item["precio"] ?? null);
+
+        if (!$idProducto || !$descripcion || !$idEmbalaje || !$cantidad || !$precio) {
+            throw new Exception("Datos inválidos en detalle");
+        }
+
+        $esExistente = ($idDetItem && $idDetItem > 0 && in_array($idDetItem, $idsEnBD));
+
+        if ($esExistente) {
+            // Leer valores actuales para comparar
+            $dbProd = null;
+            $dbDesc = null;
+            $dbEmb = null;
+            $dbCant = null;
+            $dbPesoN = null;
+            $dbPesoB = null;
+            $dbPrec = null;
+            $dbProdOrig = null;
+
+            $stmtLeer = $enlace->prepare(
+                "SELECT Id_Producto, Descripcion, Id_Embalaje, Cantidad,
+                        PesoNeto, PesoBruto, PrecioUnitario, Id_Producto_Orig
+                 FROM DetPedidoChile WHERE Id_DetPedido = ?"
+            );
+            $stmtLeer->bind_param("i", $idDetItem);
+            $stmtLeer->execute();
+            $stmtLeer->bind_result($dbProd, $dbDesc, $dbEmb, $dbCant, $dbPesoN, $dbPesoB, $dbPrec, $dbProdOrig);
+            $stmtLeer->fetch();
+            $stmtLeer->close();
+
+            $itemChanged = (
+                $idProducto != $dbProd ||
+                $descripcion !== $dbDesc ||
+                $idEmbalaje != $dbEmb ||
+                abs(($cantidad   ?? 0) - ($dbCant  ?? 0)) > 0.0001 ||
+                abs(($pesoNeto  ?? 0) - ($dbPesoN ?? 0)) > 0.0001 ||
+                abs(($pesoBruto ?? 0) - ($dbPesoB ?? 0)) > 0.0001 ||
+                abs(($precio    ?? 0) - ($dbPrec  ?? 0)) > 0.0001
+            );
+            $yaGuardoOrig = ($dbProdOrig !== null && $dbProdOrig > 0);
+
+            if ($itemChanged && !$yaGuardoOrig) {
+                // Primera modificación: guardar valores originales junto con los nuevos
+                $stmtUpOrig = $enlace->prepare(
+                     "UPDATE DetPedidoChile SET
+                          Id_Producto = ?, Descripcion = ?, Id_Embalaje = ?,
+                          Cantidad = ?, PesoNeto = ?, PesoBruto = ?, PrecioUnitario = ?,
+                          Id_Producto_Orig = ?, Descripcion_Orig = ?, Id_Embalaje_Orig = ?,
+                          Cantidad_Orig = ?, PesoNeto_Orig = ?, PesoBruto_Orig = ?, PrecioUnitario_Orig = ?,
+                          FechaModificacion = NOW()
+                      WHERE Id_DetPedido = ?"
+                );
+                $stmtUpOrig->bind_param(
+                    "isiddddisiddddi",
+                    $idProducto,
+                    $descripcion,
+                    $idEmbalaje,
+                    $cantidad,
+                    $pesoNeto,
+                    $pesoBruto,
+                    $precio,
+                    $dbProd,
+                    $dbDesc,
+                    $dbEmb,
+                    $dbCant,
+                    $dbPesoN,
+                    $dbPesoB,
+                    $dbPrec,
+                    $idDetItem
+                );
+                $stmtUpOrig->execute();
+                $stmtUpOrig->close();
+            } else {
+                // Sin cambio o ya tenía originales: solo actualizar valores
+                $stmtUp = $enlace->prepare(
+                    "UPDATE DetPedidoChile SET
+                         Id_Producto = ?, Descripcion = ?, Id_Embalaje = ?,
+                         Cantidad = ?, PesoNeto = ?, PesoBruto = ?, PrecioUnitario = ?
+                     WHERE Id_DetPedido = ?"
+                );
+                $stmtUp->bind_param("isiddddi", $idProducto, $descripcion, $idEmbalaje, $cantidad, $pesoNeto, $pesoBruto, $precio, $idDetItem);
+                $stmtUp->execute();
+                $stmtUp->close();
+            }
+        } else {
+            // Ítem nuevo: INSERT
+            $stmtIns = $enlace->prepare(
+                 "INSERT INTO DetPedidoChile
+                 (Id_EncabPedido, Id_Producto, Descripcion, Id_Embalaje, Cantidad, PesoNeto, PesoBruto, PrecioUnitario)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+            $stmtIns->bind_param("iisidddd", $idPedido, $idProducto, $descripcion, $idEmbalaje, $cantidad, $pesoNeto, $pesoBruto, $precio);
+            $stmtIns->execute();
+            if ($stmtIns->affected_rows <= 0) {
+                throw new Exception("Error al insertar detalle nuevo");
+            }
+            $stmtIns->close();
+        }
+    }
+
     $enlace->commit();
 
     echo json_encode(["success" => true, "idPedido" => $idPedido]);

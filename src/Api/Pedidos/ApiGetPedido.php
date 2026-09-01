@@ -26,8 +26,7 @@ if ($idPedido <= 0) {
 // ===================
 // Obtener encabezado
 // ===================
-// 👇 MODIFICADO: Agregar los dos campos nuevos al SELECT
-$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones, ComentarioPrimario, ComentarioSecundario
+$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones, ComentarioPrimario, ComentarioSecundario, Estado
              FROM EncabPedido 
              WHERE Id_EncabPedido = ?";
 
@@ -35,8 +34,7 @@ $stmtEnc = $enlace->prepare($sqlEnc);
 $stmtEnc->bind_param("i", $idPedido);
 $stmtEnc->execute();
 
-// 👇 MODIFICADO: Agregar los dos campos nuevos al bind_result
-$stmtEnc->bind_result($idEncabPedido, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $comentarioPrimario, $comentarioSecundario);
+$stmtEnc->bind_result($idEncabPedido, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $comentarioPrimario, $comentarioSecundario, $estado);
 
 $header = null;
 if ($stmtEnc->fetch()) {
@@ -58,9 +56,9 @@ if ($stmtEnc->fetch()) {
         "GuiaMaster"     => $guiaMaster,
         "GuiaHija"       => $guiaHija,
         "Observaciones"  => $observaciones,
-        // 👇 NUEVO: Campos agregados
         "ComentarioPrimario" => $comentarioPrimario,
-        "ComentarioSecundario" => $comentarioSecundario
+        "ComentarioSecundario" => $comentarioSecundario,
+        "Estado" => $estado
     ];
 }
 $stmtEnc->close();

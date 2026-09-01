@@ -7,6 +7,14 @@ import ListaFacturasGeneradas from './ListaFacturasGeneradas';
 import ModalDocumentosDespacho from './ModalDocumentosDespacho';
 import DashboardDocumentosDespacho from './DashboardDocumentosDespacho';
 import DocumentosFacturaModal from './DocumentosFacturaModal';
+import {
+  obtenerPedidosChilePorFecha,
+  guardarFacturaChile,
+  obtenerFacturasChile,
+  generarFacturaPDFChile,
+  eliminarFacturaChile,
+  obtenerFacturasChileConFiltros
+} from '../../services/facturacionService';
 import { getDatosSelect } from '../../services/pedidosService';
 import { crearPlanilla } from '../../services/planillasService';
 import Swal from 'sweetalert2';
@@ -33,7 +41,13 @@ export default function FacturacionMain() {
         numeroFactura: "",
         fechaFactura: new Date().toISOString().split('T')[0],
         consignatarioId: "",
-        agenciaId: "",
+        fechaVencimiento: "",
+        terminosPago: "Pago 35 dias",
+        fleteInternacional: "",
+        incoterm: "CPT",
+        partidaArancelaria: "0406100000",
+        temperatura: "2° a 6°",
+        agenciaId: "73",
         aerolineaId: "",
         guiaMaster: "",
         guiaHija: "",
@@ -41,6 +55,8 @@ export default function FacturacionMain() {
         tipoPedido: "normal"
     });
     const [facturasSeleccionadas, setFacturasSeleccionadas] = useState([]);
+    const [refreshFacturas, setRefreshFacturas] = useState(0);
+    const [refreshPedidos, setRefreshPedidos] = useState(0);
 
     // Estados para configuración de documentos - ACTUALIZADOS
     const [modalConfiguracionAbierto, setModalConfiguracionAbierto] = useState(false);
@@ -48,8 +64,11 @@ export default function FacturacionMain() {
         conductor: null,
         ayudante: null,
         precintoSeguridad: '',
+        termografoNo: '',
         placaVehiculo: 'VAK076',
-        descripcionVehiculo: 'MITSUBISHI FUSO BLANCA'
+        descripcionVehiculo: 'MITSUBISHI FUSO BLANCA',
+        mercanciaSeleccionada: [],
+        anexosSeleccionados: []
     });
     const [pasoDocumentos, setPasoDocumentos] = useState('configuracion'); // 'configuracion' | 'dashboard'
     const [planillaCreada, setPlanillaCreada] = useState(null);
@@ -65,6 +84,7 @@ export default function FacturacionMain() {
         totalFacturas: 0,
         facturasNormales: 0,
         facturasSamples: 0,
+        facturasChile: 0,
         valorTotal: 0
     });
     const [facturaSeleccionadaDocumentos, setFacturaSeleccionadaDocumentos] = useState(null);
@@ -113,7 +133,7 @@ export default function FacturacionMain() {
         setConfigFactura(prev => ({
             ...prev,
             tipoPedido: tipoPedido,
-            agenciaId: "",
+            agenciaId: "73",
             aerolineaId: "",
             guiaMaster: "",
             guiaHija: ""
@@ -123,6 +143,7 @@ export default function FacturacionMain() {
             conductor: null,
             ayudante: null,
             precintoSeguridad: '',
+            termografoNo: '',
             placaVehiculo: 'VAK076',
             descripcionVehiculo: 'MITSUBISHI FUSO BLANCA'
         });
@@ -142,6 +163,15 @@ export default function FacturacionMain() {
     const limpiarTodoDespuesDeFactura = () => {
         console.log('🧹 Limpiando todo después de generar factura...');
         setPedidosSeleccionados([]);
+        setRefreshFacturas(prev => prev + 1);
+    };
+
+    // 🔴 Recargar pedidos disponibles cuando se elimina una factura (para liberarlos automáticamente)
+    const handleFacturaEliminada = () => {
+        console.log('🔁 Factura eliminada - recargando pedidos disponibles...');
+        setPedidosSeleccionados([]);
+        setRefreshPedidos(prev => prev + 1);
+        setRefreshFacturas(prev => prev + 1);
     };
 
     // Funciones para pestaña CONSULTAR
@@ -156,16 +186,25 @@ export default function FacturacionMain() {
     // Función: Actualizar estadísticas basadas en facturas
     const actualizarEstadisticas = (facturas) => {
         const totalFacturas = facturas.length;
-        const facturasNormales = facturas.filter(f => !f.numero.startsWith('SMP-')).length;
-        const facturasSamples = facturas.filter(f => f.numero.startsWith('SMP-')).length;
-        const valorTotal = facturas.reduce((sum, f) => sum + (f.valorTotal || 0), 0);
-        
-        setEstadisticasConsulta({
-            totalFacturas,
-            facturasNormales,
-            facturasSamples,
-            valorTotal
-        });
+
+        if (filtrosConsulta.tipoFactura === 'chile') {
+            setEstadisticasConsulta({
+                totalFacturas,
+                facturasNormales: 0,
+                facturasSamples: 0,
+                facturasChile: totalFacturas,
+                valorTotal: facturas.reduce((sum, f) => sum + (f.valorTotal || 0), 0)
+            });
+        } else {
+            const facturasSamples = facturas.filter(f => f.numero && f.numero.startsWith('SMP-')).length;
+            setEstadisticasConsulta({
+                totalFacturas,
+                facturasNormales: totalFacturas - facturasSamples,
+                facturasSamples,
+                facturasChile: 0,
+                valorTotal: facturas.reduce((sum, f) => sum + (f.valorTotal || 0), 0)
+            });
+        }
     };
 
     // Función: Manejar ver documentos de factura
@@ -217,12 +256,8 @@ export default function FacturacionMain() {
             const facturasIds = facturasSeleccionadas.map(factura => {
                 let numero = factura.numero;
 
-                // Remover prefijos
-                if (numero.startsWith('FEX-')) {
-                    numero = numero.replace('FEX-', '');
-                } else if (numero.startsWith('SMP-FEX-')) {
-                    numero = numero.replace('SMP-FEX-', '');
-                }
+                // Remover cualquier prefijo conocido
+                numero = numero.replace(/^(CHI-FEX-|SMP-FEX-|FEX-)/, '');
 
                 const id = parseInt(numero);
                 return isNaN(id) ? null : id;
@@ -233,11 +268,7 @@ export default function FacturacionMain() {
             }
 
             // CREAR PLANILLA EN LA BASE DE DATOS
-            const resultado = await crearPlanilla(
-                facturasIds,
-                configuracion,
-                tipoPedido
-            );
+            const resultado = await crearPlanilla(facturasIds, configuracion, tipoPedido);
 
             if (!resultado.success) {
                 throw new Error(resultado.message);
@@ -375,7 +406,7 @@ export default function FacturacionMain() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-6">
+        <div className="min-h-screen bg-gray-50 py-6 animate-fadeIn">
             <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
 
                 {/* HEADER PRINCIPAL */}
@@ -457,11 +488,27 @@ export default function FacturacionMain() {
                                             </div>
                                         </div>
                                     </button>
+
+                                    <button
+                                        onClick={() => setTipoPedido("chile")}
+                                        className={`flex-1 py-4 px-6 rounded-xl font-semibold text-sm sm:text-base transition-all border-2 ${tipoPedido === "chile"
+                                            ? "bg-amber-50 border-amber-500 text-amber-700 shadow-sm"
+                                            : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"
+                                            }`}
+                                    >
+                                        <div className="flex items-center justify-center gap-3">
+                                            <span className="text-xl">🌎</span>
+                                            <div className="text-left">
+                                                <div className="font-bold">Pedidos Chile</div>
+                                                <div className="text-xs opacity-75">CHI-000001</div>
+                                            </div>
+                                        </div>
+                                    </button>
                                 </div>
 
                                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                                     <p className="text-sm text-gray-600 text-center">
-                                        Actualmente trabajando con: <strong>{tipoPedido === "normal" ? "Pedidos Normales" : "Pedidos Sample"}</strong>
+                                        Actualmente trabajando con: <strong>{tipoPedido === "normal" ? "Pedidos Normales" : tipoPedido === "chile" ? "Pedidos Chile" : "Pedidos Sample"}</strong>
                                     </p>
                                 </div>
                             </div>
@@ -481,7 +528,8 @@ export default function FacturacionMain() {
                                     pedidosSeleccionados={pedidosSeleccionados}
                                     onPedidosChange={handlePedidosChange}
                                     tipoPedido={tipoPedido}
-                                    key={`${tipoPedido}-${filtros.fechaDesde}-${filtros.fechaHasta}`}
+                                    fetchPedidosFn={tipoPedido === "chile" ? obtenerPedidosChilePorFecha : undefined}
+                                    key={`${tipoPedido}-${filtros.fechaDesde}-${filtros.fechaHasta}-${refreshPedidos}`}
                                 />
                             )}
 
@@ -497,7 +545,13 @@ export default function FacturacionMain() {
                                     numeroFactura: "",
                                     fechaFactura: new Date().toISOString().split('T')[0],
                                     consignatarioId: "",
-                                    agenciaId: "",
+                                    fechaVencimiento: "",
+                                    terminosPago: "Pago 35 dias",
+                                    fleteInternacional: "",
+                                    incoterm: "CPT",
+                                    partidaArancelaria: "0406100000",
+                                    temperatura: "2° a 6°",
+                                    agenciaId: "73",
                                     aerolineaId: "",
                                     guiaMaster: "",
                                     guiaHija: "",
@@ -507,6 +561,7 @@ export default function FacturacionMain() {
                                 onLimpiarPedidosSeleccionados={() => setPedidosSeleccionados([])}
                                 onLimpiarTodo={limpiarTodoDespuesDeFactura}
                                 tipoPedido={tipoPedido}
+                                guardarFacturaFn={tipoPedido === "chile" ? guardarFacturaChile : undefined}
                             />
 
                             {/* FACTURAS GENERADAS */}
@@ -517,7 +572,11 @@ export default function FacturacionMain() {
                                     onFacturasChange={handleFacturasChange}
                                     onSelectAllFacturas={() => { }}
                                     tipoPedido={tipoPedido}
-                                    key={`facturas-${tipoPedido}-${filtros.fechaDesde}-${filtros.fechaHasta}`}
+                                    fetchFacturasFn={tipoPedido === "chile" ? obtenerFacturasChile : undefined}
+                                    generarPDFFn={tipoPedido === "chile" ? generarFacturaPDFChile : undefined}
+                                    eliminarFacturaFn={tipoPedido === "chile" ? eliminarFacturaChile : undefined}
+                                    onFacturaEliminada={handleFacturaEliminada}
+                                    key={`facturas-${tipoPedido}-${filtros.fechaDesde}-${filtros.fechaHasta}-${refreshFacturas}`}
                                 />
                             )}
 
@@ -599,6 +658,7 @@ export default function FacturacionMain() {
                                         onClose={() => setPasoDocumentos('configuracion')}
                                         onGenerarDocumento={handleGenerarDocumento}
                                         onReversarDocumentos={handleReversarDocumentos}
+                                        tipoPedido={tipoPedido}
                                     />
                                 )}
                             </div>
@@ -628,6 +688,7 @@ export default function FacturacionMain() {
                                             <option value="todos">Todos los tipos</option>
                                             <option value="normal">Pedidos Normales</option>
                                             <option value="sample">Pedidos Sample</option>
+                                            <option value="chile">Pedidos Chile</option>
                                         </select>
                                     </div>
 
@@ -663,7 +724,7 @@ export default function FacturacionMain() {
                                             type="text"
                                             value={filtrosConsulta.numeroFactura}
                                             onChange={(e) => handleFiltrosConsultaChange({ numeroFactura: e.target.value })}
-                                            placeholder="Ej: 123 (para FACT-123 o SMP-FACT-123)"
+                                            placeholder="Ej: 123 (para FEX-123 o SMP-FEX-123)"
                                             className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -682,27 +743,34 @@ export default function FacturacionMain() {
                             </div>
 
                             {/* RESUMEN ESTADÍSTICO */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                            <div className="grid grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
                                     <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
                                         {estadisticasConsulta.totalFacturas}
                                     </div>
-                                    <div className="text-xs sm:text-sm text-gray-600">Facturas Totales</div>
+                                    <div className="text-xs sm:text-sm text-gray-600">Totales</div>
                                 </div>
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
                                     <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
                                         {estadisticasConsulta.facturasNormales}
                                     </div>
-                                    <div className="text-xs sm:text-sm text-gray-600">Facturas Normales</div>
+                                    <div className="text-xs sm:text-sm text-gray-600">Normales</div>
                                 </div>
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-orange-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
                                     <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
                                         {estadisticasConsulta.facturasSamples}
                                     </div>
-                                    <div className="text-xs sm:text-sm text-gray-600">Facturas Sample</div>
+                                    <div className="text-xs sm:text-sm text-gray-600">Sample</div>
+                                </div>
+                                <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
+                                    <div className="w-2 h-2 sm:w-3 sm:h-3 bg-amber-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
+                                    <div className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">
+                                        {estadisticasConsulta.facturasChile}
+                                    </div>
+                                    <div className="text-xs sm:text-sm text-gray-600">Chile</div>
                                 </div>
                                 <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 text-center shadow-sm border border-gray-200">
                                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-purple-500 rounded-full mx-auto mb-1 sm:mb-2"></div>
@@ -720,6 +788,17 @@ export default function FacturacionMain() {
                                 onFacturasChange={() => {}}
                                 onVerDocumentos={handleVerDocumentosFactura}
                                 onEstadisticasChange={actualizarEstadisticas}
+                                tipoPedido={filtrosConsulta.tipoFactura === 'chile' ? 'chile' : (filtrosConsulta.tipoFactura === 'sample' ? 'sample' : 'normal')}
+                                fetchFacturasFn={
+                                    filtrosConsulta.tipoFactura === 'chile'
+                                        ? obtenerFacturasChileConFiltros
+                                        : undefined
+                                }
+                                generarPDFFn={
+                                    filtrosConsulta.tipoFactura === 'chile'
+                                        ? generarFacturaPDFChile
+                                        : undefined
+                                }
                             />
                         </div>
                     )}
@@ -730,9 +809,9 @@ export default function FacturacionMain() {
                     <div className="flex items-center">
                         <div className="text-blue-500 mr-3 text-xl">💡</div>
                         <div>
-                            <h3 className="text-lg font-semibold text-blue-800 mb-1">Módulo en Desarrollo</h3>
+                            <h3 className="text-lg font-semibold text-blue-800 mb-1">Módulo de Facturación</h3>
                             <p className="text-blue-700 text-sm sm:text-base">
-                                Ahora con soporte para Pedidos Normales y Pedidos Sample. Próximamente se completará la funcionalidad.
+                                Soporte completo para Pedidos Normales, Pedidos Sample y Pedidos Chile. Gestione facturas, documentos y envíos desde un solo lugar.
                             </p>
                         </div>
                     </div>

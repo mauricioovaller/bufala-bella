@@ -17,7 +17,7 @@ if ($enlace->connect_error) {
 $json = file_get_contents("php://input");
 $data = json_decode($json, true);
 
-$tipo = $data['tipo'] ?? 'normal'; // 'normal' o 'sample'
+$tipo = $data['tipo'] ?? 'normal'; // 'normal', 'sample' o 'chile'
 $fechaDesde = $data['fechaDesde'] ?? '';
 $fechaHasta = $data['fechaHasta'] ?? '';
 
@@ -26,19 +26,31 @@ if (!$fechaDesde || !$fechaHasta) {
     exit;
 }
 
-// Determinar tablas según tipo
-$tablaEnc = ($tipo === 'sample') ? 'EncabPedidoSample' : 'EncabPedido';
-$campoFecha = 'FechaSalida'; // Puedes cambiarlo si necesitas otra fecha
+$campoFecha = 'FechaSalida';
 
-$sql = "SELECT 
-    Id_EncabPedido AS idPedido,
-    Id_Cliente,
-    (SELECT Nombre FROM Clientes WHERE Id_Cliente = e.Id_Cliente) AS cliente,
-    PurchaseOrder AS po,
-    FechaSalida AS fecha
-FROM $tablaEnc e
-WHERE $campoFecha BETWEEN ? AND ?
-ORDER BY $campoFecha DESC, Id_EncabPedido ";
+if ($tipo === 'chile') {
+    $sql = "SELECT 
+        e.Id_EncabPedido AS idPedido,
+        e.Id_Cliente,
+        c.Nombre AS cliente,
+        e.PurchaseOrder AS po,
+        e.FechaSalida AS fecha
+    FROM EncabPedidoChile e
+    INNER JOIN ClientesChile c ON e.Id_Cliente = c.Id_Cliente
+    WHERE e.FechaSalida BETWEEN ? AND ?
+    ORDER BY e.FechaSalida DESC, e.Id_EncabPedido";
+} else {
+    $tablaEnc = ($tipo === 'sample') ? 'EncabPedidoSample' : 'EncabPedido';
+    $sql = "SELECT 
+        Id_EncabPedido AS idPedido,
+        Id_Cliente,
+        (SELECT Nombre FROM Clientes WHERE Id_Cliente = e.Id_Cliente) AS cliente,
+        PurchaseOrder AS po,
+        FechaSalida AS fecha
+    FROM $tablaEnc e
+    WHERE $campoFecha BETWEEN ? AND ?
+    ORDER BY $campoFecha DESC, Id_EncabPedido";
+}
 
 $stmt = $enlace->prepare($sql);
 $stmt->bind_param("ss", $fechaDesde, $fechaHasta);

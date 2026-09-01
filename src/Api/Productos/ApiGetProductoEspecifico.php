@@ -23,7 +23,17 @@ if (!isset($input['idProducto']) || empty($input['idProducto'])) {
 $idProducto = intval($input['idProducto']);
 
 // Obtener datos del producto
-$sqlProducto = "SELECT * FROM Productos WHERE Id_Producto = ?";
+$sqlProducto = "SELECT 
+            Id_Producto,
+            DescripProducto,
+            DescripFactura,
+            Codigo_Siesa,
+            Codigo_FDA,
+            PesoGr,
+            FactorPesoBruto,
+            PrecioVenta,
+            Activo
+        FROM Productos WHERE Id_Producto = ?";
 $stmtProducto = $enlace->prepare($sqlProducto);
 $stmtProducto->bind_param("i", $idProducto);
 $stmtProducto->execute();

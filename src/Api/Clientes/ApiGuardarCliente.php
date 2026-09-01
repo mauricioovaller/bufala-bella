@@ -27,7 +27,9 @@ if (!$data) {
 
 // Sanitización de datos
 function limpiar_texto($texto) {
-    return htmlspecialchars(trim($texto), ENT_QUOTES, "UTF-8");
+    // Se guarda el texto tal cual (sin codificar entidades HTML).
+    // La seguridad contra inyección SQL la dan los prepared statements.
+    return trim((string)$texto);
 }
 
 function validar_entero($valor) {

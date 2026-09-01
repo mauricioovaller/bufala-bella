@@ -100,7 +100,7 @@ $sql = "SELECT
     ) + (
         SELECT COALESCE(SUM(CantidadEstibas), 0)
         FROM EncabPedidoSample 
-        WHERE .$tipoFecha BETWEEN ? AND ? AND .Estado = 'Activo'
+        WHERE $tipoFecha BETWEEN ? AND ? AND Estado = 'Activo'
     ) AS Estibas";
 
 try {

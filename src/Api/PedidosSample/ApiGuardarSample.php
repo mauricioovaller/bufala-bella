@@ -25,13 +25,16 @@ if (!$data) {
 }
 
 // Funciones de sanitización
-function limpiar_texto($txt) {
+function limpiar_texto($txt)
+{
     return htmlspecialchars(trim($txt), ENT_QUOTES, "UTF-8");
 }
-function validar_entero($valor) {
+function validar_entero($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_INT) !== false ? intval($valor) : null;
 }
-function validar_flotante($valor) {
+function validar_flotante($valor)
+{
     return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : null;
 }
 
@@ -57,12 +60,43 @@ $guiaMaster = limpiar_texto($encabezado["noGuia"] ?? "");
 $guiaHija = limpiar_texto($encabezado["guiaHija"] ?? "");
 $observaciones = limpiar_texto($encabezado["comentarios"] ?? "");
 
-// Validaciones obligatorias
+// ✅ PASO 1: Validaciones obligatorias del encabezado
 if (!$clienteTexto || !$idTransportadora || !$idBodega || !$fechaOrden || empty($detalle)) {
-    echo json_encode(["success" => false, "message" => "Faltan datos obligatorios"]);
+    echo json_encode(["success" => false, "message" => "Faltan datos obligatorios del encabezado"]);
     exit;
 }
 
+// ✅ PASO 2: Validar TODOS los detalles ANTES de iniciar transacción
+$detallesValidados = [];
+foreach ($detalle as $index => $item) {
+    $idProducto = validar_entero($item["producto"] ?? null);
+    $descripcion = limpiar_texto($item["descripcion"] ?? "");
+    $idEmbalaje = validar_entero($item["embalaje"] ?? null);
+    $cantidad = validar_flotante($item["cantidad"] ?? null);
+    $pesoNeto = validar_flotante($item["pesoNeto"] ?? null);
+    $pesoBruto = validar_flotante($item["pesoBruto"] ?? null);
+    $precio = validar_flotante($item["precio"] ?? null);
+
+    if (!$idProducto || !$descripcion || !$idEmbalaje || !$cantidad || !$precio) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Datos inválidos en detalle #{$index}: producto, descripción, embalaje, cantidad y precio son obligatorios"
+        ]);
+        exit;
+    }
+
+    $detallesValidados[] = [
+        "idProducto" => $idProducto,
+        "descripcion" => $descripcion,
+        "idEmbalaje" => $idEmbalaje,
+        "cantidad" => $cantidad,
+        "pesoNeto" => $pesoNeto,
+        "pesoBruto" => $pesoBruto,
+        "precio" => $precio
+    ];
+}
+
+// ✅ PASO 3: Iniciar transacción SOLO si TODO está validado
 try {
     $enlace->begin_transaction();
 
@@ -75,46 +109,33 @@ try {
     $stmtEnc->execute();
 
     if ($stmtEnc->affected_rows <= 0) {
-        throw new Exception("Error al insertar el encabezado");
+        throw new Exception("No se pudo insertar el encabezado");
     }
 
     $idEncabPedido = $enlace->insert_id;
 
-    // Insertar detalle
+    // Insertar detalles (sin validaciones, ya fueron validados)
     $sqlDet = "INSERT INTO DetPedidoSample 
         (Id_EncabPedido, Id_Producto, Descripcion, Id_Embalaje, Cantidad, PesoNeto, PesoBruto, PrecioUnitario) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     $stmtDet = $enlace->prepare($sqlDet);
 
-    foreach ($detalle as $item) {
-        $idProducto = validar_entero($item["producto"] ?? null);
-        $descripcion = limpiar_texto($item["descripcion"] ?? "");
-        $idEmbalaje = validar_entero($item["embalaje"] ?? null);
-        $cantidad = validar_flotante($item["cantidad"] ?? null);
-        $pesoNeto = validar_flotante($item["pesoNeto"] ?? null);
-        $pesoBruto = validar_flotante($item["pesoBruto"] ?? null);
-        $precio = validar_flotante($item["precio"] ?? null);
-
-        if (!$idProducto || !$descripcion || !$idEmbalaje || !$cantidad || !$precio) {
-            throw new Exception("Datos inválidos en detalle");
-        }
-
-        $stmtDet->bind_param("iisidddd", $idEncabPedido, $idProducto, $descripcion, $idEmbalaje, $cantidad, $pesoNeto, $pesoBruto, $precio);
+    foreach ($detallesValidados as $item) {
+        $stmtDet->bind_param("iisidddd", $idEncabPedido, $item["idProducto"], $item["descripcion"], $item["idEmbalaje"], $item["cantidad"], $item["pesoNeto"], $item["pesoBruto"], $item["precio"]);
         $stmtDet->execute();
 
         if ($stmtDet->affected_rows <= 0) {
-            throw new Exception("Error al insertar detalle");
+            throw new Exception("No se pudo insertar un detalle");
         }
     }
 
     $enlace->commit();
 
     echo json_encode(["success" => true, "idPedido" => $idEncabPedido]);
-
 } catch (Exception $e) {
     $enlace->rollback();
+    error_log("Error en ApiGuardarSample.php - " . $e->getMessage());
     echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
 }
 
 $enlace->close();
-?>

@@ -1,22 +1,22 @@
-// src/components/facturacion/ListaPedidos.jsx
 import React, { useState, useEffect } from "react";
-import { obtenerPedidosPorFecha } from '../../services/facturacionService'; // 🔴 SOLO esta importación
+import { obtenerPedidosPorFecha } from '../../services/facturacionService';
 
 const ListaPedidos = ({
     filtros,
     pedidosSeleccionados,
     onPedidosChange,
-    tipoPedido // 🔴 NUEVO: Recibir el tipo de pedido
+    tipoPedido,
+    fetchPedidosFn
 }) => {
     const [pedidos, setPedidos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // 🔴 EFECTO MEJORADO: Limpiar selección cuando pedidosSeleccionados esté vacío
+    const label = (normal, sample, chile) =>
+        tipoPedido === "chile" ? chile : tipoPedido === "normal" ? normal : sample;
+
     useEffect(() => {
-        // Si no hay pedidos seleccionados en el padre pero localmente hay seleccionados, limpiar
         if (pedidosSeleccionados.length === 0 && pedidos.some(p => p.seleccionado)) {
-            console.log('🧹 Limpiando selección automáticamente...');
             const pedidosLimpios = pedidos.map(pedido => ({
                 ...pedido,
                 seleccionado: false
@@ -25,7 +25,6 @@ const ListaPedidos = ({
         }
     }, [pedidosSeleccionados, pedidos]);
 
-    // 🔴 FUNCIÓN MEJORADA: Cargar pedidos según el tipo
     const cargarPedidos = async () => {
         if (!filtros.fechaDesde || !filtros.fechaHasta) {
             setError("Por favor selecciona ambas fechas");
@@ -36,29 +35,30 @@ const ListaPedidos = ({
         setError(null);
 
         try {
-            console.log(`📋 Cargando pedidos para: ${tipoPedido === "normal" ? "PEDIDOS NORMALES" : "SAMPLES"}`);
-            
-            // 🔴 SOLO USAMOS UNA FUNCIÓN - obtenerPedidosPorFecha
-            const resultado = await obtenerPedidosPorFecha(filtros);
-            
+            const tipoLabel = label("PEDIDOS NORMALES", "SAMPLES", "PEDIDOS CHILE");
+            console.log(`📋 Cargando pedidos para: ${tipoLabel}`);
+
+            const fnFetch = fetchPedidosFn || obtenerPedidosPorFecha;
+            const resultado = await fnFetch(filtros);
+
             if (resultado.pedidos && resultado.pedidos.length > 0) {
-                // 🔴 FILTRAR POR TIPO EN EL FRONTEND
                 let pedidosFiltrados = resultado.pedidos;
-                
+
                 if (tipoPedido === "normal") {
-                    pedidosFiltrados = resultado.pedidos.filter(pedido => 
+                    pedidosFiltrados = resultado.pedidos.filter(pedido =>
                         pedido.numero.startsWith('PED-') || pedido.tipo === 'PED'
                     );
-                    console.log(`📦 Pedidos normales filtrados: ${pedidosFiltrados.length} de ${resultado.pedidos.length}`);
+                } else if (tipoPedido === "chile") {
+                    pedidosFiltrados = resultado.pedidos.filter(pedido =>
+                        pedido.numero.startsWith('CHI-') || pedido.tipo === 'CHI'
+                    );
                 } else {
-                    pedidosFiltrados = resultado.pedidos.filter(pedido => 
+                    pedidosFiltrados = resultado.pedidos.filter(pedido =>
                         pedido.numero.startsWith('SMP-') || pedido.tipo === 'SMP'
                     );
-                    console.log(`🔬 Samples filtrados: ${pedidosFiltrados.length} de ${resultado.pedidos.length}`);
                 }
 
                 const pedidosFormateados = pedidosFiltrados.map(pedido => {
-                    // 🔴 FORMATO UNIFICADO PARA AMBOS TIPOS
                     const pedidoBase = {
                         id: pedido.id,
                         numero: pedido.numero,
@@ -66,8 +66,7 @@ const ListaPedidos = ({
                         fecha: pedido.fecha,
                         ordenCompra: pedido.ordenCompra,
                         seleccionado: false,
-                        tipo: tipoPedido, // 🔴 NUEVO: Identificar el tipo
-                        // Campos comunes
+                        tipo: tipoPedido,
                         cajas: pedido.cajas || 0,
                         tms: pedido.tms || 0,
                         pesoNeto: pedido.pesoNeto || 0,
@@ -82,29 +81,27 @@ const ListaPedidos = ({
                     return pedidoBase;
                 });
 
-                console.log(`✅ ${tipoPedido === "normal" ? "Pedidos normales" : "Samples"} formateados:`, pedidosFormateados);
+                console.log(`✅ ${label("Pedidos normales", "Samples", "Pedidos Chile")} formateados:`, pedidosFormateados);
                 setPedidos(pedidosFormateados);
             } else {
                 setPedidos([]);
-                setError(`No se encontraron ${tipoPedido === "normal" ? "pedidos" : "samples"} para las fechas seleccionadas`);
+                setError(`No se encontraron ${label("pedidos", "samples", "pedidos Chile")} para las fechas seleccionadas`);
             }
         } catch (err) {
             console.error(`Error cargando ${tipoPedido}:`, err);
-            setError(`Error al cargar ${tipoPedido === "normal" ? "pedidos" : "samples"}: ${err.message}`);
+            setError(`Error al cargar ${label("pedidos", "samples", "pedidos Chile")}: ${err.message}`);
             setPedidos([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // 🔴 EFECTO MEJORADO: Cargar pedidos cuando cambien los filtros O el tipo
     useEffect(() => {
         if (filtros.fechaDesde && filtros.fechaHasta) {
             cargarPedidos();
         }
-    }, [filtros.fechaDesde, filtros.fechaHasta, tipoPedido]); // 🔴 NUEVO: Agregar tipoPedido
+    }, [filtros.fechaDesde, filtros.fechaHasta, tipoPedido]);
 
-    // 🔴 FUNCIÓN MEJORADA: Manejar selección de pedido
     const handlePedidoSelect = (pedidoId) => {
         const nuevosPedidos = pedidos.map(pedido =>
             pedido.id === pedidoId
@@ -117,7 +114,6 @@ const ListaPedidos = ({
         onPedidosChange(seleccionados);
     };
 
-    // 🔴 FUNCIÓN MEJORADA: Seleccionar todos
     const handleSelectAll = () => {
         const allSelected = pedidos.every(pedido => pedido.seleccionado);
         const nuevosPedidos = pedidos.map(pedido => ({
@@ -136,23 +132,22 @@ const ListaPedidos = ({
     const totalPesoNeto = pedidosActualesSeleccionados.reduce((sum, pedido) => sum + pedido.pesoNeto, 0);
     const totalEstibas = pedidosActualesSeleccionados.reduce((sum, pedido) => sum + pedido.estibas, 0);
 
+    const barColor = tipoPedido === "normal" ? "bg-green-500" : tipoPedido === "chile" ? "bg-amber-500" : "bg-green-600";
+    const spinnerColor = tipoPedido === "normal" ? "border-green-500" : tipoPedido === "chile" ? "border-amber-500" : "border-green-600";
+
     if (loading) {
         return (
             <div className="bg-gray-50 rounded-xl p-4 sm:p-6">
                 <div className="flex items-center mb-4">
-                    <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${
-                        tipoPedido === "normal" ? "bg-green-500" : "bg-green-600"
-                    }`}></div>
+                    <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${barColor}`}></div>
                     <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                        {tipoPedido === "normal" ? "Pedidos Encontrados" : "Samples Encontrados"}
+                        {label("Pedidos Encontrados", "Samples Encontrados", "Pedidos Chile Encontrados")}
                     </h2>
                 </div>
                 <div className="text-center py-8">
-                    <div className={`animate-spin rounded-full h-8 w-8 border-b-2 mx-auto ${
-                        tipoPedido === "normal" ? "border-green-500" : "border-green-600"
-                    }`}></div>
+                    <div className={`animate-spin rounded-full h-8 w-8 border-b-2 mx-auto ${spinnerColor}`}></div>
                     <p className="text-gray-600 mt-2">
-                        Cargando {tipoPedido === "normal" ? "pedidos" : "samples"}...
+                        Cargando {label("pedidos", "samples", "pedidos Chile")}...
                     </p>
                 </div>
             </div>
@@ -163,11 +158,9 @@ const ListaPedidos = ({
         return (
             <div className="bg-gray-50 rounded-xl p-4 sm:p-6">
                 <div className="flex items-center mb-4">
-                    <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${
-                        tipoPedido === "normal" ? "bg-green-500" : "bg-green-600"
-                    }`}></div>
+                    <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${barColor}`}></div>
                     <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                        {tipoPedido === "normal" ? "Pedidos Encontrados" : "Samples Encontrados"}
+                        {label("Pedidos Encontrados", "Samples Encontrados", "Pedidos Chile Encontrados")}
                     </h2>
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -187,19 +180,17 @@ const ListaPedidos = ({
         <div className="bg-gray-50 rounded-xl p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-0">
                 <div className="flex items-center">
-                    <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${
-                        tipoPedido === "normal" ? "bg-green-500" : "bg-green-600"
-                    }`}></div>
+                    <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${barColor}`}></div>
                     <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                        {tipoPedido === "normal" ? "Pedidos Encontrados" : "Samples Encontrados"}
+                        {label("Pedidos Encontrados", "Samples Encontrados", "Pedidos Chile Encontrados")}
                         <span className="ml-2 text-sm font-normal text-gray-500">
-                            ({tipoPedido === "normal" ? "📦 PED-" : "🔬 SMP-"})
+                            ({label("📦 PED-", "🔬 SMP-", "🌎 CHI-")})
                         </span>
                     </h2>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs sm:text-sm text-gray-600">
-                        {pedidosActualesSeleccionados.length} de {pedidos.length} seleccionados
+                        {pedidosActualesSeleccionados.length} de {pedidos.length} {label("seleccionados", "seleccionados", "seleccionados")}
                     </span>
                     <button
                         onClick={handleSelectAll}
@@ -211,11 +202,10 @@ const ListaPedidos = ({
                 </div>
             </div>
 
-            {/* LISTA DE PEDIDOS */}
             <div className="space-y-3">
                 {pedidos.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                        No se encontraron {tipoPedido === "normal" ? "pedidos" : "samples"} para las fechas seleccionadas
+                        No se encontraron {label("pedidos", "samples", "pedidos Chile")} para las fechas seleccionadas
                     </div>
                 ) : (
                     pedidos.map((pedido) => (
@@ -255,24 +245,26 @@ const ListaPedidos = ({
                                     </div>
                                     <div>
                                         <p className="text-xs sm:text-sm text-gray-600">
-                                            {tipoPedido === "normal" ? "Cajas/TM" : "Estibas"}
+                                            {label("Cajas/TM", "Estibas", "Estibas")}
                                         </p>
                                         <p className="font-medium text-gray-900 text-sm sm:text-base">
-                                            {tipoPedido === "normal" 
-                                                ? `${pedido.cajas} cajas / ${pedido.tms} TM`
-                                                : `${pedido.estibas} estibas`
-                                            }
+                                            {label(
+                                                `${pedido.cajas} cajas / ${pedido.tms} TM`,
+                                                `${pedido.estibas} estibas`,
+                                                `${pedido.estibas} estibas`
+                                            )}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-xs sm:text-sm text-gray-600">
-                                            {tipoPedido === "normal" ? "Peso Neto" : "Cajas"}
+                                            {label("Peso Neto", "Cajas", "Cajas")}
                                         </p>
                                         <p className="font-medium text-gray-900 text-sm sm:text-base">
-                                            {tipoPedido === "normal" 
-                                                ? `${pedido.pesoNeto.toLocaleString('es-CO')} kg`
-                                                : `${pedido.cajas} cajas`
-                                            }
+                                            {label(
+                                                `${pedido.pesoNeto.toLocaleString('es-CO')} kg`,
+                                                `${pedido.cajas} cajas`,
+                                                `${pedido.cajas} cajas`
+                                            )}
                                         </p>
                                     </div>
                                     <div>
@@ -288,23 +280,22 @@ const ListaPedidos = ({
                 )}
             </div>
 
-            {/* RESUMEN DE SELECCIÓN */}
             {pedidosActualesSeleccionados.length > 0 && (
                 <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg sm:rounded-xl border border-blue-200">
                     <div className={`grid gap-3 sm:gap-4 text-center ${
-                        tipoPedido === "normal" 
-                            ? "grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-5" 
+                        tipoPedido === "normal"
+                            ? "grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
                             : "grid-cols-1 xs:grid-cols-2 md:grid-cols-4"
                     }`}>
                         <div>
                             <p className="text-xs sm:text-sm text-blue-600">
-                                {tipoPedido === "normal" ? "Pedidos" : "Samples"} Seleccionados
+                                {label("Pedidos", "Samples", "Pedidos Chile")} Seleccionados
                             </p>
                             <p className="text-lg sm:text-2xl font-bold text-blue-700">
                                 {pedidosActualesSeleccionados.length}
                             </p>
                         </div>
-                        
+
                         {tipoPedido === "normal" ? (
                             <>
                                 <div>
@@ -338,7 +329,7 @@ const ListaPedidos = ({
                                 </div>
                             </>
                         )}
-                        
+
                         <div>
                             <p className="text-xs sm:text-sm text-blue-600">Valor Total</p>
                             <p className="text-lg sm:text-2xl font-bold text-blue-700">

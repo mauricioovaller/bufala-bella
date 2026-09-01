@@ -318,6 +318,136 @@ export async function generarExcelTransporte(filtros) {
   }
 }
 
+// ============================================================================
+// SERVICIOS CHILE Y CONSOLIDADO PARA REPORTES
+// ============================================================================
+
+async function descargarArchivo(res, nombreDefault) {
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const contentDisposition = res.headers.get('Content-Disposition');
+  let fileName = nombreDefault;
+  if (contentDisposition) {
+    const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+    if (fileNameMatch && fileNameMatch.length === 2) {
+      fileName = fileNameMatch[1];
+    }
+  }
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
+const API_CONS_BASE = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Consolidacion";
+
+export async function generarReporteProduccionChile(filtros) {
+  const response = await fetch(`${API_CONS_BASE}/ApiConsolidadoProduccionChile.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!response.ok) throw new Error("Error al generar el reporte de producciÃ³n Chile");
+  return await response.blob();
+}
+
+export async function generarReporteProduccionConsolidado(filtros) {
+  const response = await fetch(`${API_CONS_BASE}/ApiConsolidadoProduccionTotal.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!response.ok) throw new Error("Error al generar el reporte de producciÃ³n consolidado");
+  return await response.blob();
+}
+
+export async function generarReporteEmpaqueChile(filtros) {
+  const response = await fetch(`${API_CONS_BASE}/ApiConsolidadoEmpaqueChile.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!response.ok) throw new Error("Error al generar el reporte de empaque Chile");
+  return await response.blob();
+}
+
+export async function generarReporteEmpaqueConsolidado(filtros) {
+  const response = await fetch(`${API_CONS_BASE}/ApiConsolidadoEmpaqueTotal.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!response.ok) throw new Error("Error al generar el reporte de empaque consolidado");
+  return await response.blob();
+}
+
+export async function generarReporteTransporteChile(filtros) {
+  const response = await fetch(`${API_CONS_BASE}/ApiConsolidadoTransporteChile.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!response.ok) throw new Error("Error al generar el reporte de transporte Chile");
+  return await response.blob();
+}
+
+export async function generarReporteTransporteConsolidado(filtros) {
+  const response = await fetch(`${API_CONS_BASE}/ApiConsolidadoTransporteTotal.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!response.ok) throw new Error("Error al generar el reporte de transporte consolidado");
+  return await response.blob();
+}
+
+export async function generarExcelConsolidacionChile(filtros) {
+  const res = await fetch(`${API_CONS_BASE}/ApiGenerarExcelConsolidacionChile.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+  await descargarArchivo(res, "Consolidacion_Pedidos_Chile.xlsx");
+  return { success: true, message: "Archivo Excel de Chile generado correctamente" };
+}
+
+export async function generarExcelConsolidacionConsolidado(filtros) {
+  const res = await fetch(`${API_CONS_BASE}/ApiGenerarExcelConsolidacionTotal.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+  await descargarArchivo(res, "Consolidacion_Pedidos_Consolidado.xlsx");
+  return { success: true, message: "Archivo Excel consolidado generado correctamente" };
+}
+
+export async function generarExcelTransporteChile(filtros) {
+  const res = await fetch(`${API_CONS_BASE}/ApiGenerarExcelTransporteChile.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+  await descargarArchivo(res, "Transporte_Chile.xlsx");
+  return { success: true, message: "Archivo Excel de transporte Chile generado correctamente" };
+}
+
+export async function generarExcelTransporteConsolidado(filtros) {
+  const res = await fetch(`${API_CONS_BASE}/ApiGenerarExcelTransporteTotal.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta, tipoFecha: filtros.tipoFecha }),
+  });
+  if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+  await descargarArchivo(res, "Transporte_Consolidado.xlsx");
+  return { success: true, message: "Archivo Excel de transporte consolidado generado correctamente" };
+}
+
 export async function obtenerPedidosPorFecha(filtros) {
   try {
     const endpoint =
@@ -362,10 +492,236 @@ export async function obtenerPedidosPorFecha(filtros) {
 }
 
 // ============================================================================
+// SERVICIOS PARA COSTOS DE TRANSPORTE AEREO
+// ============================================================================
+
+const API_COSTOS_AEREO = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporteAereo";
+
+export async function obtenerGuiasMasterPorFecha(fecha, tipoPedido = 'normal') {
+  try {
+    const response = await fetch(`${API_COSTOS_AEREO}/ApiObtenerGuiasMaster.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fecha, tipoPedido }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try { const errorText = await response.text(); errorDetail += ` - ${errorText}`; } catch (e) {}
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerGuiasMasterPorFecha:", error);
+    throw new Error(`No se pudieron obtener las guías master: ${error.message}`);
+  }
+}
+
+export async function obtenerCostosAereo(filtros, tipoPedido = 'normal') {
+  try {
+    const response = await fetch(`${API_COSTOS_AEREO}/ApiGetCostosAereo.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+        tipoPedido,
+      }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try { const errorText = await response.text(); errorDetail += ` - ${errorText}`; } catch (e) {}
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerCostosAereo:", error);
+    throw new Error(`No se pudieron cargar los costos aéreos: ${error.message}`);
+  }
+}
+
+export async function obtenerCostoAereo(id) {
+  try {
+    const response = await fetch(`${API_COSTOS_AEREO}/ApiGetCostoAereo.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try { const errorText = await response.text(); errorDetail += ` - ${errorText}`; } catch (e) {}
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerCostoAereo:", error);
+    throw new Error(`No se pudo cargar el costo aéreo: ${error.message}`);
+  }
+}
+
+export async function guardarCostoAereo(datos) {
+  try {
+    const response = await fetch(`${API_COSTOS_AEREO}/ApiGuardarCostoAereo.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(datos),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try { const errorText = await response.text(); errorDetail += ` - ${errorText}`; } catch (e) {}
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en guardarCostoAereo:", error);
+    throw new Error(`No se pudo guardar el costo aéreo: ${error.message}`);
+  }
+}
+
+export async function modificarCostoAereo(id, datos) {
+  try {
+    const response = await fetch(`${API_COSTOS_AEREO}/ApiModificarCostoAereo.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...datos }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try { const errorText = await response.text(); errorDetail += ` - ${errorText}`; } catch (e) {}
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en modificarCostoAereo:", error);
+    throw new Error(`No se pudo modificar el costo aéreo: ${error.message}`);
+  }
+}
+
+export async function eliminarCostoAereo(id) {
+  try {
+    const response = await fetch(`${API_COSTOS_AEREO}/ApiEliminarCostoAereo.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try { const errorText = await response.text(); errorDetail += ` - ${errorText}`; } catch (e) {}
+      throw new Error(errorDetail);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en eliminarCostoAereo:", error);
+    throw new Error(`No se pudo eliminar el costo aéreo: ${error.message}`);
+  }
+}
+
+// ============================================================================
+// SERVICIOS PARA CONSOLIDACION CHILE
+// ============================================================================
+
+const API_CONS_CHILE = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Consolidacion";
+
+export async function obtenerEstadisticasChile(filtros) {
+  try {
+    const response = await fetch(API_CONS_CHILE + "/ApiEstadisticasChile.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+        tipoFecha: filtros.tipoFecha
+      }),
+    });
+    if (!response.ok) throw new Error("Error " + response.status);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerEstadisticasChile:", error);
+    throw new Error("No se pudieron cargar las estadísticas Chile: " + error.message);
+  }
+}
+
+export async function obtenerPedidosChilePorFecha(filtros) {
+  try {
+    const response = await fetch(API_CONS_CHILE + "/ApiObtenerPedidosChile.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+      }),
+    });
+    if (!response.ok) throw new Error("Error " + response.status);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerPedidosChilePorFecha:", error);
+    throw new Error("No se pudieron cargar los pedidos Chile: " + error.message);
+  }
+}
+
+export async function actualizarFechaSalidaChile(pedidoId, nuevaFecha) {
+  try {
+    const response = await fetch(API_CONS_CHILE + "/ApiActualizarFechaSalidaChile.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pedidoId, nuevaFechaSalida: nuevaFecha }),
+    });
+    if (!response.ok) throw new Error("Error " + response.status);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || "Error al actualizar la fecha");
+    return data;
+  } catch (error) {
+    console.error("Error en actualizarFechaSalidaChile:", error);
+    throw new Error("No se pudo actualizar la fecha: " + error.message);
+  }
+}
+
+export const actualizarDatosEnLoteChile = async (filtros, datosEnLote) => {
+  try {
+    const response = await fetch(API_CONS_CHILE + "/ApiActualizarEnLoteChile.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filtros, datosEnLote }),
+    });
+    if (!response.ok) throw new Error("Error al actualizar datos en lote");
+    return await response.json();
+  } catch (error) {
+    throw new Error(error.message);
+  }
+};
+
+// ============================================================================
 // SERVICIOS PARA COSTOS DE TRANSPORTE DIARIO
 // ============================================================================
 
-export async function obtenerCostosTransporte(filtros) {
+export async function obtenerCostosTransporte(filtros, tipoPedido = 'normal') {
   try {
     const endpoint = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/CostosTransporte/ApiGetCostosTransporte.php";
 
@@ -377,6 +733,7 @@ export async function obtenerCostosTransporte(filtros) {
       body: JSON.stringify({
         fechaDesde: filtros.fechaDesde,
         fechaHasta: filtros.fechaHasta,
+        tipoPedido,
       }),
     });
 

@@ -13,6 +13,7 @@ import {
   getSamples,
   getSampleEspecifico,
   actualizarSample,
+  anularSample,
   imprimirSample,
   imprimirSamplesMultiples,
   getRangeSamples,
@@ -57,7 +58,7 @@ export default function PedidosSample() {
     comentarios: "",
     cantidadEstibas: 1,
     aerolineaId: "107",
-    agenciaId: "44",
+    agenciaId: "73",
     noGuia: "",
     guiaHija: "",
     bodegaId: "",
@@ -107,6 +108,8 @@ export default function PedidosSample() {
   const [showModal, setShowModal] = useState(false);
   const [cargandoSamples, setCargandoSamples] = useState(false);
   const [filtroSamples, setFiltroSamples] = useState("");
+
+  const [pedidoAnulado, setPedidoAnulado] = useState(false);
 
   // Estados para el visor de PDF
   const [urlPDF, setUrlPDF] = useState(null);
@@ -440,34 +443,92 @@ export default function PedidosSample() {
       cantidadEstibas: 1,
       bodegaId: "", // 👈 Limpiar bodega también
       aerolineaId: "107",
-      agenciaId: "44",
+      agenciaId: "73",
       noGuia: "",
       guiaHija: "",
     });
     setItems([]);
     setRegiones([]);
+    setPedidoAnulado(false);
     itemRefs.current = [];
+  }
+
+  async function handleAnular() {
+    if (!header.id) {
+      Swal.fire("Aviso", "No hay sample para anular.", "info");
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "¿Anular Sample?",
+      html: `
+        <div class="text-left">
+          <p class="mb-2">¿Está seguro de anular el sample <strong>${header.numero}</strong>?</p>
+          <p class="text-sm text-red-600">Esta acci&oacute;n no se puede deshacer.</p>
+        </div>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, Anular",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#6b7280",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      Swal.fire({
+        title: "Anulando sample...",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
+
+      const res = await anularSample(header.id);
+      Swal.close();
+
+      if (res.success) {
+        setPedidoAnulado(true);
+        Swal.fire("Anulado", "Sample anulado correctamente.", "success");
+      } else {
+        Swal.fire("Error", res.message || "No se pudo anular el sample.", "error");
+      }
+    } catch (err) {
+      console.error("Error al anular:", err);
+      Swal.fire("Error", "Ocurrió un error al anular el sample.", "error");
+    }
   }
 
   // --------------------------------------------------------------
   // 👇 FUNCIONES MEJORADAS para búsqueda de samples
   // --------------------------------------------------------------
 
-  // Abrir modal y cargar samples
+  // Abrir modal (sin cargar todos los samples)
   async function handleOpenModal() {
     setShowModal(true);
-    setCargandoSamples(true);
+    setSamples([]);
     setFiltroSamples("");
+    setCargandoSamples(false);
+  }
 
+  // 🔴 Búsqueda server-side: solo trae los samples que coinciden con el término
+  async function handleBuscarSamplesModal() {
+    const termino = filtroSamples.toString().trim();
+    if (!termino) {
+      Swal.fire("Aviso", "Escriba un número, cliente o fecha para buscar", "warning");
+      return;
+    }
+
+    setCargandoSamples(true);
     try {
-      const res = await getSamples();
+      const res = await getSamples(termino);
       if (res.success) {
         setSamples(res.pedidos || []);
       } else {
         Swal.fire("Error", "No se pudieron cargar los samples", "error");
       }
     } catch (err) {
-      console.error("Error cargando samples:", err);
+      console.error("Error buscando samples:", err);
       Swal.fire("Error", "Error al obtener samples", "error");
     } finally {
       setCargandoSamples(false);
@@ -606,7 +667,7 @@ export default function PedidosSample() {
           : (pesoNetoFinal * precio);
 
         return {
-          id: d.Id_DetSample ?? d.IdDetSample ?? d.id ?? null,
+          id: d.Id_DetPedido ?? d.id ?? null,
           producto: d.Id_Producto ?? d.IdProducto ?? "",
           descripcion: d.Descripcion ?? d.Descripción ?? d.descripcion ?? "",
           pesoGr: pesoGr,
@@ -624,10 +685,10 @@ export default function PedidosSample() {
       // 5) Aplicar al estado
       setHeader((p) => ({ ...p, ...mappedHeader }));
       setItems(mappedItems);
+      setPedidoAnulado(apiHeader.Estado === "Anulado");
       itemRefs.current = [];
 
       cerrarModalBuscarSamples();
-      Swal.fire("Cargado", "Sample cargado correctamente.", "success");
     } catch (err) {
       console.error("Error en handleSelectSample:", err);
       Swal.fire("Error", "Error al obtener el sample", "error");
@@ -1135,10 +1196,18 @@ export default function PedidosSample() {
   if (errorDatos) return <p className="text-red-600 text-center py-4">{errorDatos}</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Barra de acciones - ACTUALIZADO A SAMPLES */}
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-        <h2 className="text-xl font-semibold mb-4 text-slate-700">Gestión de Samples</h2>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-xl font-semibold text-slate-700">Gesti&oacute;n de Samples</h2>
+          {header.id && pedidoAnulado && (
+            <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Anulado</span>
+          )}
+          {header.id && !pedidoAnulado && (
+            <span className="bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full">Activo</span>
+          )}
+        </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={handleOpenModal}
@@ -1159,7 +1228,7 @@ export default function PedidosSample() {
             Nuevo Sample
           </button>
           <button
-            onClick={() => handlePrint()} // Sin parámetro para que muestre el selector
+            onClick={() => handlePrint()}
             disabled={!header.id}
             className={`rounded-lg px-4 py-3 sm:py-2 transition font-medium flex-1 ${header.id
               ? "bg-purple-600 text-white hover:bg-purple-700"
@@ -1175,6 +1244,21 @@ export default function PedidosSample() {
             Imprimir Múltiple
           </button>
         </div>
+
+        {/* Acciones Destructivas */}
+        {header.id && !pedidoAnulado && (
+          <div className="mt-3 pt-3 border-t border-gray-200 flex justify-end">
+            <button
+              onClick={handleAnular}
+              className="px-3 py-1.5 text-sm border border-red-300 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 hover:border-red-400 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Anular Sample
+            </button>
+          </div>
+        )}
       </div>
 
       <PedidoHeaderSample
@@ -1206,11 +1290,20 @@ export default function PedidosSample() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                 <input
                   type="text"
-                  placeholder="Filtrar por ID, cliente/destinatario o fecha..."
+                  placeholder="Número, cliente o fecha..."
                   className="border rounded px-3 py-2 flex-1 min-w-[200px]"
                   value={filtroSamples}
                   onChange={(e) => setFiltroSamples(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleBuscarSamplesModal();
+                  }}
                 />
+                <button
+                  onClick={handleBuscarSamplesModal}
+                  className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                >
+                  🔍 Buscar
+                </button>
                 <button
                   onClick={cerrarModalBuscarSamples}
                   className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 transition"
@@ -1221,10 +1314,10 @@ export default function PedidosSample() {
             </div>
 
             {cargandoSamples ? (
-              <div className="text-center py-8">Cargando samples...</div>
+              <div className="text-center py-8">Buscando samples...</div>
             ) : samplesFiltrados.length === 0 ? (
               <div className="text-center py-8 text-gray-600 border-2 border-dashed rounded-lg bg-gray-50">
-                {filtroSamples ? "No se encontraron samples con ese filtro." : "No hay samples registrados."}
+                {filtroSamples ? "No se encontraron samples con ese filtro." : "Escriba un número, cliente o fecha y presione Buscar para encontrar samples."}
               </div>
             ) : (
               <div className="overflow-auto max-h-96">
@@ -1237,16 +1330,26 @@ export default function PedidosSample() {
                         <th className="py-2 px-2 font-semibold">Cliente/Destinatario</th>
                         <th className="py-2 px-2 font-semibold">Fecha Orden</th>
                         <th className="py-2 px-2 font-semibold">Purchase Order</th>
+                        <th className="py-2 px-2 font-semibold">Estado</th>
                         <th className="py-2 px-2 font-semibold text-right">Acción</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {samplesFiltrados.map((s) => (
-                        <tr key={s.idPedido} className="hover:bg-gray-50 border-b">
+                      {samplesFiltrados.map((s) => {
+                        const esAnulado = s.Estado === "Anulado";
+                        return (
+                        <tr key={s.idPedido} className={`hover:bg-gray-50 border-b ${esAnulado ? "bg-red-50 opacity-70" : ""}`}>
                           <td className="py-2 px-2 font-medium">{s.idPedido}</td>
                           <td className="py-2 px-2">{s.ClienteTexto || s.Nombre}</td>
                           <td className="py-2 px-2">{s.FechaOrden}</td>
                           <td className="py-2 px-2">{s.PurchaseOrder || "-"}</td>
+                          <td className="py-2 px-2">
+                            {esAnulado ? (
+                              <span className="inline-block bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded-full">Anulado</span>
+                            ) : (
+                              <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">Activo</span>
+                            )}
+                          </td>
                           <td className="py-2 px-2 text-right">
                             <button
                               className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
@@ -1256,17 +1359,19 @@ export default function PedidosSample() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Cards para pantallas móviles */}
                 <div className="block md:hidden space-y-3">
-                  {samplesFiltrados.map((s) => (
+                  {samplesFiltrados.map((s) => {
+                    const esAnulado = s.Estado === "Anulado";
+                    return (
                     <div
                       key={s.idPedido}
-                      className="border rounded-lg p-4 shadow-sm bg-white"
+                      className={`border rounded-lg p-4 shadow-sm ${esAnulado ? "bg-red-50 border-red-200" : "bg-white"}`}
                     >
                       <div className="space-y-2">
                         <div className="flex justify-between items-start">
@@ -1274,12 +1379,19 @@ export default function PedidosSample() {
                             <span className="font-semibold text-gray-700">ID:</span>
                             <p className="text-gray-900 font-medium">{s.idPedido}</p>
                           </div>
-                          <button
-                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
-                            onClick={() => handleSelectSample(s.idPedido)}
-                          >
-                            Cargar
-                          </button>
+                          <div className="flex flex-col items-end gap-1">
+                            {esAnulado ? (
+                              <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded-full">Anulado</span>
+                            ) : (
+                              <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">Activo</span>
+                            )}
+                            <button
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm"
+                              onClick={() => handleSelectSample(s.idPedido)}
+                            >
+                              Cargar
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <span className="font-semibold text-gray-700">Cliente/Destinatario:</span>
@@ -1297,7 +1409,7 @@ export default function PedidosSample() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
             )}

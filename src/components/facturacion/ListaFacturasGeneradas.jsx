@@ -11,7 +11,12 @@ const ListaFacturasGeneradas = ({
     onFacturasChange,
     modoConsulta = false,
     onVerDocumentos,
-    onEstadisticasChange
+    onEstadisticasChange,
+    tipoPedido,
+    fetchFacturasFn,
+    generarPDFFn,
+    eliminarFacturaFn,
+    onFacturaEliminada
 }) => {
     const [facturas, setFacturas] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -76,10 +81,11 @@ const ListaFacturasGeneradas = ({
 
                 if (modoConsulta) {
                     // Usar filtros avanzados para modo consulta
-                    resultado = await obtenerFacturasConFiltros(filtros);
+                    const fnFetch = fetchFacturasFn || obtenerFacturasConFiltros;
+                    resultado = await fnFetch(filtros);
                 } else {
-                    // Usar función original para modo creación
-                    resultado = await obtenerFacturasGeneradas(filtros.fechaDesde, filtros.fechaHasta);
+                    const fnFetch = fetchFacturasFn || obtenerFacturasGeneradas;
+                    resultado = await fnFetch(filtros.fechaDesde, filtros.fechaHasta);
                 }
 
                 if (resultado.facturas && resultado.facturas.length > 0) {
@@ -153,7 +159,8 @@ const ListaFacturasGeneradas = ({
         setGenerandoPDF(true);
 
         try {
-            const pdfBlob = await generarFacturaPDF(facturaId);
+            const fnPDF = generarPDFFn || generarFacturaPDF;
+            const pdfBlob = await fnPDF(facturaId);
             const pdfUrl = URL.createObjectURL(pdfBlob);
             setUrlPDF(pdfUrl);
             setMostrarModalPDF(true);
@@ -225,22 +232,24 @@ const ListaFacturasGeneradas = ({
         setEliminandoFactura(facturaId);
 
         try {
-            const resultado = await eliminarFacturaCompleta(facturaId, numeroFactura, tipoPedido);
+            const fnEliminar = eliminarFacturaFn || eliminarFacturaCompleta;
+            const resultado = await fnEliminar(facturaId, numeroFactura, tipoPedido);
 
             if (resultado.success) {
                 // Mostrar SweetAlert de éxito
                 await Swal.fire({
                     icon: 'success',
                     title: '¡Factura Eliminada!',
-                    html: `Factura <strong>${numeroFactura}</strong> (${tipoPedido === 'sample' ? 'Samples' : 'Regular'}) eliminada correctamente.<br>
-                           <strong>${resultado.pedidosActualizados}</strong> pedidos liberados de la tabla <strong>${resultado.tablaActualizada || (tipoPedido === 'sample' ? 'EncabPedidoSample' : 'EncabPedido')}</strong>.`,
+                    html: `Factura <strong>${numeroFactura}</strong> (${tipoPedido === 'chile' ? 'Chile' : tipoPedido === 'sample' ? 'Samples' : 'Regular'}) eliminada correctamente.<br>
+                           <strong>${resultado.pedidosActualizados ?? 0}</strong> pedidos liberados de la tabla <strong>${resultado.tablaActualizada || (tipoPedido === 'chile' ? 'EncabPedidoChile' : tipoPedido === 'sample' ? 'EncabPedidoSample' : 'EncabPedido')}</strong>.`,
                     confirmButtonColor: '#10b981',
                     timer: 5000,
                     timerProgressBar: true
                 });
 
                 // Recargar la lista de facturas
-                const resultadoActualizado = await obtenerFacturasGeneradas(filtros.fechaDesde, filtros.fechaHasta);
+                const fnRecargar = fetchFacturasFn || obtenerFacturasGeneradas;
+                const resultadoActualizado = await fnRecargar(filtros.fechaDesde, filtros.fechaHasta);
 
                 if (resultadoActualizado.facturas && resultadoActualizado.facturas.length > 0) {
                     const facturasConSeleccion = resultadoActualizado.facturas.map(factura => ({
@@ -252,6 +261,11 @@ const ListaFacturasGeneradas = ({
                 } else {
                     setFacturas([]);
                     onFacturasChange([]);
+                }
+
+                // Notificar al padre para recargar los pedidos disponibles automáticamente
+                if (onFacturaEliminada) {
+                    onFacturaEliminada();
                 }
 
             } else {
@@ -430,7 +444,7 @@ const ListaFacturasGeneradas = ({
 
                                     <div className="flex-1 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
                                         <div>
-                                            <p className="font-semibold text-gray-900 text-sm sm:text-base">{factura.numero}</p>
+                                            <p className="font-semibold text-gray-900 text-sm sm:text-base">{factura.numero.replace(/^CHI-FEX-/, 'FEX-')}</p>
                                             <p className="text-xs sm:text-sm text-gray-600">{factura.fecha}</p>
                                         </div>
                                         <div>

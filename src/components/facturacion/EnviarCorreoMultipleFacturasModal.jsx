@@ -5,13 +5,23 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
     obtenerDestinatariosPredeterminados,
+    normalizarNumeroFactura,
 } from '../../services/correoService';
 import { enviarCorreoGenerico } from '../../services/envioCorreosGenericoService';
-import { generarFacturaPDF } from '../../services/facturacionService';
+import { generarFacturaPDF, generarFacturaPDFChile } from '../../services/facturacionService';
 import {
     generarCartaResponsabilidad,
     generarReporteDespacho,
     generarPlanVallejo,
+    generarCartaResponsabilidadChile,
+    generarReporteDespachoChile,
+    generarPlanVallejoChile,
+    generarAutodeclaracionChile,
+    generarPlanillaDespachoChile,
+    generarCartaDatalogerChile,
+    generarSolicitudICAChile,
+    generarCertificadoTratamientoChile,
+    generarTablaHCLacteosChile,
 } from '../../services/planillasService';
 import DestinatariosSelector from './DestinatariosSelector';
 import Swal from 'sweetalert2';
@@ -20,7 +30,7 @@ import Swal from 'sweetalert2';
 // Construye el asunto automático a partir del array de facturas
 // -------------------------------------------------------------------
 function buildAsunto(facturas) {
-    const numeros = facturas.map(f => f.numero).join(', ');
+    const numeros = facturas.map(f => normalizarNumeroFactura(f.numero)).join(', ');
     const fecha = facturas[0]?.fecha || '';
     return `Facturas ${numeros} – ${fecha}`;
 }
@@ -35,7 +45,7 @@ function buildCuerpo(facturas) {
             const valor = f.valorTotal
                 ? `$${Number(f.valorTotal).toLocaleString('es-CO')}`
                 : 'N/A';
-            return `  • ${f.numero} | ${f.cliente} | ${f.fecha} | ${valor}`;
+            return `  • ${normalizarNumeroFactura(f.numero)} | ${f.cliente} | ${f.fecha} | ${valor}`;
         })
         .join('\n');
     const total = facturas.reduce((sum, f) => sum + (Number(f.valorTotal) || 0), 0);
@@ -58,9 +68,11 @@ function buildCuerpo(facturas) {
 //   'reporte-despacho'→ un documento por factura (opcional)
 // -------------------------------------------------------------------
 function buildDocumentosIniciales(facturas) {
+    const esChile = facturas.length > 0 && facturas.every(f => f.tipoPedido === 'chile');
+
     const facturasItems = facturas.map(f => ({
         id: `factura-${f.id}`,
-        nombre: `Factura ${f.numero}`,
+        nombre: `Factura ${normalizarNumeroFactura(f.numero)}`,
         seleccionado: true,
         obligatorio: true,
         generando: false,
@@ -71,7 +83,7 @@ function buildDocumentosIniciales(facturas) {
 
     const planVallejoItems = facturas.map(f => ({
         id: `plan-vallejo-${f.id}`,
-        nombre: `Plan Vallejo – ${f.numero}`,
+        nombre: `Plan Vallejo – ${normalizarNumeroFactura(f.numero)}`,
         seleccionado: false,
         obligatorio: false,
         generando: false,
@@ -82,7 +94,7 @@ function buildDocumentosIniciales(facturas) {
 
     const reporteItems = facturas.map(f => ({
         id: `reporte-despacho-${f.id}`,
-        nombre: `Reporte de Despacho – ${f.numero}`,
+        nombre: `Reporte de Despacho – ${normalizarNumeroFactura(f.numero)}`,
         seleccionado: false,
         obligatorio: false,
         generando: false,
@@ -90,6 +102,31 @@ function buildDocumentosIniciales(facturas) {
         grupo: 'reporte-despacho',
         facturaRef: f,
     }));
+
+    // Documentos adicionales exclusivos de Chile
+    const chileDocs = esChile
+        ? [
+            { prefijo: 'autodeclaracion-chile', nombre: 'Autodeclaración Chile', grupo: 'autodeclaracion-chile' },
+            { prefijo: 'planilla-aerolinea', nombre: 'Planilla Aerolínea', grupo: 'planilla-aerolinea' },
+            { prefijo: 'carta-dataloger', nombre: 'Carta Dataloger', grupo: 'carta-dataloger' },
+            { prefijo: 'solicitud-ica', nombre: 'Solicitud ICA', grupo: 'solicitud-ica' },
+            { prefijo: 'certificado-tratamiento', nombre: 'Certificado Tratamiento Térmico', grupo: 'certificado-tratamiento' },
+            { prefijo: 'tabla-hc-lacteos', nombre: 'Tabla HC Lácteos', grupo: 'tabla-hc-lacteos' },
+        ]
+        : [];
+
+    const chileItems = chileDocs.flatMap(doc =>
+        facturas.map(f => ({
+            id: `${doc.prefijo}-${f.id}`,
+            nombre: `${doc.nombre} – ${normalizarNumeroFactura(f.numero)}`,
+            seleccionado: false,
+            obligatorio: false,
+            generando: false,
+            noDisponible: false,
+            grupo: doc.grupo,
+            facturaRef: f,
+        }))
+    );
 
     return [
         ...facturasItems,
@@ -115,6 +152,7 @@ function buildDocumentosIniciales(facturas) {
         },
         ...planVallejoItems,
         ...reporteItems,
+        ...chileItems,
     ];
 }
 
@@ -129,8 +167,11 @@ async function ejecutarGeneracion(tipoDocumento, facturas) {
         const factId = parseInt(tipoDocumento.replace('factura-', ''), 10);
         const f = facturas.find(x => x.id === factId);
         if (!f) throw new Error('Factura no encontrada');
-        const blob = await generarFacturaPDF(f.id, f.tipoPedido || 'normal');
-        return { blob, nombre: `factura-${f.numero}.pdf` };
+        const esChile = f.tipoPedido === 'chile';
+        const blob = esChile
+            ? await generarFacturaPDFChile(f.id)
+            : await generarFacturaPDF(f.id, f.tipoPedido || 'normal');
+        return { blob, nombre: `factura-${normalizarNumeroFactura(f.numero)}.pdf` };
     }
 
     // Plan Vallejo individual (puede no estar disponible)
@@ -138,10 +179,13 @@ async function ejecutarGeneracion(tipoDocumento, facturas) {
         const factId = parseInt(tipoDocumento.replace('plan-vallejo-', ''), 10);
         const f = facturas.find(x => x.id === factId);
         if (!f) throw new Error('Factura no encontrada para Plan Vallejo');
-        const blob = await generarPlanVallejo(f.id);
+        const esChile = f.tipoPedido === 'chile';
+        const blob = esChile
+            ? await generarPlanVallejoChile(f.id)
+            : await generarPlanVallejo(f.id);
         if (!(blob instanceof Blob) || blob.size === 0)
-            throw new Error(`La factura ${f.numero} no tiene Plan Vallejo disponible`);
-        return { blob, nombre: `plan-vallejo-${f.numero}.pdf` };
+            throw new Error(`La factura ${normalizarNumeroFactura(f.numero)} no tiene Plan Vallejo disponible`);
+        return { blob, nombre: `plan-vallejo-${normalizarNumeroFactura(f.numero)}.pdf` };
     }
 
     // Reporte de Despacho individual
@@ -149,26 +193,64 @@ async function ejecutarGeneracion(tipoDocumento, facturas) {
         const factId = parseInt(tipoDocumento.replace('reporte-despacho-', ''), 10);
         const f = facturas.find(x => x.id === factId);
         if (!f) throw new Error('Factura no encontrada para Reporte de Despacho');
-        const blob = await generarReporteDespacho(f.id);
-        return { blob, nombre: `reporte-despacho-${f.numero}.pdf` };
+        const esChile = f.tipoPedido === 'chile';
+        const blob = esChile
+            ? await generarReporteDespachoChile(f.id)
+            : await generarReporteDespacho(f.id);
+        return { blob, nombre: `reporte-despacho-${normalizarNumeroFactura(f.numero)}.pdf` };
+    }
+
+    // Documentos Chile por factura
+    const prefijosChile = [
+        'autodeclaracion-chile',
+        'planilla-aerolinea',
+        'carta-dataloger',
+        'solicitud-ica',
+        'certificado-tratamiento',
+        'tabla-hc-lacteos',
+    ];
+    const prefijoChile = prefijosChile.find(prefix => tipoDocumento.startsWith(`${prefix}-`));
+    if (prefijoChile) {
+        const factId = parseInt(tipoDocumento.replace(`${prefijoChile}-`, ''), 10);
+        const f = facturas.find(x => x.id === factId);
+        if (!f) throw new Error(`Factura no encontrada para ${prefijoChile}`);
+
+        const generadoresChile = {
+            'autodeclaracion-chile': generarAutodeclaracionChile,
+            'planilla-aerolinea': generarPlanillaDespachoChile,
+            'carta-dataloger': generarCartaDatalogerChile,
+            'solicitud-ica': generarSolicitudICAChile,
+            'certificado-tratamiento': generarCertificadoTratamientoChile,
+            'tabla-hc-lacteos': generarTablaHCLacteosChile,
+        };
+
+        const blob = await generadoresChile[prefijoChile](f.id);
+        if (!(blob instanceof Blob) || blob.size === 0)
+            throw new Error(`No se pudo generar ${prefijoChile} para la factura ${normalizarNumeroFactura(f.numero)}`);
+        return { blob, nombre: `${prefijoChile}-${normalizarNumeroFactura(f.numero)}.pdf` };
     }
 
     // Documentos compartidos (usan la planilla de la primera factura que la tenga)
     const facturaConPlanilla = facturas.find(f => f.Id_Planilla);
+    const esChile = facturas.length > 0 && facturas.every(f => f.tipoPedido === 'chile');
 
     switch (tipoDocumento) {
         case 'carta-policia':
             if (!facturaConPlanilla?.Id_Planilla)
                 throw new Error('Ninguna de las facturas seleccionadas tiene planilla asociada');
             return {
-                blob: await generarCartaResponsabilidad('carta-policia', facturaConPlanilla.Id_Planilla, true),
+                blob: esChile
+                    ? await generarCartaResponsabilidadChile('carta-policia', facturaConPlanilla.Id_Planilla, true)
+                    : await generarCartaResponsabilidad('carta-policia', facturaConPlanilla.Id_Planilla, true),
                 nombre: `carta-policia-${fecha}.pdf`,
             };
         case 'carta-aerolinea':
             if (!facturaConPlanilla?.Id_Planilla)
                 throw new Error('Ninguna de las facturas seleccionadas tiene planilla asociada');
             return {
-                blob: await generarCartaResponsabilidad('carta-aerolinea', facturaConPlanilla.Id_Planilla, true),
+                blob: esChile
+                    ? await generarCartaResponsabilidadChile('carta-aerolinea', facturaConPlanilla.Id_Planilla, true)
+                    : await generarCartaResponsabilidad('carta-aerolinea', facturaConPlanilla.Id_Planilla, true),
                 nombre: `carta-aerolinea-${fecha}.pdf`,
             };
         default:
@@ -367,7 +449,7 @@ const EnviarCorreoMultipleFacturasModal = ({
                 return blob;
             };
 
-            const numerosFacturas = facturas.map(f => f.numero).join(', ');
+            const numerosFacturas = facturas.map(f => normalizarNumeroFactura(f.numero)).join(', ');
 
             const resultado = await enviarCorreoGenerico({
                 modulo: 'facturacion',
@@ -423,6 +505,12 @@ const EnviarCorreoMultipleFacturasModal = ({
     const grupoCompartidos = documentosDisponibles.filter(d => d.grupo === 'compartidos');
     const grupoPlanVallejo = documentosDisponibles.filter(d => d.grupo === 'plan-vallejo');
     const grupoReporte = documentosDisponibles.filter(d => d.grupo === 'reporte-despacho');
+    const grupoAutodeclaracion = documentosDisponibles.filter(d => d.grupo === 'autodeclaracion-chile');
+    const grupoPlanillaAerolinea = documentosDisponibles.filter(d => d.grupo === 'planilla-aerolinea');
+    const grupoCartaDataloger = documentosDisponibles.filter(d => d.grupo === 'carta-dataloger');
+    const grupoSolicitudICA = documentosDisponibles.filter(d => d.grupo === 'solicitud-ica');
+    const grupoCertificadoTratamiento = documentosDisponibles.filter(d => d.grupo === 'certificado-tratamiento');
+    const grupoTablaHC = documentosDisponibles.filter(d => d.grupo === 'tabla-hc-lacteos');
 
     const totalSeleccionados = documentosDisponibles.filter(d => d.seleccionado).length;
     const totalGenerados = Object.keys(archivosGenerados).length;
@@ -439,7 +527,7 @@ const EnviarCorreoMultipleFacturasModal = ({
                         <h2 className="text-xl font-bold text-gray-900">📧 Envío Múltiple de Facturas</h2>
                         <p className="text-sm text-gray-500 mt-1">
                             {facturas.length} factura(s):&nbsp;
-                            <span className="font-medium text-gray-700">{facturas.map(f => f.numero).join(' · ')}</span>
+                            <span className="font-medium text-gray-700">{facturas.map(f => normalizarNumeroFactura(f.numero)).join(' · ')}</span>
                             &nbsp;—&nbsp;
                             <span className="text-blue-600">{facturas[0]?.fecha}</span>
                         </p>
@@ -548,6 +636,74 @@ const EnviarCorreoMultipleFacturasModal = ({
                                 onGenerar={generarDocumento}
                                 colorBtn="teal"
                             />
+
+                            {/* Documentos Chile por factura */}
+                            {grupoAutodeclaracion.length > 0 && (
+                                <GrupoDocumentos
+                                    titulo="🗒️ Autodeclaración Chile (por factura)"
+                                    colorTitulo="text-amber-600"
+                                    docs={grupoAutodeclaracion}
+                                    archivos={archivosGenerados}
+                                    onToggle={handleDocumentoChange}
+                                    onGenerar={generarDocumento}
+                                    colorBtn="amber"
+                                />
+                            )}
+                            {grupoPlanillaAerolinea.length > 0 && (
+                                <GrupoDocumentos
+                                    titulo="✈️ Planilla Aerolínea (por factura)"
+                                    colorTitulo="text-cyan-700"
+                                    docs={grupoPlanillaAerolinea}
+                                    archivos={archivosGenerados}
+                                    onToggle={handleDocumentoChange}
+                                    onGenerar={generarDocumento}
+                                    colorBtn="teal"
+                                />
+                            )}
+                            {grupoCartaDataloger.length > 0 && (
+                                <GrupoDocumentos
+                                    titulo="🛰️ Carta Dataloger (por factura)"
+                                    colorTitulo="text-purple-600"
+                                    docs={grupoCartaDataloger}
+                                    archivos={archivosGenerados}
+                                    onToggle={handleDocumentoChange}
+                                    onGenerar={generarDocumento}
+                                    colorBtn="purple"
+                                />
+                            )}
+                            {grupoSolicitudICA.length > 0 && (
+                                <GrupoDocumentos
+                                    titulo="🏛️ Solicitud ICA (por factura)"
+                                    colorTitulo="text-blue-600"
+                                    docs={grupoSolicitudICA}
+                                    archivos={archivosGenerados}
+                                    onToggle={handleDocumentoChange}
+                                    onGenerar={generarDocumento}
+                                    colorBtn="blue"
+                                />
+                            )}
+                            {grupoCertificadoTratamiento.length > 0 && (
+                                <GrupoDocumentos
+                                    titulo="🌡️ Certificado Tratamiento Térmico (por factura)"
+                                    colorTitulo="text-amber-600"
+                                    docs={grupoCertificadoTratamiento}
+                                    archivos={archivosGenerados}
+                                    onToggle={handleDocumentoChange}
+                                    onGenerar={generarDocumento}
+                                    colorBtn="amber"
+                                />
+                            )}
+                            {grupoTablaHC.length > 0 && (
+                                <GrupoDocumentos
+                                    titulo="🧪 Tabla HC Lácteos (por factura)"
+                                    colorTitulo="text-teal-600"
+                                    docs={grupoTablaHC}
+                                    archivos={archivosGenerados}
+                                    onToggle={handleDocumentoChange}
+                                    onGenerar={generarDocumento}
+                                    colorBtn="teal"
+                                />
+                            )}
                         </div>
 
                         {/* ── Resumen ── */}

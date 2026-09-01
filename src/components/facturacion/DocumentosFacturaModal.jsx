@@ -1,6 +1,7 @@
 // src/components/facturacion/DocumentosFacturaModal.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { generarCartaResponsabilidad, generarReporteDespacho, generarPlanVallejo } from '../../services/planillasService';
+import { generarCartaResponsabilidadChile, generarReporteDespachoChile, generarPlanVallejoChile, generarAutodeclaracionChile, generarPlanillaDespachoChile, generarCartaDatalogerChile, generarSolicitudICAChile, generarCertificadoTratamientoChile, generarTablaHCLacteosChile, obtenerPlanillaConfiguracion } from '../../services/planillasService';
 import ModalVisorPreliminar from '../ModalVisorPreliminar';
 import Swal from 'sweetalert2';
 
@@ -13,6 +14,27 @@ const DocumentosFacturaModal = ({
     const [urlPDF, setUrlPDF] = useState(null);
     const [generandoPDF, setGenerandoPDF] = useState(false);
     const [tipoDocumentoActual, setTipoDocumentoActual] = useState('');
+    const [mercanciaSeleccionada, setMercanciaSeleccionada] = useState(null);
+    const [anexosSeleccionados, setAnexosSeleccionados] = useState(null);
+
+    const esChile = factura?.tipoPedido === 'chile';
+
+    // 🔴 Cargar la configuración guardada de la planilla (mercancia/anexos seleccionados)
+    useEffect(() => {
+        if (isOpen && esChile && factura?.Id_Planilla && factura.Id_Planilla !== 0) {
+            obtenerPlanillaConfiguracion(factura.Id_Planilla, 'chile').then((resultado) => {
+                if (resultado.success) {
+                    setMercanciaSeleccionada(resultado.mercanciaSeleccionada);
+                    setAnexosSeleccionados(resultado.anexosSeleccionados);
+                } else {
+                    console.warn('No se pudo cargar la configuración de la planilla:', resultado.message);
+                }
+            });
+        } else {
+            setMercanciaSeleccionada(null);
+            setAnexosSeleccionados(null);
+        }
+    }, [isOpen, esChile, factura?.Id_Planilla]);
 
     // Función para generar y mostrar un documento
     const generarYMostrarDocumento = async (generadorFunc, tipoDocumento, parametros = []) => {
@@ -43,7 +65,7 @@ const DocumentosFacturaModal = ({
         }
     };
 
-    // Función para generar carta de responsabilidad (IGUAL QUE DashboardDocumentosDespacho.jsx)
+    // Función para generar carta de responsabilidad
     const handleGenerarCarta = async (tipoCarta) => {
         if (!factura.Id_Planilla || factura.Id_Planilla === 0) {
             Swal.fire({
@@ -55,7 +77,7 @@ const DocumentosFacturaModal = ({
             return;
         }
         
-        // SweetAlert para preguntar "con firma" o "sin firma" (IGUAL QUE DashboardDocumentosDespacho.jsx)
+        // SweetAlert para preguntar "con firma" o "sin firma"
         const result = await Swal.fire({
             title: '¿Incluir firma?',
             text: 'Selecciona si deseas incluir la firma en el documento',
@@ -68,20 +90,26 @@ const DocumentosFacturaModal = ({
             reverseButtons: true
         });
 
-        // result.isConfirmed es true cuando se confirma (Con Firma), false cuando se cancela (Sin Firma)
         const conFirma = result.isConfirmed;
+        const fnCarta = esChile ? generarCartaResponsabilidadChile : generarCartaResponsabilidad;
+        const tipoCartaParam = esChile
+            ? (tipoCarta === 'aerolinea' ? 'carta-aerolinea' : 'carta-policia')
+            : (tipoCarta === 'aerolinea' ? 'carta-aerolinea' : 'carta-policia');
         
         await generarYMostrarDocumento(
-            generarCartaResponsabilidad,
+            fnCarta,
             `Carta de ${tipoCarta === 'aerolinea' ? 'Aerolínea' : 'Policía'}`,
-            [tipoCarta === 'aerolinea' ? 'carta-aerolinea' : 'carta-policia', factura.Id_Planilla, conFirma]
+            esChile
+                ? [tipoCartaParam, factura.Id_Planilla, conFirma, mercanciaSeleccionada]
+                : [tipoCartaParam, factura.Id_Planilla, conFirma]
         );
     };
 
     // Función para generar reporte de despacho
     const handleGenerarReporteDespacho = async () => {
+        const fnReporte = esChile ? generarReporteDespachoChile : generarReporteDespacho;
         await generarYMostrarDocumento(
-            generarReporteDespacho,
+            fnReporte,
             'Reporte de Despacho',
             [factura.id]
         );
@@ -89,9 +117,64 @@ const DocumentosFacturaModal = ({
 
     // Función para generar plan vallejo
     const handleGenerarPlanVallejo = async () => {
+        const fnVallejo = esChile ? generarPlanVallejoChile : generarPlanVallejo;
         await generarYMostrarDocumento(
-            generarPlanVallejo,
+            fnVallejo,
             'Plan Vallejo',
+            [factura.id]
+        );
+    };
+
+    // Función para generar autodeclaración Chile
+    const handleGenerarAutodeclaracion = async () => {
+        await generarYMostrarDocumento(
+            generarAutodeclaracionChile,
+            'Autodeclaración Chile',
+            [factura.id, anexosSeleccionados]
+        );
+    };
+
+    // Función para generar planilla de despacho Chile
+    const handleGenerarPlanillaDespacho = async () => {
+        await generarYMostrarDocumento(
+            generarPlanillaDespachoChile,
+            'Planilla Aerolinea Chile',
+            [factura.id]
+        );
+    };
+
+    // Función para generar carta dataloger Chile
+    const handleGenerarCartaDataloger = async () => {
+        await generarYMostrarDocumento(
+            generarCartaDatalogerChile,
+            'Carta Dataloger Chile',
+            [factura.id]
+        );
+    };
+
+    // Función para generar solicitud ICA Chile
+    const handleGenerarSolicitudICA = async () => {
+        await generarYMostrarDocumento(
+            generarSolicitudICAChile,
+            'Solicitud ICA Chile',
+            [factura.id]
+        );
+    };
+
+    // Función para generar certificado tratamiento térmico Chile
+    const handleGenerarCertificadoTratamiento = async () => {
+        await generarYMostrarDocumento(
+            generarCertificadoTratamientoChile,
+            'Certificado Tratamiento Térmico Chile',
+            [factura.id]
+        );
+    };
+
+    // Función para generar tabla HC lácteos Chile
+    const handleGenerarTablaHC = async () => {
+        await generarYMostrarDocumento(
+            generarTablaHCLacteosChile,
+            'Tabla HC Lácteos Chile',
             [factura.id]
         );
     };
@@ -140,7 +223,7 @@ const DocumentosFacturaModal = ({
                             </div>
                             <div className="mt-2">
                                 <p className="text-sm text-gray-600">
-                                    Factura: <span className="font-semibold">{factura.numero}</span>
+                                    Factura: <span className="font-semibold">{factura.numero.replace(/^CHI-FEX-/, 'FEX-')}</span>
                                 </p>
                                 <p className="text-sm text-gray-600">
                                     Cliente: <span className="font-semibold">{factura.cliente}</span>
@@ -244,6 +327,112 @@ const DocumentosFacturaModal = ({
                                                 </>
                                             )}
                                         </button>
+                                        {esChile && (
+                                            <>
+                                            <button
+                                                onClick={handleGenerarAutodeclaracion}
+                                                disabled={generandoPDF && tipoDocumentoActual.includes('Autodeclaración')}
+                                                className="flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 px-4 py-3 rounded-lg border border-amber-200 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generandoPDF && tipoDocumentoActual.includes('Autodeclaración') ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-600"></div>
+                                                        Generando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-lg">🇨🇱</span>
+                                                        <span className="font-medium">Autodeclaración Chile</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={handleGenerarPlanillaDespacho}
+                                                disabled={generandoPDF && tipoDocumentoActual.includes('Planilla Aerolinea')}
+                                                className="flex items-center justify-center gap-2 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-4 py-3 rounded-lg border border-cyan-200 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generandoPDF && tipoDocumentoActual.includes('Planilla Aerolinea') ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-cyan-600"></div>
+                                                        Generando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-lg">📋</span>
+                                                        <span className="font-medium">Planilla Aerolinea</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={handleGenerarCartaDataloger}
+                                                disabled={generandoPDF && tipoDocumentoActual.includes('Carta Dataloger')}
+                                                className="flex items-center justify-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-700 px-4 py-3 rounded-lg border border-rose-200 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generandoPDF && tipoDocumentoActual.includes('Carta Dataloger') ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-600"></div>
+                                                        Generando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-lg">🌡️</span>
+                                                        <span className="font-medium">Carta Dataloger</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={handleGenerarSolicitudICA}
+                                                disabled={generandoPDF && tipoDocumentoActual.includes('Solicitud ICA')}
+                                                className="flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-3 rounded-lg border border-indigo-200 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generandoPDF && tipoDocumentoActual.includes('Solicitud ICA') ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                                                        Generando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-lg">📄</span>
+                                                        <span className="font-medium">Solicitud ICA</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={handleGenerarCertificadoTratamiento}
+                                                disabled={generandoPDF && tipoDocumentoActual.includes('Tratamiento Térmico')}
+                                                className="flex items-center justify-center gap-2 bg-teal-50 hover:bg-teal-100 text-teal-700 px-4 py-3 rounded-lg border border-teal-200 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generandoPDF && tipoDocumentoActual.includes('Tratamiento Térmico') ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-600"></div>
+                                                        Generando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-lg">🧪</span>
+                                                        <span className="font-medium">Certificado Tratamiento Térmico</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={handleGenerarTablaHC}
+                                                disabled={generandoPDF && tipoDocumentoActual.includes('Tabla HC')}
+                                                className="flex items-center justify-center gap-2 bg-violet-50 hover:bg-violet-100 text-violet-700 px-4 py-3 rounded-lg border border-violet-200 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generandoPDF && tipoDocumentoActual.includes('Tabla HC') ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-violet-600"></div>
+                                                        Generando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-lg">🏷️</span>
+                                                        <span className="font-medium">Tabla HC Lácteos</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 

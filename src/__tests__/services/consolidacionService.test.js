@@ -2,8 +2,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   generarExcelConsolidacion,
+  generarExcelConsolidacionChile,
+  generarExcelConsolidacionConsolidado,
   generarReporteProduccion,
+  generarReporteProduccionChile,
+  generarReporteProduccionConsolidado,
   generarReporteEmpaque,
+  obtenerCostosTransporte,
+  obtenerCostosAereo,
 } from "../../services/consolidacionService";
 
 // Mock de las APIs del navegador para descarga de archivos
@@ -180,5 +186,53 @@ describe("generarReporteEmpaque", () => {
         tipoFecha: "salida",
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("servicios Chile y Consolidado", () => {
+  it("generarReporteProduccionChile retorna un Blob", async () => {
+    const mockBlob = new Blob(["chile pdf"]);
+    global.fetch.mockResolvedValueOnce({ ok: true, blob: async () => mockBlob });
+    const result = await generarReporteProduccionChile({ fechaDesde: "2026-01-01", fechaHasta: "2026-01-31", tipoFecha: "salida" });
+    expect(result).toBeInstanceOf(Blob);
+  });
+
+  it("generarReporteProduccionConsolidado retorna un Blob", async () => {
+    const mockBlob = new Blob(["total pdf"]);
+    global.fetch.mockResolvedValueOnce({ ok: true, blob: async () => mockBlob });
+    const result = await generarReporteProduccionConsolidado({ fechaDesde: "2026-01-01", fechaHasta: "2026-01-31", tipoFecha: "salida" });
+    expect(result).toBeInstanceOf(Blob);
+  });
+
+  it("generarExcelConsolidacionChile descarga el archivo", async () => {
+    mockFetchBlob();
+    const result = await generarExcelConsolidacionChile({ fechaDesde: "2026-01-01", fechaHasta: "2026-01-31", tipoFecha: "salida" });
+    expect(result.success).toBe(true);
+  });
+
+  it("generarExcelConsolidacionConsolidado descarga el archivo", async () => {
+    mockFetchBlob();
+    const result = await generarExcelConsolidacionConsolidado({ fechaDesde: "2026-01-01", fechaHasta: "2026-01-31", tipoFecha: "salida" });
+    expect(result.success).toBe(true);
+  });
+
+  it("obtenerCostosTransporte envía tipoPedido", async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, costos: [] }),
+    });
+    await obtenerCostosTransporte({ fechaDesde: "2026-01-01", fechaHasta: "2026-01-31" }, "chile");
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.tipoPedido).toBe("chile");
+  });
+
+  it("obtenerCostosAereo envía tipoPedido", async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, costos: [] }),
+    });
+    await obtenerCostosAereo({ fechaDesde: "2026-01-01", fechaHasta: "2026-01-31" }, "chile");
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.tipoPedido).toBe("chile");
   });
 });

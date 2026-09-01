@@ -233,7 +233,7 @@ describe("imprimirPedidoChile", () => {
 
   it("hace POST a ApiImprimirListaEmpaqueChile.php con idPedido", async () => {
     mockFetchBlob();
-    await imprimirPedidoChile(7);
+    await imprimirPedidoChile(7, "listaempaque");
     const call = global.fetch.mock.calls[0];
     expect(call[0]).toContain("ApiImprimirListaEmpaqueChile.php");
     const body = JSON.parse(call[1].body);

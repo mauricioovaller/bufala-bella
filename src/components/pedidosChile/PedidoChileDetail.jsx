@@ -1,376 +1,546 @@
-// src/components/pedidosChile/PedidoChileDetail.jsx
-import React from "react";
+//src/components/pedidos/PedidoDetail.jsx
+import React, { useEffect, useState } from "react";
+import ModalVisorProduccionChile from "./ModalVisorProduccionChile";
+import { getPedidoProduccion } from "../../services/produccion/produccionService";
 
-// ── Fórmulas de cálculo ───────────────────────────────────────────────────────
-function calcularItem(item) {
-    const cantCajas = parseFloat(item.cantidadCajas) || 0;
-    const envase = parseFloat(item.envaseInternoxCaja) || 0;
-    const pesoNetoGr = parseFloat(item.pesoNetoGr) || 0;
-    const pesoEscurridoKg = parseFloat(item.pesoEscurridoKg) || 0;
-    const factorPesoBruto = parseFloat(item.factorPesoBruto) || 0;
-    const valorxKilo = parseFloat(item.valorxKilo) || 0;
+// Mapeo de embalajes por defecto según el Id_Producto
+const embalajesPorDefecto = {
+  "36": "6",    // Producto: Mozzarella Standard Moisture 250g (Caprese) → Embalaje: Caja 12 unidades
+  "7": "2",    // Producto: Burrata Buf Food Service Trays 1000g → Embalaje: Caja 4 unidades  
+  "11": "2",   // Producto: Ovoline Buf Food Service Trays 1000g  → Embalaje: Caja 4 unidades
+  // Seguir agregando los que se necesiten...
+};
 
-    const unidadesSolicitadas = cantCajas * envase;
-    const pesoEscurridoxCaja = pesoEscurridoKg * envase;
-    const pesoEscurridoTotal = pesoEscurridoxCaja * cantCajas;
-    const pesoNetoTotal = (pesoNetoGr / 1000) * unidadesSolicitadas;
-    const pesoBrutoTotal = pesoNetoTotal * factorPesoBruto;
-    const valorTotal = pesoEscurridoTotal * valorxKilo;
-
-    return {
-        ...item,
-        unidadesSolicitadas: +unidadesSolicitadas.toFixed(4),
-        pesoEscurridoxCaja: +pesoEscurridoxCaja.toFixed(4),
-        pesoEscurridoTotal: +pesoEscurridoTotal.toFixed(4),
-        pesoNetoTotal: +pesoNetoTotal.toFixed(4),
-        pesoBrutoTotal: +pesoBrutoTotal.toFixed(4),
-        valorTotal: +valorTotal.toFixed(4),
-    };
+function formatCurrency(v) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 2,
+  }).format(v || 0);
 }
 
-
-
-// ── Componente ────────────────────────────────────────────────────────────────
-export default function PedidoChileDetail({
-    items,
-    onChangeItems,
-    productosChile = [],
+export default function PedidoDetail({
+  items,
+  onChangeItems,
+  productos = [],
+  embalajes = [],
+  itemRefsRef,
+  idPedido,
+  tipoPedido = "normal",
 }) {
-    // ── Agregar / eliminar ────────────────────────────────────────────────────
-    function addItem() {
-        const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        onChangeItems([
-            ...items,
-            {
-                id,
-                productoId: "", descripcion: "", codigoCliente: "", codigoSiesa: "",
-                lote: "", fechaElaboracion: "", fechaVencimiento: "",
-                pesoNetoGr: 0, cantidadCajas: 0, envaseInternoxCaja: 0,
-                pesoEscurridoKg: 0, factorPesoBruto: 0, valorxKilo: 0,
-                unidadesSolicitadas: 0, pesoEscurridoxCaja: 0, pesoEscurridoTotal: 0,
-                pesoNetoTotal: 0, pesoBrutoTotal: 0, valorTotal: 0,
-            },
-        ]);
+  // Estado para modal de producción
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [productionData, setProductionData] = useState(null);
+  const [loadingProduction, setLoadingProduction] = useState(false);
+
+  // Función para obtener datos de producción
+  const fetchProductionData = async (detId) => {
+    try {
+      setLoadingProduction(true);
+      const result = await getPedidoProduccion({
+        idPedido: idPedido,
+        tipo: tipoPedido,
+      });
+
+      if (result.success && result.pedido.items) {
+        const item = result.pedido.items.find((i) => i.idDet === detId);
+        if (item) {
+          if (tipoPedido === "chile") {
+            setProductionData({
+              lote: item.lote || null,
+              fechaElaboracion: item.fechaElaboracion || "",
+              fechaVencimiento: item.fechaVencimiento || "",
+            });
+          } else {
+            setProductionData({
+              responsable: item.responsable || "No asignado",
+              lotes: item.lotes,
+              cantidades: item.cantidades,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching production data:", error);
+    } finally {
+      setLoadingProduction(false);
     }
+  };
 
-    function removeItem(index) {
-        const copy = items.slice();
-        copy.splice(index, 1);
-        onChangeItems(copy);
+  // Función para abrir el modal
+  const openProductionModal = (item) => {
+    setSelectedItem(item);
+    // Usar el id del item que viene en la estructura del pedido
+    // Si no existe, usaremos el índice del item
+    const detId = item.detId || item.id;
+    fetchProductionData(detId);
+    setModalOpen(true);
+  };
+
+  // Efecto para recalcular campos cuando cambian items, productos o embalajes
+  useEffect(() => {
+    const recalculatedItems = items.map(item => {
+      // Convertir campos a string para consistencia
+      const productoStr = String(item.producto || "");
+      const embalajeStr = String(item.embalaje || "");
+
+      // Si ya tenemos todos los datos calculados, no recalcular
+      if (item.pesoNeto !== undefined && item.pesoNeto !== 0 &&
+        item.pesoBruto !== undefined && item.pesoBruto !== 0) {
+        return item; // Mantener valores existentes
+      }
+
+      // Buscar información actualizada del producto
+      const productoInfo = productos.find(
+        p => String(p.Id_Producto) === String(item.producto)
+      );
+
+      // Buscar información actualizada del embalaje
+      const embalajeInfo = embalajes.find(
+        e => String(e.Id_Embalaje) === String(item.embalaje)
+      );
+
+      const cantidad = item.cantidad || 0;
+      const precio = item.precio || 0;
+      const pesoGr = productoInfo?.PesoGr || item.pesoGr || 0;
+      const factorPesoBruto = productoInfo?.FactorPesoBruto || item.factorPesoBruto || 0;
+      const cantidadEmbalaje = embalajeInfo?.Cantidad || item.cantidadEmbalaje || 0;
+
+      // Recalcular
+      const pesoNeto = ((cantidad * cantidadEmbalaje * pesoGr) / 1000) || 0;
+      const pesoBruto = ((cantidad * cantidadEmbalaje * pesoGr * factorPesoBruto) / 1000) || 0;
+      const subtotal = pesoNeto * precio;
+
+      return {
+        ...item,
+        producto: productoStr,
+        embalaje: embalajeStr,
+        pesoGr,
+        factorPesoBruto,
+        cantidadEmbalaje,
+        pesoNeto,
+        pesoBruto,
+        subtotal,
+      };
+    });
+
+    // Solo actualizar si hubo cambios
+    const needsUpdate = recalculatedItems.some((newItem, index) => {
+      const oldItem = items[index];
+      return newItem.pesoNeto !== oldItem.pesoNeto ||
+        newItem.pesoBruto !== oldItem.pesoBruto ||
+        newItem.subtotal !== oldItem.subtotal;
+    });
+
+    if (needsUpdate) {
+      onChangeItems(recalculatedItems);
     }
+  }, [items, productos, embalajes, onChangeItems]);
 
-    function updateItem(index, field, value) {
-        const copy = items.map((it) => ({ ...it }));
-        const item = copy[index];
-        if (!item) return;
+  function addItem() {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newItem = {
+      id,
+      producto: "",
+      descripcion: "",
+      embalaje: "",
+      cantidad: 1,
+      precio: 0,
+      pesoNeto: 0,
+      pesoBruto: 0,
+      subtotal: 0,
+      pesoGr: 0,
+      cantidadEmbalaje: 0,
+    };
+    onChangeItems([...items, newItem]);
+  }
 
-        if (field === "productoId") {
-            const prod = productosChile.find(
-                (p) => String(p.Id_ProductoChile) === String(value)
-            );
-            if (prod) {
-                item.productoId = String(prod.Id_ProductoChile);
-                item.descripcion = prod.DescripProducto || "";
-                item.codigoCliente = prod.CodigoCliente || "";
-                item.codigoSiesa = prod.CodigoSiesa || "";
-                item.pesoNetoGr = parseFloat(prod.PesoNetoGr) || 0;
-                item.pesoEscurridoKg = parseFloat(prod.PesoEscurridoKg) || 0;
-                item.envaseInternoxCaja = parseInt(prod.EnvaseInternoxCaja) || 0;
-                item.factorPesoBruto = parseFloat(prod.FactorPesoBruto) || 0;
-                item.valorxKilo = parseFloat(prod.PrecioXKilo) || 0;
-            } else {
-                item.productoId = ""; item.descripcion = ""; item.codigoCliente = "";
-                item.codigoSiesa = ""; item.pesoNetoGr = 0; item.pesoEscurridoKg = 0;
-                item.envaseInternoxCaja = 0; item.factorPesoBruto = 0; item.valorxKilo = 0;
-            }
+  function removeItem(index) {
+    const copy = items.slice();
+    copy.splice(index, 1);
+    onChangeItems(copy);
+  }
+
+  function updateItem(index, field, value) {
+    console.log("updateItem", { index, field, value });
+    const copy = items.map((it) => ({ ...it }));
+    const item = copy[index];
+    if (!item) return;
+
+    if (field === "producto") {
+      const prod = productos.find((p) => String(p.Id_Producto) === String(value));
+      if (prod) {
+        item.producto = prod.Id_Producto;
+        item.descripcion = prod.DescripFactura || "";
+        item.pesoGr = prod.PesoGr || 0;
+        item.factorPesoBruto = prod.FactorPesoBruto || 0;
+        // 👇 NUEVO: Cargar automáticamente el precio de venta del producto
+        item.precio = prod.PrecioVenta || 0;
+
+        // Aplicar embalaje por defecto si existe para este producto
+        const embalajePorDefecto = embalajesPorDefecto[String(prod.Id_Producto)];
+        if (embalajePorDefecto) {
+          const emb = embalajes.find((e) => String(e.Id_Embalaje) === String(embalajePorDefecto));
+          if (emb) {
+            item.embalaje = emb.Id_Embalaje;
+            item.cantidadEmbalaje = emb.Cantidad || 0;
+          }
         } else {
-            item[field] = value;
+          // Si no hay embalaje por defecto, limpiar el campo
+          item.embalaje = "";
+          item.cantidadEmbalaje = 0;
         }
 
-        copy[index] = calcularItem(item);
-        onChangeItems(copy);
+      } else {
+        item.producto = "";
+        item.descripcion = "";
+        item.pesoGr = 0;
+        item.factorPesoBruto = 0;
+        item.precio = 0; // 👈 Limpiar precio si no hay producto
+        item.embalaje = ""; // 👈 También limpiar embalaje aquí
+        item.cantidadEmbalaje = 0;
+      }
+    } else if (field === "embalaje") {
+      const emb = embalajes.find((e) => String(e.Id_Embalaje) === String(value));
+      if (emb) {
+        item.embalaje = emb.Id_Embalaje;
+        item.cantidadEmbalaje = emb.Cantidad || 0;
+      } else {
+        item.embalaje = "";
+        item.cantidadEmbalaje = 0;
+      }
+    } else if (["cantidad", "precio", "pesoNeto", "pesoBruto"].includes(field)) {
+      item[field] = Number(value || 0);
+    } else {
+      item[field] = value;
     }
 
-    // ── Totales ───────────────────────────────────────────────────────────────
-    const totalCajas = items.reduce((s, it) => s + (parseFloat(it.cantidadCajas) || 0), 0);
-    const totalPesoNeto = items.reduce((s, it) => s + (parseFloat(it.pesoNetoTotal) || 0), 0);
-    const totalPesoBruto = items.reduce((s, it) => s + (parseFloat(it.pesoBrutoTotal) || 0), 0);
-    const totalValor = items.reduce((s, it) => s + (parseFloat(it.valorTotal) || 0), 0);
+    // Calcular subtotal y peso
+    // 👇 IMPORTANTE: Solo recalcular si NO estamos editando manualmente los pesos
+    if (field !== "pesoNeto" && field !== "pesoBruto") {
+      // Calcular subtotal y peso automáticamente
+      item.pesoNeto =
+        ((item.cantidad || 0) * (item.cantidadEmbalaje || 0) * (item.pesoGr || 0)) / 1000;
+      item.pesoBruto =
+        ((item.cantidad || 0) * (item.cantidadEmbalaje || 0) * (item.pesoGr || 0) * (item.factorPesoBruto || 0)) / 1000;
+    }
+    item.subtotal = item.pesoNeto * (item.precio || 0);
 
-    const fmt = (n, dec = 4) =>
-        n !== undefined && n !== null && n !== "" ? parseFloat(n).toFixed(dec) : "0";
+    onChangeItems(copy);
+  }
 
-    return (
-        <section className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
-                <h3 className="text-xl font-semibold text-slate-700">Detalle del Pedido</h3>
-                <button
-                    type="button"
-                    onClick={addItem}
-                    className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 transition font-medium text-sm sm:text-base"
+  const totalCajas = items.reduce((s, it) => s + Number(it.cantidad || 0), 0);
+  const totalValor = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
+  const totalPesoNeto = items.reduce((s, it) => s + Number(it.pesoNeto || 0), 0);
+  const totalPesoBruto = items.reduce((s, it) => s + Number(it.pesoBruto || 0), 0);
+
+  return (
+    <section className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
+        <h3 className="text-xl font-semibold text-slate-700">Detalle del Pedido</h3>
+        <button
+          type="button"
+          onClick={addItem}
+          className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 transition font-medium text-sm sm:text-base"
+        >
+          + Agregar Producto
+        </button>
+      </div>
+
+      {/* Totales - NUEVO DISEÑO */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
+        <div className="text-center">
+          <div className="text-xs text-gray-600 font-medium">Total Cajas</div>
+          <div className="text-lg font-bold text-gray-900">{totalCajas}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs text-gray-600 font-medium">Peso Escurrido (Kg)</div>
+          <div className="text-lg font-bold text-gray-900">{totalPesoNeto.toFixed(2)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs text-gray-600 font-medium">Peso Bruto (Kg)</div>
+          <div className="text-lg font-bold text-gray-900">{totalPesoBruto.toFixed(2)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs text-gray-600 font-medium">Total Valor</div>
+          <div className="text-lg font-bold text-green-600">{formatCurrency(totalValor)}</div>
+        </div>
+      </div>
+
+      {/* Tabla Desktop - CON SCROLL VERTICAL */}
+      <div className="hidden md:block border rounded-lg overflow-hidden">
+        <div className="overflow-y-auto max-h-96"> {/* 👈 SCROLL VERTICAL AQUÍ */}
+          <table className="min-w-full text-xs">
+            <thead className="bg-gray-100 sticky top-0 z-10">
+              <tr className="text-left text-gray-700">
+                <th className="p-2 border-b font-semibold">Producto</th>
+                <th className="p-2 border-b font-semibold">Descripción</th>
+                <th className="p-2 border-b font-semibold">Embalaje</th>
+                <th className="p-2 border-b font-semibold w-20 text-center">Cajas</th>
+                <th className="p-2 border-b font-semibold w-28 text-right">Precio Unit. Kg.</th>
+                <th className="p-2 border-b font-semibold w-24 text-right">Peso Escurrido Kg.</th>
+                <th className="p-2 border-b font-semibold w-24 text-right">Peso Bruto Kg.</th>
+                <th className="p-2 border-b font-semibold w-32 text-right">Valor Registro</th>
+                <th className="p-2 border-b font-semibold w-20 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => (
+                <tr key={it.id} className="border-b hover:bg-gray-50">
+                  {/* Producto */}
+                  <td className="p-2">
+                    <select
+                      value={it.producto}
+                      onChange={(e) => updateItem(idx, "producto", e.target.value)}
+                      ref={(el) => {
+                        if (itemRefsRef) itemRefsRef.current[idx] = el;
+                      }}
+                      className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleccione...</option>
+                      {productos.map((p) => (
+                        <option key={p.Id_Producto} value={p.Id_Producto}>
+                          {p.DescripProducto} - {p.Codigo_Siesa}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  {/* Descripción */}
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={it.descripcion}
+                      onChange={(e) => updateItem(idx, "descripcion", e.target.value)}
+                      className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+
+                  {/* Embalaje */}
+                  <td className="p-2">
+                    <select
+                      value={it.embalaje}
+                      onChange={(e) => updateItem(idx, "embalaje", e.target.value)}
+                      className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Seleccione...</option>
+                      {embalajes.map((e) => (
+                        <option key={e.Id_Embalaje} value={e.Id_Embalaje}>
+                          {e.Descripcion} ({e.Cantidad})
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  {/* Cantidad */}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      value={it.cantidad}
+                      onChange={(e) => updateItem(idx, "cantidad", e.target.value)}
+                      className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+
+                  {/* Precio */}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      value={it.precio}
+                      onChange={(e) => updateItem(idx, "precio", e.target.value)}
+                      className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+
+                  {/* Peso Neto */}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={it.pesoNeto || 0}
+                      onChange={(e) => updateItem(idx, "pesoNeto", parseFloat(e.target.value) || 0)}
+                      className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+
+                  {/* Peso Bruto */}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={it.pesoBruto || 0}
+                      onChange={(e) => updateItem(idx, "pesoBruto", parseFloat(e.target.value) || 0)}
+                      className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+
+                  {/* Subtotal */}
+                  <td className="p-2 text-right text-green-600 font-medium">
+                    {formatCurrency(it.subtotal.toFixed(2))}
+                  </td>
+
+                   {/* Acciones */}
+                   <td className="p-2 text-center">
+                     <div className="flex justify-center gap-1">
+                       <button
+                         type="button"
+                         onClick={() => openProductionModal(it)}
+                         className="text-blue-600 hover:text-blue-800 text-xs font-medium bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition"
+                         title="Ver información de producción"
+                       >
+                         👁️
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => removeItem(idx)}
+                         className="text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition"
+                       >
+                         Eliminar
+                       </button>
+                     </div>
+                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {items.length === 0 && (
+          <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-gray-50 m-2">
+            <div className="text-gray-400 mb-2">
+              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m8-8V4a1 1 0 00-1-1h-2a1 1 0 00-1 1v1M9 7h6" />
+              </svg>
+            </div>
+            <p className="text-sm">No hay productos en el detalle</p>
+            <p className="text-xs mt-1">Haga clic en "Agregar Producto" para comenzar</p>
+          </div>
+        )}
+      </div>
+
+      {/* Vista Mobile - MEJORADA */}
+      <div className="md:hidden space-y-3">
+        {items.map((it, idx) => (
+          <div key={it.id} className="border rounded-lg p-4 shadow-sm bg-white">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Producto</label>
+                <select
+                  value={it.producto}
+                  onChange={(e) => updateItem(idx, "producto", e.target.value)}
+                  className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 >
-                    + Agregar Producto
-                </button>
+                  <option value="">Seleccione...</option>
+                  {productos.map((p) => (
+                    <option key={p.Id_Producto} value={p.Id_Producto}>
+                      {p.DescripProducto} - {p.Codigo_Siesa}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Descripción</label>
+                <input
+                  type="text"
+                  value={it.descripcion}
+                  className="border rounded p-2 w-full text-sm bg-gray-50"
+                  readOnly
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Embalaje</label>
+                <select
+                  value={it.embalaje}
+                  onChange={(e) => updateItem(idx, "embalaje", e.target.value)}
+                  className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Seleccione...</option>
+                  {embalajes.map((e) => (
+                    <option key={e.Id_Embalaje} value={e.Id_Embalaje}>
+                      {e.Descripcion} ({e.Cantidad})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Cajas</label>
+                  <input
+                    type="number"
+                    value={it.cantidad}
+                    onChange={(e) => updateItem(idx, "cantidad", e.target.value)}
+                    className="border rounded p-2 w-full text-sm text-center focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Precio Unit. Kg.</label>
+                  <input
+                    type="number"
+                    value={it.precio}
+                    onChange={(e) => updateItem(idx, "precio", e.target.value)}
+                    className="border rounded p-2 w-full text-sm text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-xs bg-gray-50 p-2 rounded">
+                <div className="text-center">
+                  <div className="text-gray-600">Peso Escurrido</div>
+                  <div className="font-medium">{it.pesoNeto.toFixed(2)} Kg</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-gray-600">Peso Bruto</div>
+                  <div className="font-medium">{it.pesoBruto.toFixed(2)} Kg</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-gray-600">Subtotal</div>
+                  <div className="font-medium text-green-600">{formatCurrency(it.subtotal)}</div>
+                </div>
+              </div>
             </div>
 
-            {/* ── Barra de totales ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
-                <div className="text-center">
-                    <div className="text-xs text-gray-600 font-medium">Total Cajas</div>
-                    <div className="text-lg font-bold text-gray-900">{totalCajas}</div>
-                </div>
-                <div className="text-center">
-                    <div className="text-xs text-gray-600 font-medium">Peso Neto (Kg)</div>
-                    <div className="text-lg font-bold text-gray-900">{totalPesoNeto.toFixed(4)}</div>
-                </div>
-                <div className="text-center">
-                    <div className="text-xs text-gray-600 font-medium">Peso Bruto (Kg)</div>
-                    <div className="text-lg font-bold text-gray-900">{totalPesoBruto.toFixed(4)}</div>
-                </div>
-                <div className="text-center">
-                    <div className="text-xs text-gray-600 font-medium">Valor Total (USD)</div>
-                    <div className="text-lg font-bold text-green-600">$ {totalValor.toFixed(4)}</div>
-                </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => openProductionModal(it)}
+                className="flex-1 text-blue-600 hover:text-blue-800 text-xs font-medium bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded transition"
+                title="Ver información de producción"
+              >
+                👁️ Ver Producción
+              </button>
+              <button
+                type="button"
+                onClick={() => removeItem(idx)}
+                className="flex-1 text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-3 py-2 rounded transition"
+              >
+                Eliminar Producto
+              </button>
             </div>
+          </div>
+        ))}
 
-            {/* ── Tabla Desktop ── */}
-            <div className="hidden md:block border rounded-lg overflow-hidden">
-                <div className="overflow-x-auto overflow-y-auto max-h-96">
-                    <table className="min-w-full text-xs">
-                        <thead className="bg-gray-100 sticky top-0 z-10">
-                            <tr className="text-left text-gray-700">
-                                <th className="p-2 border-b font-semibold">Producto</th>
-                                <th className="p-2 border-b font-semibold">Descripción</th>
-                                <th className="p-2 border-b font-semibold">Cód. Cliente</th>
-                                <th className="p-2 border-b font-semibold">Cód. SIESA</th>
-                                <th className="p-2 border-b font-semibold">Lote</th>
-                                <th className="p-2 border-b font-semibold">Fecha Elab.</th>
-                                <th className="p-2 border-b font-semibold">Fecha Venc.</th>
-                                <th className="p-2 border-b font-semibold w-20 text-center">Cant. Cajas</th>
-                                <th className="p-2 border-b font-semibold w-16 text-center">Env./Caja</th>
-                                <th className="p-2 border-b font-semibold w-24 text-right">Valor/Kilo</th>
-                                <th className="p-2 border-b font-semibold w-20 text-right">Unid. Sol.</th>
-                                <th className="p-2 border-b font-semibold w-28 text-right">Peso Esc./Un (Kg)</th>
-                                <th className="p-2 border-b font-semibold w-24 text-right">Peso Esc./Caja</th>
-                                <th className="p-2 border-b font-semibold w-24 text-right">Peso Esc. Total</th>
-                                <th className="p-2 border-b font-semibold w-24 text-right">Peso Neto (Kg)</th>
-                                <th className="p-2 border-b font-semibold w-24 text-right">Peso Bruto (Kg)</th>
-                                <th className="p-2 border-b font-semibold w-28 text-right">Valor Total (USD)</th>
-                                <th className="p-2 border-b font-semibold w-20 text-center">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.map((it, idx) => (
-                                <tr key={it.id} className="border-b hover:bg-gray-50">
-                                    <td className="p-2">
-                                        <select
-                                            value={it.productoId || ""}
-                                            onChange={(e) => updateItem(idx, "productoId", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-[160px]"
-                                        >
-                                            <option value="">Seleccione...</option>
-                                            {productosChile.map((p) => (
-                                                <option key={p.Id_ProductoChile} value={p.Id_ProductoChile}>
-                                                    {p.DescripProducto}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </td>
-                                    <td className="p-2">
-                                        <input
-                                            type="text"
-                                            value={it.descripcion || ""}
-                                            onChange={(e) => updateItem(idx, "descripcion", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-[140px]"
-                                        />
-                                    </td>
-                                    <td className="p-2 text-gray-500 whitespace-nowrap">{it.codigoCliente || "—"}</td>
-                                    <td className="p-2 text-gray-500 whitespace-nowrap">{it.codigoSiesa || "—"}</td>
-                                    <td className="p-2">
-                                        <input
-                                            value={it.lote || ""}
-                                            onChange={(e) => updateItem(idx, "lote", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-[70px]"
-                                            placeholder="Lote"
-                                        />
-                                    </td>
-                                    <td className="p-2">
-                                        <input
-                                            type="date"
-                                            value={it.fechaElaboracion || ""}
-                                            onChange={(e) => updateItem(idx, "fechaElaboracion", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </td>
-                                    <td className="p-2">
-                                        <input
-                                            type="date"
-                                            value={it.fechaVencimiento || ""}
-                                            onChange={(e) => updateItem(idx, "fechaVencimiento", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </td>
-                                    <td className="p-2">
-                                        <input
-                                            type="number" min="0" step="0.5"
-                                            value={it.cantidadCajas || ""}
-                                            onChange={(e) => updateItem(idx, "cantidadCajas", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </td>
-                                    <td className="p-2">
-                                        <input
-                                            type="number" min="0" step="1"
-                                            value={it.envaseInternoxCaja || ""}
-                                            onChange={(e) => updateItem(idx, "envaseInternoxCaja", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </td>
-                                    <td className="p-2">
-                                        <input
-                                            type="number" min="0" step="0.0001"
-                                            value={it.valorxKilo || ""}
-                                            onChange={(e) => updateItem(idx, "valorxKilo", e.target.value)}
-                                            className="border rounded p-1 w-full text-xs text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </td>
-                                    <td className="p-2 text-right text-gray-600">{fmt(it.unidadesSolicitadas, 0)}</td>
-                                    <td className="p-2 text-right text-gray-600">{fmt(it.pesoEscurridoKg, 3)}</td>
-                                    <td className="p-2 text-right text-gray-600">{fmt(it.pesoEscurridoxCaja, 4)}</td>
-                                    <td className="p-2 text-right text-gray-600">{fmt(it.pesoEscurridoTotal, 4)}</td>
-                                    <td className="p-2 text-right text-gray-600">{fmt(it.pesoNetoTotal, 4)}</td>
-                                    <td className="p-2 text-right text-gray-600">{fmt(it.pesoBrutoTotal, 4)}</td>
-                                    <td className="p-2 text-right text-green-600 font-medium">$ {fmt(it.valorTotal, 4)}</td>
-                                    <td className="p-2 text-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => removeItem(idx)}
-                                            className="text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition"
-                                        >
-                                            Eliminar
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+        {items.length === 0 && (
+          <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-gray-50">
+            <p>No hay productos en el detalle</p>
+          </div>
+        )}
+      </div>
 
-                {items.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-gray-50 m-2">
-                        <div className="text-gray-400 mb-2">
-                            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m8-8V4a1 1 0 00-1-1h-2a1 1 0 00-1 1v1M9 7h6" />
-                            </svg>
-                        </div>
-                        <p className="text-sm">No hay productos en el detalle</p>
-                        <p className="text-xs mt-1">Haga clic en "+ Agregar Producto" para comenzar</p>
-                    </div>
-                )}
-            </div>
-
-            {/* ── Vista Mobile ── */}
-            <div className="md:hidden space-y-3">
-                {items.map((it, idx) => (
-                    <div key={it.id} className="border rounded-lg p-4 shadow-sm bg-white">
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Producto</label>
-                                <select
-                                    value={it.productoId || ""}
-                                    onChange={(e) => updateItem(idx, "productoId", e.target.value)}
-                                    className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                >
-                                    <option value="">Seleccione...</option>
-                                    {productosChile.map((p) => (
-                                        <option key={p.Id_ProductoChile} value={p.Id_ProductoChile}>
-                                            {p.DescripProducto}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Descripción</label>
-                                <input
-                                    type="text"
-                                    value={it.descripcion || ""}
-                                    onChange={(e) => updateItem(idx, "descripcion", e.target.value)}
-                                    className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Lote</label>
-                                    <input
-                                        value={it.lote || ""}
-                                        onChange={(e) => updateItem(idx, "lote", e.target.value)}
-                                        className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="Lote"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Cant. Cajas</label>
-                                    <input
-                                        type="number" min="0" step="0.5"
-                                        value={it.cantidadCajas || ""}
-                                        onChange={(e) => updateItem(idx, "cantidadCajas", e.target.value)}
-                                        className="border rounded p-2 w-full text-sm text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Fecha Elab.</label>
-                                    <input
-                                        type="date"
-                                        value={it.fechaElaboracion || ""}
-                                        onChange={(e) => updateItem(idx, "fechaElaboracion", e.target.value)}
-                                        className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Fecha Venc.</label>
-                                    <input
-                                        type="date"
-                                        value={it.fechaVencimiento || ""}
-                                        onChange={(e) => updateItem(idx, "fechaVencimiento", e.target.value)}
-                                        className="border rounded p-2 w-full text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-xs bg-gray-50 p-2 rounded">
-                                <div className="text-center">
-                                    <div className="text-gray-600">Peso Neto</div>
-                                    <div className="font-medium">{fmt(it.pesoNetoTotal, 4)} Kg</div>
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-gray-600">Peso Bruto</div>
-                                    <div className="font-medium">{fmt(it.pesoBrutoTotal, 4)} Kg</div>
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-gray-600">Valor Total</div>
-                                    <div className="font-medium text-green-600">$ {fmt(it.valorTotal, 4)}</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-3">
-                            <button
-                                type="button"
-                                onClick={() => removeItem(idx)}
-                                className="w-full text-red-600 hover:text-red-800 text-xs font-medium bg-red-50 hover:bg-red-100 px-3 py-2 rounded transition"
-                            >
-                                Eliminar Producto
-                            </button>
-                        </div>
-                    </div>
-                ))}
-
-                {items.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-gray-50">
-                        <p>No hay productos en el detalle</p>
-                    </div>
-                )}
-            </div>
-        </section>
-    );
+      {/* Modal de Producción Chile */}
+      <ModalVisorProduccionChile
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedItem(null);
+          setProductionData(null);
+        }}
+        item={selectedItem}
+        productionData={productionData}
+      />
+    </section>
+  );
 }

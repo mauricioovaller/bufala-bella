@@ -20,15 +20,30 @@ if (!isset($input['id_factura']) || empty($input['id_factura'])) {
 
 $id_factura = intval($input['id_factura']);
 
-// 🔴 CONSULTA 1: ENCABEZADO DE FACTURA Y DATOS DE PLANILLA
+// DETECTAR SI ES FACTURA CHILE
+$sqlCheck = "SELECT Id_EncabInvoice FROM EncabInvoiceChile WHERE Id_EncabInvoice = ?";
+$stmtCheck = $enlace->prepare($sqlCheck);
+$stmtCheck->bind_param("i", $id_factura);
+$stmtCheck->execute();
+$stmtCheck->store_result();
+$esChile = $stmtCheck->num_rows > 0;
+$stmtCheck->close();
+
+// CONSULTA 1: ENCABEZADO DE FACTURA Y DATOS DE PLANILLA
+$tblEnc = $esChile ? 'EncabInvoiceChile' : 'EncabInvoice';
+$tblDet = $esChile ? 'DetInvoiceChile' : 'DetInvoice';
+$tblPlan = $esChile ? 'PlanillasChile' : 'Planillas';
+$tblEnt = $esChile ? 'ClientesChile' : 'Consignatarios';
+$joinEnt = $esChile ? 'cli ON enc.Id_Cliente = cli.Id_Cliente' : 'csg ON enc.Id_Consignatario = csg.Id_Consignatario';
+$selEnt = $esChile ? 'cli.Nombre AS Consignatario, "" AS DUNS, cli.Direccion, cli.Telefono' : 'csg.Nombre AS Consignatario, csg.DUNS, csg.Direccion, csg.Telefono';
+$pref = 'FEX-';
+$grpEnt = $esChile ? 'cli.Nombre, cli.Direccion, cli.Telefono' : 'csg.Nombre, csg.DUNS, csg.Direccion, csg.Telefono';
+
 $sqlEncabezado = "SELECT
                     enc.Id_EncabInvoice AS id_factura,
-                    CONCAT('FEX-', enc.Id_EncabInvoice) AS numero_factura,
+                    CONCAT('{$pref}', enc.Id_EncabInvoice) AS numero_factura,
                     DATE_FORMAT(enc.Fecha, '%d/%m/%Y') AS fecha_factura,
-                    csg.Nombre AS Consignatario,
-                    csg.DUNS,
-                    csg.Direccion,
-                    csg.Telefono,
+                    {$selEnt},
                     '30 Days' AS Payment_Term,
                     enc.GuiaMaster,
                     enc.GuiaHija,
@@ -39,25 +54,21 @@ $sqlEncabezado = "SELECT
                     ROUND(SUM(det.Kilogramos), 2) AS tot_kgm_netos,
                     ROUND(SUM(det.Kilogramos) * 2.6, 2) AS tot_kgm_brutos,
                     ROUND(SUM(det.Kilogramos * det.ValKilogramo), 2) AS total_valor,
-                    -- DATOS DE PLANILLA
                     pl.Placa,
                     pl.Precinto,
                     cond.Nombre AS Conductor,
                     ayud.Nombre AS Ayudante,
                     DATE_FORMAT(pl.Fecha, '%d de %M de %Y') AS fecha_salida
-                FROM
-                    EncabInvoice enc
-                INNER JOIN DetInvoice det ON enc.Id_EncabInvoice = det.Id_EncabInvoice
-                INNER JOIN Consignatarios csg ON enc.Id_Consignatario = csg.Id_Consignatario
+                FROM {$tblEnc} enc
+                INNER JOIN {$tblDet} det ON enc.Id_EncabInvoice = det.Id_EncabInvoice
+                INNER JOIN {$tblEnt} {$joinEnt}
                 INNER JOIN Aerolineas aer ON enc.IdAerolinea = aer.IdAerolinea
                 INNER JOIN Agencias age ON enc.IdAgencia = age.IdAgencia
-                LEFT JOIN Planillas pl ON enc.Id_Planilla = pl.Id_Planilla
+                LEFT JOIN {$tblPlan} pl ON enc.Id_Planilla = pl.Id_Planilla
                 LEFT JOIN Conductores cond ON pl.Id_Conductor = cond.Id_Conductor
                 LEFT JOIN Conductores ayud ON pl.Id_Ayudante = ayud.Id_Conductor
-                WHERE
-                    enc.Id_EncabInvoice = ?
-                GROUP BY 
-                    enc.Id_EncabInvoice, enc.Fecha, csg.Nombre, csg.DUNS, csg.Direccion, csg.Telefono,
+                WHERE enc.Id_EncabInvoice = ?
+                GROUP BY enc.Id_EncabInvoice, enc.Fecha, {$grpEnt},
                     enc.GuiaMaster, enc.GuiaHija, aer.NOMAEROLINEA, age.NOMAGENCIA, enc.CantidadEstibas,
                     pl.Placa, pl.Precinto, cond.Nombre, ayud.Nombre, pl.Fecha";
 

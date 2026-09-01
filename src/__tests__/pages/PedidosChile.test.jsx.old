@@ -93,6 +93,10 @@ describe("PedidosChile", () => {
         pedidosChileService.guardarPedidoChile.mockResolvedValue({ success: true, idPedido: 1, numero: "CHI-000001" });
         pedidosChileService.actualizarPedidoChile.mockResolvedValue({ success: true });
         pedidosChileService.imprimirPedidoChile.mockResolvedValue(new Blob(["PDF"]));
+        pedidosChileService.validarNumeroOrdenChile.mockResolvedValue({ success: true, existe: false });
+        pedidosChileService.contarPedidosChilePorFiltro.mockResolvedValue({ success: true, total: 2 });
+        pedidosChileService.getRangoPedidosChile.mockResolvedValue({ success: true, pedidos: [] });
+        pedidosChileService.imprimirPedidosChileMultiples.mockResolvedValue(new Blob(["PDF"]));
     });
 
     // ── Renderizado básico ────────────────────────────────────────────────────
@@ -157,8 +161,11 @@ describe("PedidosChile", () => {
 
         await waitFor(() => {
             // Se muestran ambos pedidos (CHI-000001, CHI-000002)
-            expect(screen.getByText("CHI-000001")).toBeInTheDocument();
-            expect(screen.getByText("CHI-000002")).toBeInTheDocument();
+            // En jsdom Tailwind no aplica, renderiza versión desktop + mobile juntos
+            const chi1 = screen.getAllByText("CHI-000001");
+            const chi2 = screen.getAllByText("CHI-000002");
+            expect(chi1.length).toBeGreaterThanOrEqual(1);
+            expect(chi2.length).toBeGreaterThanOrEqual(1);
         });
     });
 
@@ -167,15 +174,17 @@ describe("PedidosChile", () => {
         await waitFor(() => expect(pedidosChileService.getDatosSelectChile).toHaveBeenCalled());
 
         fireEvent.click(screen.getByRole("button", { name: /buscar pedido/i }));
-        await waitFor(() => expect(screen.getByText("CHI-000001")).toBeInTheDocument());
+        await waitFor(() => {
+            expect(screen.getAllByText("CHI-000001").length).toBeGreaterThanOrEqual(1);
+        });
 
         const inputBusqueda = screen.getByPlaceholderText(/buscar por num/i);
         fireEvent.change(inputBusqueda, { target: { value: "489" } });
 
         // Solo debe mostrar el pedido con orden 489
         await waitFor(() => {
-            expect(screen.getByText("CHI-000002")).toBeInTheDocument();
-            expect(screen.queryByText("CHI-000001")).not.toBeInTheDocument();
+            expect(screen.getAllByText("CHI-000002").length).toBeGreaterThanOrEqual(1);
+            expect(screen.queryAllByText("CHI-000001").length).toBe(0);
         });
     });
 
@@ -198,9 +207,10 @@ describe("PedidosChile", () => {
         await waitFor(() => expect(pedidosChileService.getDatosSelectChile).toHaveBeenCalled());
 
         fireEvent.click(screen.getByRole("button", { name: /buscar pedido/i }));
-        await waitFor(() => expect(screen.getByText("CHI-000001")).toBeInTheDocument());
-
-        fireEvent.click(screen.getByText("CHI-000001"));
+        await waitFor(() => {
+            const result = screen.getAllByText("CHI-000001");
+            fireEvent.click(result[0]);
+        });
 
         await waitFor(() => {
             expect(pedidosChileService.getPedidoChileEspecifico).toHaveBeenCalledWith(1);
@@ -212,8 +222,11 @@ describe("PedidosChile", () => {
         await waitFor(() => expect(pedidosChileService.getDatosSelectChile).toHaveBeenCalled());
 
         fireEvent.click(screen.getByRole("button", { name: /buscar pedidos/i }));
-        await waitFor(() => expect(screen.getByText("CHI-000001")).toBeInTheDocument());
-        fireEvent.click(screen.getByText("CHI-000001"));
+        await waitFor(() => {
+            const all = screen.getAllByText("CHI-000001");
+            expect(all.length).toBeGreaterThanOrEqual(1);
+            fireEvent.click(all[0]);
+        });
 
         await waitFor(() => {
             expect(pedidosChileService.getPedidoChileEspecifico).toHaveBeenCalled();
@@ -232,8 +245,11 @@ describe("PedidosChile", () => {
 
         // Cargar un pedido primero
         fireEvent.click(screen.getByRole("button", { name: /buscar pedidos/i }));
-        await waitFor(() => expect(screen.getByText("CHI-000001")).toBeInTheDocument());
-        fireEvent.click(screen.getByText("CHI-000001"));
+        await waitFor(() => {
+            const all = screen.getAllByText("CHI-000001");
+            expect(all.length).toBeGreaterThanOrEqual(1);
+            fireEvent.click(all[0]);
+        });
         await waitFor(() => expect(pedidosChileService.getPedidoChileEspecifico).toHaveBeenCalled());
 
         // Con pedido cargado el botón dice "Actualizar Pedido"

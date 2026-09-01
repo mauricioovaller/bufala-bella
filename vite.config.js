@@ -17,8 +17,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setup.js",
     css: false,
-    // singleFork evita timeout de workers en máquinas con recursos limitados (Vitest 4: opción top-level)
-    singleFork: true,
+    pool: "threads",
+    singleThread: true,
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],

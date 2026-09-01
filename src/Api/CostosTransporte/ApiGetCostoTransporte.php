@@ -29,6 +29,7 @@ try {
     $sql = "SELECT 
                 Id_CostoTransporte,
                 Fecha,
+                TipoPedido,
                 CantidadCamiones,
                 ValorFlete,
                 Observaciones,
@@ -44,6 +45,7 @@ try {
     $stmt->bind_result(
         $idCostoTransporte,
         $fecha,
+        $tipoPedidoRow,
         $cantidadCamiones,
         $valorFlete,
         $observaciones,
@@ -55,9 +57,11 @@ try {
         $stmt->close();
         
         // Obtener peso total facturado para esta fecha
+        $tablaFacturas = $tipoPedidoRow === 'chile' ? 'EncabInvoiceChile' : 'EncabInvoice';
+        $tablaDetalles = $tipoPedidoRow === 'chile' ? 'DetInvoiceChile' : 'DetInvoice';
         $sqlPeso = "SELECT COALESCE(SUM(di.Kilogramos), 0) 
-                    FROM EncabInvoice ei 
-                    INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice 
+                    FROM {$tablaFacturas} ei 
+                    INNER JOIN {$tablaDetalles} di ON ei.Id_EncabInvoice = di.Id_EncabInvoice 
                     WHERE ei.Fecha = ?";
         
         $stmtPeso = $enlace->prepare($sqlPeso);
@@ -74,6 +78,7 @@ try {
             'costo' => [
                 'id' => $idCostoTransporte,
                 'fecha' => $fecha,
+                'tipoPedido' => $tipoPedidoRow,
                 'cantidadCamiones' => $cantidadCamiones,
                 'valorFlete' => (float)$valorFlete,
                 'observaciones' => $observaciones,

@@ -22,6 +22,10 @@ vi.mock("sweetalert2", () => ({
       }),
     showLoading: vi.fn(),
     close: vi.fn(),
+    setDefaults: vi.fn(),
+    mixin: vi.fn(() => ({
+      fire: vi.fn().mockResolvedValue({ isConfirmed: true }),
+    })),
   },
 }));
 

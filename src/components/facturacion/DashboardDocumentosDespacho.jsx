@@ -1,6 +1,12 @@
 // src/components/facturacion/DashboardDocumentosDespacho.jsx
 import React, { useState } from 'react';
-import { generarCartaResponsabilidad, generarReporteDespacho, generarPlanVallejo } from '../../services/planillasService';
+import {
+  generarCartaResponsabilidad, generarReporteDespacho, generarPlanVallejo,
+  generarCartaResponsabilidadChile, generarReporteDespachoChile, generarPlanVallejoChile,
+  generarAutodeclaracionChile, generarPlanillaDespachoChile, generarCartaDatalogerChile,
+  generarSolicitudICAChile, generarCertificadoTratamientoChile,
+  generarTablaHCLacteosChile
+} from '../../services/planillasService';
 import Swal from 'sweetalert2';
 import ModalVisorPreliminar from "../ModalVisorPreliminar";
 
@@ -10,7 +16,8 @@ const DashboardDocumentosDespacho = ({
   configuracion,
   onClose,
   onGenerarDocumento,
-  onReversarDocumentos
+  onReversarDocumentos,
+  tipoPedido = "normal"
 }) => {
   const [generandoDocumento, setGenerandoDocumento] = useState('');
 
@@ -50,7 +57,44 @@ const DashboardDocumentosDespacho = ({
       descripcion: "Reporte detallado por factura con información del vehículo",
       tipo: "factura",
       color: "bg-orange-500 hover:bg-orange-600"
-    }
+    },
+    ...(tipoPedido === 'chile' ? [{
+      id: "autodeclaracion-chile",
+      titulo: "🏷️ Autodeclaración Chile",
+      descripcion: "Autodeclaración para exportación de lácteos con destino a Chile",
+      tipo: "factura",
+      color: "bg-teal-500 hover:bg-teal-600"
+    }, {
+      id: "planilla-despacho-chile",
+      titulo: "📋 Planilla Aerolinea",
+      descripcion: "Planilla de despacho para aerolínea con detalle de cajas y transporte",
+      tipo: "factura",
+      color: "bg-cyan-500 hover:bg-cyan-600"
+    }, {
+      id: "carta-dataloger-chile",
+      titulo: "🌡️ Carta Dataloger",
+      descripcion: "Carta de notificación de dispositivo Termógrafo para control de temperatura",
+      tipo: "factura",
+      color: "bg-rose-500 hover:bg-rose-600"
+    }, {
+      id: "solicitud-ica-chile",
+      titulo: "📄 Solicitud ICA",
+      descripcion: "Solicitud de inspección sanitaria ante el ICA para exportación a Chile",
+      tipo: "factura",
+      color: "bg-indigo-500 hover:bg-indigo-600"
+    }, {
+      id: "certificado-tratamiento-chile",
+      titulo: "🧪 Certificado Tratamiento Térmico",
+      descripcion: "Certificado de pasteurización y pH para exportación a Chile",
+      tipo: "factura",
+      color: "bg-teal-500 hover:bg-teal-600"
+    }, {
+      id: "tabla-hc-lacteos-chile",
+      titulo: "🏷️ Tabla HC Lácteos Chile",
+      descripcion: "Tabla sanitaria de productos lácteos con destino a Chile",
+      tipo: "factura",
+      color: "bg-violet-500 hover:bg-violet-600"
+    }] : [])
   ];
 
   const handleGenerarDocumento = async (tipoDocumento, factura = null) => {
@@ -90,7 +134,8 @@ const DashboardDocumentosDespacho = ({
 
         console.log('🖊️ Opción de firma seleccionada:', conFirma ? 'CON FIRMA' : 'SIN FIRMA');
 
-        blob = await generarCartaResponsabilidad(tipoDocumento, idPlanilla, conFirma);
+        const fnCarta = tipoPedido === 'chile' ? generarCartaResponsabilidadChile : generarCartaResponsabilidad;
+        blob = await fnCarta(tipoDocumento, idPlanilla, conFirma, configuracion?.mercanciaSeleccionada);
 
       }
       // Para Reporte de Despacho
@@ -103,7 +148,8 @@ const DashboardDocumentosDespacho = ({
           throw new Error('No se encontró información completa de la factura');
         }
 
-        blob = await generarReporteDespacho(idFactura);
+        const fnReporte = tipoPedido === 'chile' ? generarReporteDespachoChile : generarReporteDespacho;
+        blob = await fnReporte(idFactura);
 
       }
       // Para Plan Vallejo
@@ -116,7 +162,74 @@ const DashboardDocumentosDespacho = ({
           throw new Error('No se encontró información completa de la factura');
         }
 
-        blob = await generarPlanVallejo(idFactura);
+        const fnVallejo = tipoPedido === 'chile' ? generarPlanVallejoChile : generarPlanVallejo;
+        blob = await fnVallejo(idFactura);
+
+      }
+      // Para Autodeclaración Chile
+      else if (tipoDocumento === 'autodeclaracion-chile') {
+        const idFactura = factura?.id || factura?.Id_EncabInvoice;
+
+        if (!factura || !idFactura) {
+          throw new Error('No se encontró información completa de la factura');
+        }
+
+        blob = await generarAutodeclaracionChile(idFactura, configuracion?.anexosSeleccionados);
+
+      }
+      // Para Planilla de Despacho Chile
+      else if (tipoDocumento === 'planilla-despacho-chile') {
+        const idFactura = factura?.id || factura?.Id_EncabInvoice;
+
+        if (!factura || !idFactura) {
+          throw new Error('No se encontró información completa de la factura');
+        }
+
+        blob = await generarPlanillaDespachoChile(idFactura);
+
+      }
+      // Para Carta Dataloger Chile
+      else if (tipoDocumento === 'carta-dataloger-chile') {
+        const idFactura = factura?.id || factura?.Id_EncabInvoice;
+
+        if (!factura || !idFactura) {
+          throw new Error('No se encontró información completa de la factura');
+        }
+
+        blob = await generarCartaDatalogerChile(idFactura);
+
+      }
+      // Para Solicitud ICA Chile
+      else if (tipoDocumento === 'solicitud-ica-chile') {
+        const idFactura = factura?.id || factura?.Id_EncabInvoice;
+
+        if (!factura || !idFactura) {
+          throw new Error('No se encontró información completa de la factura');
+        }
+
+        blob = await generarSolicitudICAChile(idFactura);
+
+      }
+      // Para Certificado Tratamiento Térmico Chile
+      else if (tipoDocumento === 'certificado-tratamiento-chile') {
+        const idFactura = factura?.id || factura?.Id_EncabInvoice;
+
+        if (!factura || !idFactura) {
+          throw new Error('No se encontró información completa de la factura');
+        }
+
+        blob = await generarCertificadoTratamientoChile(idFactura);
+
+      }
+      // Para Tabla HC Lácteos Chile
+      else if (tipoDocumento === 'tabla-hc-lacteos-chile') {
+        const idFactura = factura?.id || factura?.Id_EncabInvoice;
+
+        if (!factura || !idFactura) {
+          throw new Error('No se encontró información completa de la factura');
+        }
+
+        blob = await generarTablaHCLacteosChile(idFactura);
 
       }
       // Para otros documentos (mantener lógica existente)
@@ -137,6 +250,12 @@ const DashboardDocumentosDespacho = ({
       else if (tipoDocumento === 'carta-policia') tituloDocumento = 'Carta para Policía';
       else if (tipoDocumento === 'reporte-despacho') tituloDocumento = 'Reporte de Despacho';
       else if (tipoDocumento === 'plan-vallejo') tituloDocumento = 'Plan Vallejo';
+      else if (tipoDocumento === 'autodeclaracion-chile') tituloDocumento = 'Autodeclaración Chile';
+      else if (tipoDocumento === 'planilla-despacho-chile') tituloDocumento = 'Planilla Aerolinea Chile';
+      else if (tipoDocumento === 'carta-dataloger-chile') tituloDocumento = 'Carta Dataloger Chile';
+      else if (tipoDocumento === 'solicitud-ica-chile') tituloDocumento = 'Solicitud ICA Chile';
+      else if (tipoDocumento === 'certificado-tratamiento-chile') tituloDocumento = 'Certificado Tratamiento Térmico Chile';
+      else if (tipoDocumento === 'tabla-hc-lacteos-chile') tituloDocumento = 'Tabla HC Lácteos Chile';
 
       Swal.fire({
         icon: 'success',
@@ -205,7 +324,7 @@ const DashboardDocumentosDespacho = ({
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 animate-fadeIn">
       {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -306,20 +425,22 @@ const DashboardDocumentosDespacho = ({
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="font-semibold text-gray-800 text-lg">
-                    Factura: {factura.numero}
+                    Factura: {factura.numero.replace(/^CHI-FEX-/, 'FEX-')}
                   </h4>
                   <p className="text-gray-600 text-sm">
                     Cliente: {factura.cliente} • Valor: ${factura.valorTotal?.toLocaleString('es-CO')}
                   </p>
                 </div>
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  📦 {factura.tipo === 'sample' ? 'Sample' : 'Normal'}
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  tipoPedido === 'sample' ? 'bg-green-100 text-green-800' : tipoPedido === 'chile' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {tipoPedido === 'sample' ? '🔬 Sample' : tipoPedido === 'chile' ? '🌎 Chile' : '📦 Normal'}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {documentosFactura.map((documento) => (
-                  <div key={documento.id} className="border border-gray-200 rounded-lg p-4">
+                {documentosFactura.map((documento, docIdx) => (
+                  <div key={documento.id} className="border border-gray-200 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:border-gray-300 animate-slideUp" style={{animationDelay: `${docIdx * 0.05}s`}}>
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h5 className="font-semibold text-gray-800 mb-1">

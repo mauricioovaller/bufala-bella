@@ -343,11 +343,17 @@ export function formatearListaEmails(emails) {
   return emails.join(", ");
 }
 
+// Función para normalizar el número de factura Chile (elimina prefijo CHI-FEX-)
+export function normalizarNumeroFactura(numero) {
+  if (!numero) return numero || "";
+  return String(numero).replace(/^CHI-FEX-/, "FEX-");
+}
+
 // Función para generar nombre de archivo para factura
 export function generarNombreFactura(factura) {
   if (!factura) return "factura.pdf";
 
-  const numero = factura.numero || "sin-numero";
+  const numero = normalizarNumeroFactura(factura.numero) || "sin-numero";
   const cliente = factura.cliente
     ? factura.cliente.replace(/[^a-z0-9]/gi, "-").toLowerCase()
     : "cliente";
@@ -372,7 +378,7 @@ export function generarVariablesFactura(factura, documentosSeleccionados = []) {
   }
 
   return {
-    numero: factura.numero || "",
+    numero: normalizarNumeroFactura(factura.numero) || "",
     cliente: factura.cliente || "",
     fecha: factura.fecha || new Date().toLocaleDateString("es-CO"),
     valor: valorFormateado,

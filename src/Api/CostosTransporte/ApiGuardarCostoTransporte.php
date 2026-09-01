@@ -32,6 +32,7 @@ function limpiar_texto($texto)
 }
 
 $fecha = $data["Fecha"] ?? "";
+$tipoPedido = $data["TipoPedido"] ?? "normal";
 $cantidadCamiones = $data["CantidadCamiones"] ?? 1;
 $valorFlete = $data["ValorFlete"] ?? 0;
 $observaciones = limpiar_texto($data["Observaciones"] ?? "");
@@ -60,8 +61,14 @@ if (!is_numeric($valorFlete) || $valorFlete <= 0) {
     exit;
 }
 
-// Validar que la fecha exista en EncabInvoice (tiene facturas)
-$sqlCheckFecha = "SELECT COUNT(*) FROM EncabInvoice WHERE Fecha = ?";
+// Validar tipo de pedido (compatible hacia atras: default 'normal')
+if (!in_array($tipoPedido, ['normal', 'chile'], true)) {
+    $tipoPedido = 'normal';
+}
+
+// Validar que la fecha exista en la tabla de facturas del tipo correspondiente
+$tablaFacturas = $tipoPedido === 'chile' ? 'EncabInvoiceChile' : 'EncabInvoice';
+$sqlCheckFecha = "SELECT COUNT(*) FROM {$tablaFacturas} WHERE Fecha = ?";
 $stmtCheckFecha = $enlace->prepare($sqlCheckFecha);
 $stmtCheckFecha->bind_param("s", $fecha);
 $stmtCheckFecha->execute();
@@ -75,24 +82,24 @@ if ($countFacturas == 0) {
 }
 
 // Validar que no exista ya un registro para esta fecha (un único costo por fecha)
-$sqlCheckDuplicado = "SELECT Id_CostoTransporte FROM CostosTransporteDiario WHERE Fecha = ?";
+$sqlCheckDuplicado = "SELECT Id_CostoTransporte FROM CostosTransporteDiario WHERE Fecha = ? AND TipoPedido = ?";
 $stmtCheckDuplicado = $enlace->prepare($sqlCheckDuplicado);
-$stmtCheckDuplicado->bind_param("s", $fecha);
+$stmtCheckDuplicado->bind_param("ss", $fecha, $tipoPedido);
 $stmtCheckDuplicado->execute();
 $stmtCheckDuplicado->store_result();
 
 if ($stmtCheckDuplicado->num_rows > 0) {
-    echo json_encode(["success" => false, "message" => "Ya existe un registro de costo de transporte para la fecha $fecha"]);
+    echo json_encode(["success" => false, "message" => "Ya existe un registro de costo de transporte para la fecha $fecha con tipo $tipoPedido"]);
     $stmtCheckDuplicado->close();
     exit;
 }
 $stmtCheckDuplicado->close();
 
 // Insertar registro
-$sql = "INSERT INTO CostosTransporteDiario (Fecha, CantidadCamiones, ValorFlete, Observaciones, HorasExtras, ValorHorasExtras, UsuarioRegistro) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)";
+$sql = "INSERT INTO CostosTransporteDiario (Fecha, TipoPedido, CantidadCamiones, ValorFlete, Observaciones, HorasExtras, ValorHorasExtras, UsuarioRegistro) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 $stmt = $enlace->prepare($sql);
-$stmt->bind_param("sddsdds", $fecha, $cantidadCamiones, $valorFlete, $observaciones, $horasExtras, $valorHorasExtras, $usuarioRegistro);
+$stmt->bind_param("ssddsdds", $fecha, $tipoPedido, $cantidadCamiones, $valorFlete, $observaciones, $horasExtras, $valorHorasExtras, $usuarioRegistro);
 
 if ($stmt->execute()) {
     $id = $stmt->insert_id;

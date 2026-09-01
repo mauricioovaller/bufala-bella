@@ -33,6 +33,10 @@ function validar_entero($valor) {
 }
 
 function validar_flotante($valor) {
+    // Aceptar coma o punto como separador decimal (ej: "18,2305" -> 18.2305)
+    if (is_string($valor)) {
+        $valor = str_replace(',', '.', $valor);
+    }
     return filter_var($valor, FILTER_VALIDATE_FLOAT) !== false ? floatval($valor) : 0;
 }
 

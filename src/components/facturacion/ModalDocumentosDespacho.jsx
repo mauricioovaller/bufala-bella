@@ -1,6 +1,7 @@
 // src/components/facturacion/ModalDocumentosDespacho.jsx
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
+import { getDocumentosChileItems } from '../../services/planillasService';
 
 const ModalDocumentosDespacho = ({
     isOpen,
@@ -14,10 +15,14 @@ const ModalDocumentosDespacho = ({
     const [conductorSeleccionado, setConductorSeleccionado] = useState('');
     const [ayudanteSeleccionado, setAyudanteSeleccionado] = useState('');
     const [precintoSeguridad, setPrecintoSeguridad] = useState('');
-    const [placaVehiculo, setPlacaVehiculo] = useState('VAK076'); // 🔴 NUEVO: Valor por defecto
-    const [descripcionVehiculo, setDescripcionVehiculo] = useState('MITSUBISHI FUSO BLANCA'); // 🔴 NUEVO: Valor por defecto
+    const [termografoNo, setTermografoNo] = useState('');
+    const [placaVehiculo, setPlacaVehiculo] = useState('VAK076');
+    const [descripcionVehiculo, setDescripcionVehiculo] = useState('MITSUBISHI FUSO BLANCA');
     const [cargandoDatos, setCargandoDatos] = useState(false);
     const [guardandoConfiguracion, setGuardandoConfiguracion] = useState(false);
+    const [documentosItems, setDocumentosItems] = useState({ mercancia: [], anexo: [] });
+    const [mercanciaSeleccionada, setMercanciaSeleccionada] = useState([]);
+    const [anexosSeleccionados, setAnexosSeleccionados] = useState([]);
 
     // Datos mock de conductores (solo como respaldo)
     const conductoresMock = [
@@ -124,6 +129,21 @@ const ModalDocumentosDespacho = ({
                 setAyudantes(opcionesAyudantes);
             }
 
+            // Cargar items seleccionables para documentos Chile
+            try {
+                const itemsRes = await getDocumentosChileItems();
+                if (itemsRes.success && itemsRes.items) {
+                    setDocumentosItems(itemsRes.items);
+                    // Por defecto seleccionar todos
+                    const todasMercancia = itemsRes.items.mercancia?.map(i => i.id) || [];
+                    const todosAnexos = itemsRes.items.anexo?.map(i => i.id) || [];
+                    setMercanciaSeleccionada(todasMercancia);
+                    setAnexosSeleccionados(todosAnexos);
+                }
+            } catch (err) {
+                console.warn('Error cargando items documentos Chile:', err);
+            }
+
             setCargandoDatos(false);
         } catch (error) {
             console.error('Error cargando datos:', error);
@@ -189,6 +209,16 @@ const ModalDocumentosDespacho = ({
             return;
         }
 
+        if (mercanciaSeleccionada.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Mercancía requerida',
+                text: 'Debes seleccionar al menos un producto (Queso Mozzarella o Yogurt) para las cartas.',
+                confirmButtonColor: '#3085d6',
+            });
+            return;
+        }
+
         setGuardandoConfiguracion(true);
 
         try {
@@ -199,8 +229,11 @@ const ModalDocumentosDespacho = ({
                 conductor: conductor,
                 ayudante: ayudante && ayudante.id !== "0" ? ayudante : null,
                 precintoSeguridad: precintoSeguridad,
-                placaVehiculo: placaVehiculo, // 🔴 NUEVO
-                descripcionVehiculo: descripcionVehiculo // 🔴 NUEVO
+                termografoNo: termografoNo,
+                placaVehiculo: placaVehiculo,
+                descripcionVehiculo: descripcionVehiculo,
+                mercanciaSeleccionada: mercanciaSeleccionada,
+                anexosSeleccionados: anexosSeleccionados
             };
 
             console.log('💾 Guardando configuración:', configuracion);
@@ -208,12 +241,11 @@ const ModalDocumentosDespacho = ({
             // Llamar al handler del padre para guardar la configuración
             await onGuardarConfiguracion(configuracion);
 
-            
-
             // Limpiar y cerrar
             setConductorSeleccionado('');
             setAyudanteSeleccionado('');
             setPrecintoSeguridad('');
+            setTermografoNo('');
             
 
         } catch (error) {
@@ -229,13 +261,29 @@ const ModalDocumentosDespacho = ({
         }
     };
 
-    // 🔴 NUEVO: Función para limpiar configuración
+    const toggleMercanciaItem = (id) => {
+        setMercanciaSeleccionada(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleAnexoItem = (id) => {
+        setAnexosSeleccionados(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
     const handleLimpiarConfiguracion = () => {
         setConductorSeleccionado('');
         setAyudanteSeleccionado('');
         setPrecintoSeguridad('');
-        setPlacaVehiculo('VAK076'); // Restaurar valor por defecto
-        setDescripcionVehiculo('MITSUBISHI FUSO BLANCA'); // Restaurar valor por defecto
+        setTermografoNo('');
+        setPlacaVehiculo('VAK076');
+        setDescripcionVehiculo('MITSUBISHI FUSO BLANCA');
+        const todasMercancia = documentosItems.mercancia?.map(i => i.id) || [];
+        const todosAnexos = documentosItems.anexo?.map(i => i.id) || [];
+        setMercanciaSeleccionada(todasMercancia);
+        setAnexosSeleccionados(todosAnexos);
     };
 
     if (!isOpen) return null;
@@ -275,7 +323,7 @@ const ModalDocumentosDespacho = ({
                             {facturasSeleccionadas.map((factura, index) => (
                                 <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                                     <div>
-                                        <p className="font-medium text-gray-900">{factura.numero}</p>
+                                        <p className="font-medium text-gray-900">{factura.numero.replace(/^CHI-FEX-/, 'FEX-')}</p>
                                         <p className="text-sm text-gray-600">{factura.cliente}</p>
                                     </div>
                                     <p className="font-semibold text-gray-700">
@@ -471,6 +519,77 @@ const ModalDocumentosDespacho = ({
                             Número único del precinto de seguridad del vehículo
                         </p>
                     </div>
+
+                    {/* TERMÓGRAFO No. */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Termógrafo No.
+                        </label>
+                        <input
+                            type="text"
+                            value={termografoNo}
+                            onChange={(e) => setTermografoNo(e.target.value)}
+                            placeholder="Ej: QCHYN025J0"
+                            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            disabled={guardandoConfiguracion}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                            Número de serie del dispositivo termógrafo para control de temperatura
+                        </p>
+                    </div>
+
+                    {/* MERCANCÍA PARA CARTAS */}
+                    {documentosItems.mercancia?.length > 0 && (
+                        <div className="border-t border-gray-200 pt-4">
+                            <h3 className="font-semibold text-gray-800 mb-2">Descripción General de la Mercancía</h3>
+                            <p className="text-xs text-gray-500 mb-3">Selecciona los productos que aparecerán en las Cartas (Aerolínea / Policía)</p>
+                            <div className="space-y-2">
+                                {documentosItems.mercancia.map(item => (
+                                    <label key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={mercanciaSeleccionada.includes(item.id)}
+                                            onChange={() => toggleMercanciaItem(item.id)}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            disabled={guardandoConfiguracion}
+                                        />
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-800">{item.descripcionCorta}</p>
+                                            <p className="text-xs text-gray-500">{item.texto}</p>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                            {mercanciaSeleccionada.length === 0 && (
+                                <p className="text-xs text-red-500 mt-1">Selecciona al menos un producto</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ANEXOS PARA AUTODECLARACIÓN */}
+                    {documentosItems.anexo?.length > 0 && (
+                        <div className="border-t border-gray-200 pt-4">
+                            <h3 className="font-semibold text-gray-800 mb-2">Anexos - Autodeclaración Chile</h3>
+                            <p className="text-xs text-gray-500 mb-3">Selecciona los anexos que aparecerán en la sección "Envase y etiquetado"</p>
+                            <div className="space-y-2">
+                                {documentosItems.anexo.map(item => (
+                                    <label key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={anexosSeleccionados.includes(item.id)}
+                                            onChange={() => toggleAnexoItem(item.id)}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            disabled={guardandoConfiguracion}
+                                        />
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-800">{item.descripcionCorta}</p>
+                                            <p className="text-xs text-gray-500">{item.texto}</p>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* FOOTER - BOTONES */}

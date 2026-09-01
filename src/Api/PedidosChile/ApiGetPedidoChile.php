@@ -1,177 +1,115 @@
 <?php
-// src/Api/PedidosChile/ApiGetPedidoChile.php
-// Retorna un pedido Chile completo (encabezado + detalle) por Id
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
+header("Content-Type: application/json");
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     echo json_encode(["success" => false, "message" => "Método no permitido"]);
-    http_response_code(405);
     exit;
 }
 
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
-$enlace->set_charset("utf8mb4");
 
+if ($enlace->connect_error) {
+    echo json_encode(["success" => false, "message" => "Error de conexión: " . $enlace->connect_error]);
+    exit;
+}
+
+// Leer JSON
 $json = file_get_contents("php://input");
 $data = json_decode($json, true);
+$idPedido = intval($data["idPedido"] ?? 0);
 
-$idPedido = filter_var($data["idPedido"] ?? null, FILTER_VALIDATE_INT);
-if (!$idPedido) {
+if ($idPedido <= 0) {
     echo json_encode(["success" => false, "message" => "ID de pedido inválido"]);
     exit;
 }
 
-// ── Encabezado ─────────────────────────────────────────────────────────────
-// NOTA: Se usa bind_result() + fetch() — NO get_result() (no disponible en prod)
-$stmtEnc = $enlace->prepare(
-    "SELECT e.Id_EncabPedidoChile,
-            e.Id_ClienteChile,
-            c.Nombre       AS NombreCliente,
-            c.Direccion,
-            c.Ciudad,
-            c.Pais,
-            e.NumeroOrden,
-            e.FechaRecepcionOrden,
-            e.FechaSolicitudEntrega,
-            e.FechaFinalEntrega,
-            e.CantidadEstibas,
-            e.GuiaAerea,
-            e.IdAgencia,
-            ag.NOMAGENCIA  AS NombreAgencia,
-            e.IdAerolinea,
-            ae.NOMAEROLINEA AS NombreAerolinea,
-            e.DescuentoComercial,
-            e.Observaciones,
-            e.FacturaNo,
-            e.Estado
-     FROM EncabPedidoChile e
-     JOIN ClientesChile c   ON e.Id_ClienteChile = c.Id_ClienteChile
-     LEFT JOIN Agencias ag  ON e.IdAgencia       = ag.IdAgencia
-     LEFT JOIN Aerolineas ae ON e.IdAerolinea    = ae.IdAerolinea
-     WHERE e.Id_EncabPedidoChile = ?"
-);
+// ===================
+// Obtener encabezado
+// ===================
+$sqlEnc = "SELECT Id_EncabPedido, Id_Cliente, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones, ComentarioPrimario, ComentarioSecundario, Estado
+             FROM EncabPedidoChile 
+             WHERE Id_EncabPedido = ?";
+
+$stmtEnc = $enlace->prepare($sqlEnc);
 $stmtEnc->bind_param("i", $idPedido);
 $stmtEnc->execute();
-$stmtEnc->bind_result(
-    $idEnc,
-    $idCli,
-    $nomCli,
-    $dir,
-    $ciudad,
-    $pais,
-    $numOrden,
-    $fechaRec,
-    $fechaSol,
-    $fechaFin,
-    $cantEst,
-    $guia,
-    $idAg,
-    $nomAg,
-    $idAe,
-    $nomAe,
-    $descuento,
-    $obs,
-    $factNo,
-    $estado
-);
 
-$encabezado = null;
+$stmtEnc->bind_result($idEncabPedido, $idCliente, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $comentarioPrimario, $comentarioSecundario, $estado);
+
+$header = null;
 if ($stmtEnc->fetch()) {
-    $encabezado = [
-        'idPedido'            => $idEnc,
-        'clienteId'           => $idCli,
-        'nombreCliente'       => $nomCli,
-        'direccion'           => $dir,
-        'ciudad'              => $ciudad,
-        'pais'                => $pais,
-        'numeroOrden'         => $numOrden,
-        'fechaRecepcionOrden' => $fechaRec,
-        'fechaSolicitudEntrega' => $fechaSol,
-        'fechaFinalEntrega'   => $fechaFin,
-        'cantidadEstibas'     => $cantEst,
-        'guiaAerea'           => $guia,
-        'idAgencia'           => $idAg,
-        'nombreAgencia'       => $nomAg,
-        'idAerolinea'         => $idAe,
-        'nombreAerolinea'     => $nomAe,
-        'descuentoComercial'  => $descuento,
-        'observaciones'       => $obs,
-        'facturaNo'           => $factNo,
-        'estado'              => $estado,
+    $header = [
+        "Id_EncabPedido" => $idEncabPedido,
+        "Id_Cliente"     => $idCliente,
+        "PurchaseOrder"  => $purchaseOrder,
+        "FechaOrden"     => $fechaOrden,
+        "FechaSalida"    => $fechaSalida,
+        "FechaEnroute"   => $fechaEnroute,
+        "FechaDelivery"  => $fechaDelivery,
+        "FechaIngreso"   => $fechaIngreso,
+        "CantidadEstibas"=> $cantidadEstibas,
+        "Id_Aerolinea"    => $idAerolinea,
+        "Id_Agencia"      => $idAgencia,
+        "GuiaMaster"     => $guiaMaster,
+        "GuiaHija"       => $guiaHija,
+        "Observaciones"  => $observaciones,
+        "ComentarioPrimario" => $comentarioPrimario,
+        "ComentarioSecundario" => $comentarioSecundario,
+        "Estado" => $estado
     ];
 }
 $stmtEnc->close();
 
-if (!$encabezado) {
-    echo json_encode(["success" => false, "message" => "Pedido no encontrado"]);
-    exit;
-}
+// ===================
+// Obtener detalle (SIN CAMBIOS)
+// ===================
+//$sqlDet = "SELECT d.Id_DetPedidoChile, d.Id_EncabPedidoChile, d.Id_Producto, p.DescripProducto, p.DescripFactura, p.Codigo_Siesa, p.Codigo_FDA, p.PesoGr, p.FactorPesoBruto, d.Descripcion, d.Id_Embalaje, d.Cantidad, d.PrecioUnitario, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) / 1000),2) AS PesoNeto, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) * p.FactorPesoBruto / 1000),2) AS PesoBruto, ROUND(((p.PesoGr * e.Cantidad * d.Cantidad) / 1000) * d.PrecioUnitario,2) AS ValorRegistro
+//             FROM DetPedidoChile d
+//             INNER JOIN Productos p ON d.Id_Producto = p.Id_Producto
+//             INNER JOIN Embalajes e ON d.Id_Embalaje = e.Id_Embalaje
+//             WHERE Id_EncabPedidoChile = ?";
 
-// ── Detalle ────────────────────────────────────────────────────────────────
-$stmtDet = $enlace->prepare(
-    "SELECT d.Id_DetPedidoChile,
-            d.Id_ProductoChile,
-            d.Descripcion,
-            d.CodigoCliente,
-            d.CodigoSiesa,
-            d.Lote,
-            d.FechaElaboracion,
-            d.FechaVencimiento,
-            d.PesoNetoGr,
-            d.CantidadCajas,
-            d.EnvaseInternoxCaja,
-            d.PesoEscurridoKg,
-            d.FactorPesoBruto,
-            d.ValorXKilo
-     FROM DetPedidoChile d
-     WHERE d.Id_EncabPedidoChile = ?
-     ORDER BY d.Id_DetPedidoChile"
-);
+$sqlDet = "SELECT d.Id_DetPedido, d.Id_EncabPedido, d.Id_Producto, p.DescripProducto, p.DescripFactura, p.Codigo_Siesa, p.PesoGr, p.FactorPesoBruto, d.Descripcion, d.Id_Embalaje, d.Cantidad, d.PrecioUnitario, d.PesoNeto, d.PesoBruto, ROUND(d.PesoNeto  * d.PrecioUnitario,2) AS ValorRegistro
+             FROM DetPedidoChile d
+             INNER JOIN ProductosChile p ON d.Id_Producto = p.Id_Producto
+             INNER JOIN Embalajes e ON d.Id_Embalaje = e.Id_Embalaje
+             WHERE Id_EncabPedido = ?";
+
+$stmtDet = $enlace->prepare($sqlDet);
 $stmtDet->bind_param("i", $idPedido);
 $stmtDet->execute();
-$stmtDet->bind_result(
-    $idDet,
-    $idProd,
-    $desc,
-    $codCli,
-    $codSiesa,
-    $lote,
-    $fechaElab,
-    $fechaVenc,
-    $pesoNetoGr,
-    $cantCajas,
-    $envase,
-    $pesoEsc,
-    $factor,
-    $valorKilo
-);
+$stmtDet->bind_result($idDetPedido, $idEncab, $idProducto, $descripProducto, $descripFactura, $codigoSiesa, $pesoGr, $factorPesoBruto, $descripcion, $idEmbalaje, $cantidad, $precioUnitario, $pesoNeto, $pesoBruto, $valorRegistro);
 
 $detalle = [];
 while ($stmtDet->fetch()) {
     $detalle[] = [
-        'idDet'             => $idDet,
-        'productoId'        => $idProd,
-        'descripcion'       => $desc,
-        'codigoCliente'     => $codCli,
-        'codigoSiesa'       => $codSiesa,
-        'lote'              => $lote,
-        'fechaElaboracion'  => $fechaElab,
-        'fechaVencimiento'  => $fechaVenc,
-        'pesoNetoGr'        => (float)$pesoNetoGr,
-        'cantidadCajas'     => (float)$cantCajas,
-        'envaseInternoxCaja' => (int)$envase,
-        'pesoEscurridoKg'   => (float)$pesoEsc,
-        'factorPesoBruto'   => (float)$factor,
-        'valorxKilo'        => (float)$valorKilo,
+        "Id_DetPedido"   => $idDetPedido,
+        "Id_EncabPedido" => $idEncab,
+        "Id_Producto"    => $idProducto,
+        "DescripProducto"=> $descripProducto,
+        "DescripFactura" => $descripFactura,
+        "Codigo_Siesa"   => $codigoSiesa,
+        "PesoGr"         => $pesoGr,
+        "FactorPesoBruto"=> $factorPesoBruto,
+        "Descripcion"    => $descripcion,
+        "Id_Embalaje"    => $idEmbalaje,
+        "Cantidad"       => $cantidad,
+        "Precio"         => $precioUnitario,
+        "PesoNeto"       => $pesoNeto,
+        "PesoBruto"      => $pesoBruto, 
+        "ValorRegistro"  => $valorRegistro,
     ];
 }
 $stmtDet->close();
 
-echo json_encode([
-    'success'    => true,
-    'encabezado' => $encabezado,
-    'detalle'    => $detalle,
-]);
-
 $enlace->close();
+
+// ===================
+// Respuesta final
+// ===================
+echo json_encode([
+    "success" => true,
+    "header"  => $header,
+    "detalle" => $detalle
+]);
+?>

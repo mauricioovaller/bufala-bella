@@ -13,7 +13,8 @@ const ConfiguracionFactura = ({
     onLimpiarConfiguracion,
     onLimpiarPedidosSeleccionados,
     onLimpiarTodo,
-    tipoPedido // 🔴 NUEVO: Recibir el tipo de pedido
+    tipoPedido,
+    guardarFacturaFn // Opcional: funcion personalizada para guardar (ej: Chile)
 }) => {
     const [alertas, setAlertas] = useState([]);
     const [guardando, setGuardando] = useState(false);
@@ -75,13 +76,14 @@ const ConfiguracionFactura = ({
             const primerPedido = pedidosSeleccionados[0];
 
             if (primerPedido) {
-                // Solo autocompletar si los campos están vacíos
-                if (!configFactura.agenciaId && primerPedido.idAgencia) {
+                // Agencia: siempre se toma del primer pedido seleccionado
+                if (primerPedido.idAgencia) {
                     nuevosConfig.agenciaId = primerPedido.idAgencia.toString();
                     hayCambios = true;
                     console.log('✅ Autocompletado agencia:', primerPedido.idAgencia);
                 }
                 
+                // Solo autocompletar los demás campos si están vacíos
                 if (!configFactura.aerolineaId && primerPedido.idAerolinea) {
                     nuevosConfig.aerolineaId = primerPedido.idAerolinea.toString();
                     hayCambios = true;
@@ -108,6 +110,18 @@ const ConfiguracionFactura = ({
         }
     }, [pedidosSeleccionados]);
 
+    // 🔴 AUTO-CALCULAR FECHA VENCIMIENTO (35 días después de la fecha factura)
+    useEffect(() => {
+        if (configFactura.fechaFactura && tipoPedido === 'chile') {
+            const fecha = new Date(configFactura.fechaFactura);
+            fecha.setDate(fecha.getDate() + 35);
+            const fechaVenc = fecha.toISOString().split('T')[0];
+            if (configFactura.fechaVencimiento !== fechaVenc) {
+                onConfigChange(prev => ({...prev, fechaVencimiento: fechaVenc}));
+            }
+        }
+    }, [configFactura.fechaFactura, tipoPedido]);
+
     // 🔴 FUNCIÓN COMPLETAMENTE ACTUALIZADA CON SOPORTE PARA SAMPLES
     const handleGenerarFactura = async () => {
         if (guardando) return; // Evitar múltiples clics
@@ -123,7 +137,8 @@ const ConfiguracionFactura = ({
             return;
         }
 
-        if (!configFactura.numeroFactura || !configFactura.fechaFactura || !configFactura.consignatarioId) {
+        const requiereConsignatario = tipoPedido !== 'chile';
+        if (!configFactura.numeroFactura || !configFactura.fechaFactura || (requiereConsignatario && !configFactura.consignatarioId)) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Campos obligatorios',
@@ -151,14 +166,14 @@ const ConfiguracionFactura = ({
             return;
         }
 
-        // 🔴 CONFIRMACIÓN CON SWEETALERT2 - MOSTRAR TIPO ESPECÍFICO
+        const labelTipo = tipoPedido === 'normal' ? 'Normal' : tipoPedido === 'chile' ? 'Chile' : 'Sample';
         const confirmacion = await Swal.fire({
-            title: `¿Generar Factura ${tipoPedido === 'normal' ? 'Normal' : 'Sample'}?`,
+            title: `¿Generar Factura ${labelTipo}?`,
             html: `
                 <div class="text-left">
                     <p><strong>Número:</strong> ${configFactura.numeroFactura}</p>
-                    <p><strong>Tipo:</strong> ${tipoPedido === 'normal' ? '📦 Pedidos Normales' : '🔬 Samples'}</p>
-                    <p><strong>Cantidad:</strong> ${pedidosSeleccionados.length} ${tipoPedido === 'normal' ? 'pedidos' : 'samples'}</p>
+                    <p><strong>Tipo:</strong> ${tipoPedido === 'normal' ? '📦 Pedidos Normales' : tipoPedido === 'chile' ? '🌎 Pedidos Chile' : '🔬 Samples'}</p>
+                    <p><strong>Cantidad:</strong> ${pedidosSeleccionados.length} ${tipoPedido === 'normal' ? 'pedidos' : tipoPedido === 'chile' ? 'pedidos Chile' : 'samples'}</p>
                     <p><strong>Valor Total:</strong> $${pedidosSeleccionados.reduce((sum, p) => sum + p.valor, 0).toLocaleString('es-CO')}</p>
                 </div>
             `,
@@ -166,7 +181,7 @@ const ConfiguracionFactura = ({
             showCancelButton: true,
             confirmButtonColor: tipoPedido === 'normal' ? '#10b981' : '#059669',
             cancelButtonColor: '#6b7280',
-            confirmButtonText: `Sí, generar factura ${tipoPedido === 'normal' ? 'normal' : 'sample'}`,
+            confirmButtonText: `Sí, generar factura ${tipoPedido === 'chile' ? 'chile' : tipoPedido === 'normal' ? 'normal' : 'sample'}`,
             cancelButtonText: 'Cancelar',
             reverseButtons: true
         });
@@ -189,31 +204,39 @@ const ConfiguracionFactura = ({
                     guiaMaster: configFactura.guiaMaster,
                     guiaHija: configFactura.guiaHija,
                     observaciones: configFactura.observaciones || '',
-                    tipoPedido: tipoPedido // 🔴 NUEVO: Incluir tipo de pedido
+                    tipoPedido: tipoPedido,
+                    ...(tipoPedido === 'chile' ? {
+                        fechaVencimiento: configFactura.fechaVencimiento,
+                        terminosPago: configFactura.terminosPago,
+                        fleteInternacional: configFactura.fleteInternacional,
+                        incoterm: configFactura.incoterm,
+                        partidaArancelaria: configFactura.partidaArancelaria,
+                        temperatura: configFactura.temperatura
+                    } : {})
                 },
                 pedidosIds: pedidosSeleccionados.map(pedido => pedido.id),
-                tipoPedido: tipoPedido // 🔴 NUEVO: Para que el backend sepa qué tabla usar
+                tipoPedido: tipoPedido
             };
 
             console.log('📤 Enviando datos al backend:', datosFactura);
 
-            // Llamar al servicio CON EL TIPO DE PEDIDO
-            const resultado = await guardarFactura(
-                datosFactura.encabezado, 
-                datosFactura.pedidosIds, 
+            const fnGuardar = guardarFacturaFn || guardarFactura;
+            const resultado = await fnGuardar(
+                datosFactura.encabezado,
+                datosFactura.pedidosIds,
                 tipoPedido
             );
 
             if (resultado.success) {
-                // 🔴 ÉXITO CON SWEETALERT2 Y LIMPIEZA COMPLETA
+                const labelTipo = tipoPedido === 'normal' ? 'Normal' : tipoPedido === 'chile' ? 'Chile' : 'Sample';
                 await Swal.fire({
                     icon: 'success',
-                    title: `¡Factura ${tipoPedido === 'normal' ? 'Normal' : 'Sample'} Generada!`,
+                    title: `¡Factura ${labelTipo} Generada!`,
                     html: `
                         <div class="text-left">
                             <p><strong>Número:</strong> ${resultado.numeroFactura}</p>
-                            <p><strong>Tipo:</strong> ${tipoPedido === 'normal' ? '📦 Pedidos Normales' : '🔬 Samples'}</p>
-                            <p><strong>${tipoPedido === 'normal' ? 'Pedidos' : 'Samples'} procesados:</strong> ${resultado.pedidosActualizados || pedidosSeleccionados.length}</p>
+                            <p><strong>Tipo:</strong> ${tipoPedido === 'normal' ? '📦 Pedidos Normales' : tipoPedido === 'chile' ? '🌎 Pedidos Chile' : '🔬 Samples'}</p>
+                            <p><strong>Procesados:</strong> ${resultado.pedidosActualizados || pedidosSeleccionados.length}</p>
                             ${resultado.cantidadItems ? `<p><strong>Items:</strong> ${resultado.cantidadItems}</p>` : ''}
                             ${resultado.cantidadEstibas ? `<p><strong>Estibas:</strong> ${resultado.cantidadEstibas}</p>` : ''}
                         </div>
@@ -239,7 +262,7 @@ const ConfiguracionFactura = ({
                 // 🔴 ERROR CON SWEETALERT2
                 Swal.fire({
                     icon: 'error',
-                    title: `Error al generar factura ${tipoPedido === 'normal' ? 'normal' : 'sample'}`,
+                    title: `Error al generar factura ${tipoPedido === 'chile' ? 'chile' : tipoPedido === 'normal' ? 'normal' : 'sample'}`,
                     text: resultado.message || 'Ocurrió un error inesperado',
                     confirmButtonColor: '#ef4444',
                 });
@@ -300,29 +323,30 @@ const ConfiguracionFactura = ({
         <div className="bg-gray-50 rounded-xl p-4 sm:p-6">
             <div className="flex items-center mb-4 sm:mb-6">
                 <div className={`w-1 h-6 sm:h-8 rounded-full mr-3 ${
-                    tipoPedido === 'normal' ? 'bg-purple-500' : 'bg-green-600'
+                    tipoPedido === 'normal' ? 'bg-purple-500' : tipoPedido === 'chile' ? 'bg-amber-500' : 'bg-green-600'
                 }`}></div>
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                    Configuración de Factura {tipoPedido === 'normal' ? 'Normal' : 'Sample'}
+                    Configuración de Factura {tipoPedido === 'chile' ? 'Chile' : tipoPedido === 'normal' ? 'Normal' : 'Sample'}
                 </h2>
             </div>
 
-            {/* 🔴 NUEVO: Banner informativo del tipo */}
             <div className={`mb-6 p-4 rounded-lg border ${
-                tipoPedido === 'normal' 
-                    ? 'bg-blue-50 border-blue-200 text-blue-800' 
-                    : 'bg-green-50 border-green-200 text-green-800'
+                tipoPedido === 'normal'
+                    ? 'bg-blue-50 border-blue-200 text-blue-800'
+                    : tipoPedido === 'chile'
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-green-50 border-green-200 text-green-800'
             }`}>
                 <div className="flex items-center">
                     <span className="mr-2 text-lg">
-                        {tipoPedido === 'normal' ? '📦' : '🔬'}
+                        {tipoPedido === 'normal' ? '📦' : tipoPedido === 'chile' ? '🌎' : '🔬'}
                     </span>
                     <div>
                         <p className="font-medium">
-                            Trabajando con {tipoPedido === 'normal' ? 'Pedidos Normales' : 'Samples'}
+                            Trabajando con {tipoPedido === 'chile' ? 'Pedidos Chile' : tipoPedido === 'normal' ? 'Pedidos Normales' : 'Samples'}
                         </p>
                         <p className="text-sm mt-1">
-                            {pedidosSeleccionados.length} {tipoPedido === 'normal' ? 'pedidos' : 'samples'} seleccionados • 
+                            {pedidosSeleccionados.length} {tipoPedido === 'chile' ? 'pedidos Chile' : tipoPedido === 'normal' ? 'pedidos' : 'samples'} seleccionados •
                             Valor total: ${estadisticas.totalValor.toLocaleString('es-CO')}
                         </p>
                     </div>
@@ -424,13 +448,58 @@ const ConfiguracionFactura = ({
                     </div>
                 </div>
 
-                {/* COLUMNA 2 - CONSIGNATARIO */}
+                {/* COLUMNA 2 - CONSIGNATARIO (normal/sample) / DATOS CHILE */}
+                {tipoPedido === 'chile' ? (
+                <div className="space-y-4 sm:space-y-6">
+                    <h3 className="text-md font-semibold text-gray-700 border-b pb-2">
+                        Configuración de Factura Chile
+                    </h3>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Vencimiento</label>
+                        <input type="date" value={configFactura.fechaVencimiento || ''}
+                            onChange={(e) => onConfigChange(prev => ({...prev, fechaVencimiento: e.target.value}))}
+                            className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled={guardando} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Terminos de Pago</label>
+                        <input type="text" value={configFactura.terminosPago || 'Pago 35 dias'}
+                            onChange={(e) => onConfigChange(prev => ({...prev, terminosPago: e.target.value}))}
+                            className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled={guardando} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Flete Internacional (USD)</label>
+                        <input type="number" step="0.01" value={configFactura.fleteInternacional || ''}
+                            onChange={(e) => onConfigChange(prev => ({...prev, fleteInternacional: e.target.value}))}
+                            className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled={guardando} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Incoterm</label>
+                        <select value={configFactura.incoterm || 'CPT'}
+                            onChange={(e) => onConfigChange(prev => ({...prev, incoterm: e.target.value}))}
+                            className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled={guardando}>
+                            <option value="CPT">CPT - Costo y Flete</option>
+                            <option value="CIF">CIF - Costo Seguro y Flete</option>
+                            <option value="FOB">FOB - Free on Board</option>
+                            <option value="EXW">EXW - Ex Works</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Partida Arancelaria</label>
+                        <input type="text" value={configFactura.partidaArancelaria || '0406100000'}
+                            onChange={(e) => onConfigChange(prev => ({...prev, partidaArancelaria: e.target.value}))}
+                            className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled={guardando} />
+                    </div>
+                </div>
+                ) : (
                 <div className="space-y-4 sm:space-y-6">
                     <h3 className="text-md font-semibold text-gray-700 border-b pb-2">
                         Consignatario
                     </h3>
-
-                    {/* Consignatario */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Consignatario *
@@ -451,6 +520,7 @@ const ConfiguracionFactura = ({
                         </select>
                     </div>
                 </div>
+                )}
 
                 {/* COLUMNA 3 - AGENCIA Y AEROLÍNEA */}
                 <div className="space-y-4 sm:space-y-6">
@@ -478,7 +548,7 @@ const ConfiguracionFactura = ({
                         </select>
                         {configFactura.agenciaId && (
                             <p className="text-xs text-green-600 mt-1">
-                                ✅ Valor tomado de los {tipoPedido === 'normal' ? 'pedidos' : 'samples'}
+                                {tipoPedido === 'chile' ? '✅ Valor tomado de los pedidos Chile' : `✅ Valor tomado de los ${tipoPedido === 'normal' ? 'pedidos' : 'samples'}`}
                             </p>
                         )}
                     </div>
@@ -503,7 +573,7 @@ const ConfiguracionFactura = ({
                         </select>
                         {configFactura.aerolineaId && (
                             <p className="text-xs text-green-600 mt-1">
-                                ✅ Valor tomado de los {tipoPedido === 'normal' ? 'pedidos' : 'samples'}
+                                {tipoPedido === 'chile' ? '✅ Valor tomado de los pedidos Chile' : `✅ Valor tomado de los ${tipoPedido === 'normal' ? 'pedidos' : 'samples'}`}
                             </p>
                         )}
                     </div>
@@ -530,7 +600,7 @@ const ConfiguracionFactura = ({
                         />
                         {configFactura.guiaMaster && (
                             <p className="text-xs text-green-600 mt-1">
-                                ✅ Valor tomado de los {tipoPedido === 'normal' ? 'pedidos' : 'samples'}
+                                {tipoPedido === 'chile' ? '✅ Valor tomado de los pedidos Chile' : `✅ Valor tomado de los ${tipoPedido === 'normal' ? 'pedidos' : 'samples'}`}
                             </p>
                         )}
                     </div>
@@ -550,7 +620,7 @@ const ConfiguracionFactura = ({
                         />
                         {configFactura.guiaHija && (
                             <p className="text-xs text-green-600 mt-1">
-                                ✅ Valor tomado de los {tipoPedido === 'normal' ? 'pedidos' : 'samples'}
+                                {tipoPedido === 'chile' ? '✅ Valor tomado de los pedidos Chile' : `✅ Valor tomado de los ${tipoPedido === 'normal' ? 'pedidos' : 'samples'}`}
                             </p>
                         )}
                     </div>
@@ -562,10 +632,12 @@ const ConfiguracionFactura = ({
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="text-sm text-gray-600">
                         <p>
-                            <span className="font-semibold">{pedidosSeleccionados.length}</span> {tipoPedido === 'normal' ? 'pedidos' : 'samples'} seleccionados
+                            <span className="font-semibold">{pedidosSeleccionados.length}</span> {tipoPedido === 'chile' ? 'pedidos Chile' : tipoPedido === 'normal' ? 'pedidos' : 'samples'} seleccionados
                         </p>
                         <p className="text-xs">
-                            {tipoPedido === 'normal' ? (
+                            {tipoPedido === 'chile' ? (
+                                `🌎 ${estadisticas.totalEstibas} estibas • ${estadisticas.totalCajas} cajas`
+                            ) : tipoPedido === 'normal' ? (
                                 `📦 ${estadisticas.totalCajas} cajas • ${estadisticas.totalTms} TM • ${estadisticas.totalPesoNeto.toLocaleString('es-CO')} kg`
                             ) : (
                                 `🔬 ${estadisticas.totalCajas} cajas • ${estadisticas.totalEstibas} estibas`
@@ -584,12 +656,12 @@ const ConfiguracionFactura = ({
 
                     <button
                         onClick={handleGenerarFactura}
-                        disabled={guardando || pedidosSeleccionados.length === 0 || !configFactura.numeroFactura || !configFactura.fechaFactura || !configFactura.consignatarioId}
+                        disabled={guardando || pedidosSeleccionados.length === 0 || !configFactura.numeroFactura || !configFactura.fechaFactura || (tipoPedido !== 'chile' && !configFactura.consignatarioId)}
                         className={`w-full sm:w-auto py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl font-semibold text-sm sm:text-lg transition-all ${!guardando && pedidosSeleccionados.length > 0 &&
                             configFactura.numeroFactura &&
                             configFactura.fechaFactura &&
-                            configFactura.consignatarioId
-                            ? tipoPedido === 'normal' 
+                            (tipoPedido === 'chile' || configFactura.consignatarioId)
+                            ? tipoPedido === 'normal' || tipoPedido === 'chile'
                                 ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                                 : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -601,7 +673,7 @@ const ConfiguracionFactura = ({
                                 Guardando...
                             </span>
                         ) : (
-                            `🧾 Generar Factura ${tipoPedido === 'normal' ? 'Normal' : 'Sample'}`
+                            `🧾 Generar Factura ${tipoPedido === 'normal' ? 'Normal' : tipoPedido === 'chile' ? 'Chile' : 'Sample'}`
                         )}
                     </button>
                 </div>

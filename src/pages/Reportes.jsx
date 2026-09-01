@@ -17,7 +17,7 @@ export default function Reportes() {
     const reporte = REPORTES.find((r) => r.id === reporteActivo);
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 animate-fadeIn">
             <div className="flex flex-col md:flex-row min-h-screen">
 
                 {/* ── Sidebar desktop / tabs móvil ── */}

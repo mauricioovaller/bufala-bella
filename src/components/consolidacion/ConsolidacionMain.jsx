@@ -2,10 +2,20 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   generarExcelConsolidacion,
+  generarExcelConsolidacionChile,
+  generarExcelConsolidacionConsolidado,
   generarReporteProduccion,
+  generarReporteProduccionChile,
+  generarReporteProduccionConsolidado,
   generarReporteEmpaque,
+  generarReporteEmpaqueChile,
+  generarReporteEmpaqueConsolidado,
   generarReporteTransporte,
+  generarReporteTransporteChile,
+  generarReporteTransporteConsolidado,
   generarExcelTransporte,
+  generarExcelTransporteChile,
+  generarExcelTransporteConsolidado,
   obtenerEstadisticasConsolidacion,
   actualizarFechaSalidaPedido,
   actualizarDatosEnLote,
@@ -13,7 +23,16 @@ import {
   obtenerCostosTransporte,
   guardarCostoTransporte,
   modificarCostoTransporte,
-  eliminarCostoTransporte
+  eliminarCostoTransporte,
+  obtenerCostosAereo,
+  guardarCostoAereo,
+  modificarCostoAereo,
+  eliminarCostoAereo,
+  obtenerGuiasMasterPorFecha,
+  obtenerEstadisticasChile,
+  obtenerPedidosChilePorFecha,
+  actualizarFechaSalidaChile,
+  actualizarDatosEnLoteChile
 } from '../../services/consolidacionService';
 import ModalVisorPreliminar from "../ModalVisorPreliminar";
 import { getDatosSelect } from '../../services/pedidosService';
@@ -21,6 +40,13 @@ import { getPermisosAccionesPorModulo } from '../../services/menuPrincipal/permi
 import Swal from 'sweetalert2';
 
 export default function ConsolidacionMain() {
+  const [pestanaActiva, setPestanaActiva] = useState("pedidos");
+
+  const esChile = pestanaActiva === 'chile';
+  const esConsolidado = pestanaActiva === 'consolidado';
+  const tipoPedidoCostos = esChile ? 'chile' : 'normal';
+  const etiquetaOrigen = esChile ? 'Chile' : esConsolidado ? 'Consolidado' : 'Locales';
+
   const [filtros, setFiltros] = useState({
     tipoFecha: "fechaSalida",
     fechaDesde: "",
@@ -75,11 +101,32 @@ export default function ConsolidacionMain() {
   const [guardandoCosto, setGuardandoCosto] = useState(false);
   const [formCosto, setFormCosto] = useState({
     Fecha: '',
+    TipoPedido: tipoPedidoCostos,
     CantidadCamiones: 1,
     ValorFlete: '',
     Observaciones: '',
     HorasExtras: '',
     ValorHorasExtras: ''
+  });
+
+  // 👇 NUEVOS ESTADOS PARA COSTOS DE TRANSPORTE AEREO
+  const [mostrarCostosAereo, setMostrarCostosAereo] = useState(false);
+  const [costosAereo, setCostosAereo] = useState([]);
+  const [loadingCostosAereo, setLoadingCostosAereo] = useState(false);
+  const [errorCostosAereo, setErrorCostosAereo] = useState(null);
+  const [modalAereoAbierto, setModalAereoAbierto] = useState(false);
+  const [aereoEditando, setAereoEditando] = useState(null);
+  const [guardandoAereo, setGuardandoAereo] = useState(false);
+  const [guiasMasterDisponibles, setGuiasMasterDisponibles] = useState([]);
+  const [loadingGuias, setLoadingGuias] = useState(false);
+  const [formAereo, setFormAereo] = useState({
+    Fecha: '',
+    GuiaMaster: '',
+    TipoPedido: tipoPedidoCostos,
+    ValorFleteUSD: '',
+    TRM: '',
+    PesoCobrado: '',
+    Observaciones: ''
   });
 
   // Permisos granulares del módulo ([] = acceso completo)
@@ -162,7 +209,22 @@ export default function ConsolidacionMain() {
     setEstadisticas(prev => ({ ...prev, loading: true }));
 
     try {
-      const datos = await obtenerEstadisticasConsolidacion(filtros);
+      let datos;
+      if (esConsolidado) {
+        const [datosLocal, datosChile] = await Promise.all([
+          obtenerEstadisticasConsolidacion(filtros),
+          obtenerEstadisticasChile(filtros)
+        ]);
+        datos = {
+          totalPedidos: (datosLocal.totalPedidos || 0) + (datosChile.totalPedidos || 0),
+          cajas: (datosLocal.cajas || 0) + (datosChile.cajas || 0),
+          pesoNeto: (datosLocal.pesoNeto || 0) + (datosChile.pesoNeto || 0),
+          valorTotal: (datosLocal.valorTotal || 0) + (datosChile.valorTotal || 0),
+          estibas: (datosLocal.estibas || 0) + (datosChile.estibas || 0)
+        };
+      } else {
+        datos = esChile ? await obtenerEstadisticasChile(filtros) : await obtenerEstadisticasConsolidacion(filtros);
+      }
 
       setEstadisticas({
         totalPedidos: datos.totalPedidos || 0,
@@ -190,16 +252,32 @@ export default function ConsolidacionMain() {
     setMensajeExito(null);
 
     try {
-      const resultado = await obtenerPedidosPorFecha(filtros);
+      let pedidosCrudos = [];
 
-      if (resultado.pedidos && resultado.pedidos.length > 0) {
-        // Mapear los datos reales al formato que espera el componente
-        const pedidosFormateados = resultado.pedidos.map(pedido => ({
+      if (esConsolidado) {
+        const [locales, chile] = await Promise.all([
+          obtenerPedidosPorFecha(filtros),
+          obtenerPedidosChilePorFecha(filtros)
+        ]);
+        pedidosCrudos = [
+          ...(locales.pedidos || []).map(pedido => ({ ...pedido, origen: 'local' })),
+          ...(chile.pedidos || []).map(pedido => ({ ...pedido, origen: 'chile' }))
+        ];
+      } else {
+        const resultado = esChile ? await obtenerPedidosChilePorFecha(filtros) : await obtenerPedidosPorFecha(filtros);
+        pedidosCrudos = (resultado.pedidos || []).map(pedido => ({
+          ...pedido,
+          origen: esChile ? 'chile' : 'local'
+        }));
+      }
+
+      if (pedidosCrudos.length > 0) {
+        const pedidosFormateados = pedidosCrudos.map(pedido => ({
           id: pedido.id,
           numero: pedido.numero,
           cliente: pedido.cliente,
           region: pedido.region,
-          fechaSalida: pedido.fecha, // ← Usar pedido.fecha que viene del backend
+          fechaSalida: pedido.fecha,
           fecha: pedido.fecha,
           cajas: pedido.cajas,
           tms: pedido.tms,
@@ -207,9 +285,12 @@ export default function ConsolidacionMain() {
           valor: pedido.valor,
           ordenCompra: pedido.ordenCompra,
           estibas: pedido.estibas,
-          estibasPagas: pedido.estibasPagas, // 👈 NUEVO
-          facturaNo: pedido.facturaNo || '',  // 👈 NUEVO
-          tipoDato: pedido.tipo || 'PED'  // 👈 Para identificar si es PED o SMP
+          estibasPagas: pedido.estibasPagas,
+          facturaNo: pedido.facturaNo || '',
+          tipoDato: pedido.tipo || 'PED',
+          guiaMaster: pedido.guiaMaster || '',
+          guiaHija: pedido.guiaHija || '',
+          origen: pedido.origen || 'local'
         }));
 
         setPedidos(pedidosFormateados);
@@ -240,7 +321,21 @@ export default function ConsolidacionMain() {
     setErrorCostos(null);
 
     try {
-      const resultado = await obtenerCostosTransporte(filtros);
+      let resultado;
+      if (esConsolidado) {
+        const [costosLocales, costosChile] = await Promise.all([
+          obtenerCostosTransporte(filtros, 'normal'),
+          obtenerCostosTransporte(filtros, 'chile')
+        ]);
+        resultado = {
+          costos: [
+            ...(costosLocales.costos || []).map(c => ({ ...c, TipoPedido: 'normal' })),
+            ...(costosChile.costos || []).map(c => ({ ...c, TipoPedido: 'chile' }))
+          ]
+        };
+      } else {
+        resultado = await obtenerCostosTransporte(filtros, tipoPedidoCostos);
+      }
 
       if (resultado.costos && resultado.costos.length > 0) {
         setCostosTransporte(resultado.costos);
@@ -253,7 +348,7 @@ export default function ConsolidacionMain() {
     } finally {
       setLoadingCostos(false);
     }
-  }, [filtros]);
+  }, [filtros, tipoPedidoCostos]);
 
   // Función para abrir modal de costo (nuevo o edición)
   const abrirModalCosto = (costo = null) => {
@@ -262,6 +357,7 @@ export default function ConsolidacionMain() {
       setCostoEditando(costo.id);
       setFormCosto({
         Fecha: costo.Fecha,
+        TipoPedido: costo.TipoPedido || (esConsolidado ? '' : tipoPedidoCostos),
         CantidadCamiones: costo.CantidadCamiones,
         ValorFlete: costo.ValorFlete,
         Observaciones: costo.Observaciones || '',
@@ -273,6 +369,7 @@ export default function ConsolidacionMain() {
       setCostoEditando(null);
       setFormCosto({
         Fecha: '',
+        TipoPedido: esConsolidado ? '' : tipoPedidoCostos,
         CantidadCamiones: 1,
         ValorFlete: '',
         Observaciones: ''
@@ -287,6 +384,7 @@ export default function ConsolidacionMain() {
     setCostoEditando(null);
     setFormCosto({
       Fecha: '',
+      TipoPedido: esConsolidado ? '' : tipoPedidoCostos,
       CantidadCamiones: 1,
       ValorFlete: '',
       Observaciones: '',
@@ -300,6 +398,10 @@ export default function ConsolidacionMain() {
     // Validaciones
     if (!formCosto.Fecha) {
       setErrorCostos('La fecha es obligatoria');
+      return;
+    }
+    if (esConsolidado && !formCosto.TipoPedido) {
+      setErrorCostos('Selecciona el tipo de pedido para el costo');
       return;
     }
     if (!formCosto.CantidadCamiones || formCosto.CantidadCamiones <= 0) {
@@ -327,6 +429,7 @@ export default function ConsolidacionMain() {
       if (costoEditando) {
         // Actualizar
         await modificarCostoTransporte(costoEditando, {
+          TipoPedido: formCosto.TipoPedido,
           CantidadCamiones: formCosto.CantidadCamiones,
           ValorFlete: formCosto.ValorFlete,
           Observaciones: formCosto.Observaciones,
@@ -337,6 +440,7 @@ export default function ConsolidacionMain() {
         // Crear nuevo
         await guardarCostoTransporte({
           Fecha: formCosto.Fecha,
+          TipoPedido: formCosto.TipoPedido,
           CantidadCamiones: formCosto.CantidadCamiones,
           ValorFlete: formCosto.ValorFlete,
           Observaciones: formCosto.Observaciones,
@@ -445,26 +549,283 @@ export default function ConsolidacionMain() {
     cargarEstadisticas();  // Actualizar estadísticas
   };
 
-  // Cargar estadísticas cuando cambien los filtros
+  // Cargar estadísticas cuando cambien los filtros o la pestaña
   useEffect(() => {
     if (filtros.fechaDesde && filtros.fechaHasta) {
       cargarEstadisticas();
     }
-  }, [filtros.fechaDesde, filtros.fechaHasta, filtros.tipoFecha]);
+  }, [filtros.fechaDesde, filtros.fechaHasta, filtros.tipoFecha, pestanaActiva]);
 
-  // Cargar pedidos cuando se active la gestión de fechas
+  // Cargar pedidos cuando se active la gestión de fechas o cambie de pestaña
   useEffect(() => {
     if (mostrarGestionFechas && filtros.fechaDesde && filtros.fechaHasta) {
       cargarPedidos();
     }
-  }, [mostrarGestionFechas, filtros.fechaDesde, filtros.fechaHasta]);
+  }, [mostrarGestionFechas, filtros.fechaDesde, filtros.fechaHasta, pestanaActiva]);
 
   // Cargar costos de transporte cuando se active la sección
   useEffect(() => {
     if (mostrarCostosTransporte && filtros.fechaDesde && filtros.fechaHasta) {
       cargarCostosTransporte();
     }
-  }, [mostrarCostosTransporte, filtros.fechaDesde, filtros.fechaHasta, cargarCostosTransporte]);
+  }, [mostrarCostosTransporte, filtros.fechaDesde, filtros.fechaHasta, cargarCostosTransporte, pestanaActiva]);
+
+  // ============================================================================
+  // FUNCIONES PARA COSTOS DE TRANSPORTE AEREO
+  // ============================================================================
+
+  const cargarCostosAereo = useCallback(async () => {
+    if (!filtros.fechaDesde || !filtros.fechaHasta) {
+      setErrorCostosAereo('Por favor selecciona un rango de fechas válido');
+      return;
+    }
+
+    setLoadingCostosAereo(true);
+    setErrorCostosAereo(null);
+
+    try {
+      let resultado;
+      if (esConsolidado) {
+        const [costosLocales, costosChile] = await Promise.all([
+          obtenerCostosAereo(filtros, 'normal'),
+          obtenerCostosAereo(filtros, 'chile')
+        ]);
+        resultado = {
+          costos: [
+            ...(costosLocales.costos || []).map(c => ({ ...c, TipoPedido: 'normal' })),
+            ...(costosChile.costos || []).map(c => ({ ...c, TipoPedido: 'chile' }))
+          ]
+        };
+      } else {
+        resultado = await obtenerCostosAereo(filtros, tipoPedidoCostos);
+      }
+
+      if (resultado.costos && resultado.costos.length > 0) {
+        setCostosAereo(resultado.costos);
+      } else {
+        setCostosAereo([]);
+      }
+    } catch (err) {
+      setErrorCostosAereo(err.message);
+      setCostosAereo([]);
+    } finally {
+      setLoadingCostosAereo(false);
+    }
+  }, [filtros, tipoPedidoCostos]);
+
+  const cargarGuiasPorFecha = async (fecha, tipo = tipoPedidoCostos) => {
+    if (!fecha) {
+      setGuiasMasterDisponibles([]);
+      return;
+    }
+    if (esConsolidado && !tipo) {
+      setGuiasMasterDisponibles([]);
+      return;
+    }
+
+    setLoadingGuias(true);
+    try {
+      const resultado = await obtenerGuiasMasterPorFecha(fecha, tipo);
+      setGuiasMasterDisponibles(resultado.guiasMaster || []);
+    } catch (err) {
+      setGuiasMasterDisponibles([]);
+    } finally {
+      setLoadingGuias(false);
+    }
+  };
+
+  const abrirModalAereo = (costo = null) => {
+    if (costo) {
+      const tipoAereo = costo.TipoPedido || (esConsolidado ? '' : tipoPedidoCostos);
+      setAereoEditando(costo.id);
+      setFormAereo({
+        Fecha: costo.Fecha,
+        GuiaMaster: costo.GuiaMaster,
+        TipoPedido: tipoAereo,
+        ValorFleteUSD: costo.ValorFleteUSD,
+        TRM: costo.TRM,
+        PesoCobrado: costo.PesoCobrado,
+        Observaciones: costo.Observaciones || ''
+      });
+      cargarGuiasPorFecha(costo.Fecha, tipoAereo);
+    } else {
+      setAereoEditando(null);
+      setFormAereo({
+        Fecha: '',
+        GuiaMaster: '',
+        TipoPedido: esConsolidado ? '' : tipoPedidoCostos,
+        ValorFleteUSD: '',
+        TRM: '',
+        PesoCobrado: '',
+        Observaciones: ''
+      });
+      setGuiasMasterDisponibles([]);
+    }
+    setModalAereoAbierto(true);
+  };
+
+  const cerrarModalAereo = () => {
+    setModalAereoAbierto(false);
+    setAereoEditando(null);
+    setFormAereo({
+      Fecha: '',
+      GuiaMaster: '',
+      TipoPedido: esConsolidado ? '' : tipoPedidoCostos,
+      ValorFleteUSD: '',
+      TRM: '',
+      PesoCobrado: '',
+      Observaciones: ''
+    });
+    setGuiasMasterDisponibles([]);
+  };
+
+  const handleFechaAereoChange = (e) => {
+    const fecha = e.target.value;
+    setFormAereo(prev => ({ ...prev, Fecha: fecha, GuiaMaster: '' }));
+    if (fecha) {
+      cargarGuiasPorFecha(fecha, formAereo.TipoPedido);
+    } else {
+      setGuiasMasterDisponibles([]);
+    }
+  };
+
+  const handleTipoAereoChange = (e) => {
+    const tipo = e.target.value;
+    setFormAereo(prev => ({ ...prev, TipoPedido: tipo, GuiaMaster: '' }));
+    if (formAereo.Fecha && tipo) {
+      cargarGuiasPorFecha(formAereo.Fecha, tipo);
+    } else {
+      setGuiasMasterDisponibles([]);
+    }
+  };
+
+  const guardarCostoAereoFn = async () => {
+    if (!formAereo.Fecha) {
+      setErrorCostosAereo('La fecha es obligatoria');
+      return;
+    }
+    if (esConsolidado && !formAereo.TipoPedido) {
+      setErrorCostosAereo('Selecciona el tipo de pedido para el costo aÃ©reo');
+      return;
+    }
+    if (!formAereo.GuiaMaster) {
+      setErrorCostosAereo('La Guía Master es obligatoria');
+      return;
+    }
+    if (!formAereo.ValorFleteUSD || parseFloat(formAereo.ValorFleteUSD) <= 0) {
+      setErrorCostosAereo('El valor del flete USD debe ser mayor a 0');
+      return;
+    }
+    if (!formAereo.TRM || parseFloat(formAereo.TRM) <= 0) {
+      setErrorCostosAereo('La TRM debe ser mayor a 0');
+      return;
+    }
+    if (!formAereo.PesoCobrado || parseFloat(formAereo.PesoCobrado) <= 0) {
+      setErrorCostosAereo('El peso cobrado debe ser mayor a 0');
+      return;
+    }
+
+    setGuardandoAereo(true);
+    setErrorCostosAereo(null);
+
+    try {
+      if (aereoEditando) {
+        await modificarCostoAereo(aereoEditando, {
+          Fecha: formAereo.Fecha,
+          GuiaMaster: formAereo.GuiaMaster,
+          TipoPedido: formAereo.TipoPedido,
+          ValorFleteUSD: parseFloat(formAereo.ValorFleteUSD),
+          TRM: parseFloat(formAereo.TRM),
+          PesoCobrado: parseFloat(formAereo.PesoCobrado),
+          Observaciones: formAereo.Observaciones
+        });
+      } else {
+        await guardarCostoAereo({
+          Fecha: formAereo.Fecha,
+          GuiaMaster: formAereo.GuiaMaster,
+          TipoPedido: formAereo.TipoPedido,
+          ValorFleteUSD: parseFloat(formAereo.ValorFleteUSD),
+          TRM: parseFloat(formAereo.TRM),
+          PesoCobrado: parseFloat(formAereo.PesoCobrado),
+          Observaciones: formAereo.Observaciones,
+          UsuarioRegistro: 'Sistema'
+        });
+      }
+
+      await cargarCostosAereo();
+      cerrarModalAereo();
+
+      Swal.fire({
+        icon: 'success',
+        title: aereoEditando ? '¡Actualizado!' : '¡Guardado!',
+        text: aereoEditando
+          ? 'Costo aéreo actualizado correctamente.'
+          : 'Costo aéreo guardado correctamente.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (err) {
+      setErrorCostosAereo(err.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || 'No se pudo guardar el costo aéreo.',
+        confirmButtonColor: '#dc2626'
+      });
+    } finally {
+      setGuardandoAereo(false);
+    }
+  };
+
+  const eliminarCostoAereoFn = async (costo) => {
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: '¿Eliminar costo aéreo?',
+      html: `<div class="text-left">
+        <p class="mb-2">¿Estás seguro de eliminar el costo del <strong>${costo.Fecha}</strong> - Guía <strong>${costo.GuiaMaster}</strong>?</p>
+        <p class="text-sm text-gray-600">Esta acción no se puede deshacer.</p>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280'
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setLoadingCostosAereo(true);
+    setErrorCostosAereo(null);
+
+    try {
+      await eliminarCostoAereo(costo.id);
+      await cargarCostosAereo();
+      Swal.fire({
+        icon: 'success',
+        title: '¡Eliminado!',
+        text: `Costo aéreo del ${costo.Fecha} eliminado correctamente.`,
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (err) {
+      setErrorCostosAereo(err.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || 'No se pudo eliminar el costo aéreo.',
+        confirmButtonColor: '#dc2626'
+      });
+    } finally {
+      setLoadingCostosAereo(false);
+    }
+  };
+
+  // Cargar costos aéreos cuando se active la sección
+  useEffect(() => {
+    if (mostrarCostosAereo && filtros.fechaDesde && filtros.fechaHasta) {
+      cargarCostosAereo();
+    }
+  }, [mostrarCostosAereo, filtros.fechaDesde, filtros.fechaHasta, cargarCostosAereo, pestanaActiva]);
 
   // Cargar aerolíneas y agencias al montar el componente
   useEffect(() => {
@@ -509,19 +870,37 @@ export default function ConsolidacionMain() {
 
     try {
       if (reporte.tipo === "excel") {
-        await generarExcelConsolidacion(filtros);
+        if (esChile) {
+          await generarExcelConsolidacionChile(filtros);
+        } else if (esConsolidado) {
+          await generarExcelConsolidacionConsolidado(filtros);
+        } else {
+          await generarExcelConsolidacion(filtros);
+        }
       } else if (reporte.tipo === "pdf") {
         let blob;
 
         if (reporteId === 'produccion') {
-          blob = await generarReporteProduccion(filtros);
+          blob = esChile
+            ? await generarReporteProduccionChile(filtros)
+            : esConsolidado
+              ? await generarReporteProduccionConsolidado(filtros)
+              : await generarReporteProduccion(filtros);
           setReporteActual('Producción');
         } else if (reporteId === 'empaque') {
-          blob = await generarReporteEmpaque(filtros);
-          setReporteActual('Empaque');
+          blob = esChile
+            ? await generarReporteEmpaqueChile(filtros)
+            : esConsolidado
+              ? await generarReporteEmpaqueConsolidado(filtros)
+              : await generarReporteEmpaque(filtros);
+          setReporteActual(esConsolidado ? 'Empaque Consolidado' : 'Empaque');
         } else if (reporteId === 'transporte') {
-          blob = await generarReporteTransporte(filtros);
-          setReporteActual('Transporte');
+          blob = esChile
+            ? await generarReporteTransporteChile(filtros)
+            : esConsolidado
+              ? await generarReporteTransporteConsolidado(filtros)
+              : await generarReporteTransporte(filtros);
+          setReporteActual(esConsolidado ? 'Transporte Consolidado' : 'Transporte');
         }
 
         if (blob) {
@@ -547,7 +926,13 @@ export default function ConsolidacionMain() {
     setError(null);
 
     try {
-      await generarExcelTransporte(filtros);
+      if (esChile) {
+        await generarExcelTransporteChile(filtros);
+      } else if (esConsolidado) {
+        await generarExcelTransporteConsolidado(filtros);
+      } else {
+        await generarExcelTransporte(filtros);
+      }
     } catch (err) {
       console.error('Error generando Excel de transporte:', err);
       setError(err.message || 'Error al generar el archivo Excel de transporte');
@@ -576,7 +961,7 @@ export default function ConsolidacionMain() {
     setMensajeExito(null);
   };
 
-  const guardarFecha = async (pedidoId, tipoPedido = null) => {
+  const guardarFecha = async (pedidoId, origenPedido = null) => {
     if (!nuevaFecha) {
       setErrorPedidos('Por favor selecciona una fecha válida');
       return;
@@ -587,31 +972,20 @@ export default function ConsolidacionMain() {
     setMensajeExito(null);
 
     try {
-      // Determinar automáticamente el tipo de pedido si no se especifica
-      let tipo = tipoPedido;
-      if (!tipo) {
-        // Buscar el pedido en la lista para determinar si es normal o sample
-        const pedido = pedidos.find(p => p.id === pedidoId);
-        if (pedido && pedido.tipoDato) {
-          tipo = pedido.tipoDato.toLowerCase(); // 'normal' o 'sample'
-        }
-      }
+      const esPedidoChile = origenPedido === 'chile' || (esConsolidado ? origenPedido === 'chile' : esChile);
+      const resultado = esPedidoChile
+        ? await actualizarFechaSalidaChile(pedidoId, nuevaFecha)
+        : await actualizarFechaSalidaPedido(pedidoId, nuevaFecha);
 
-      const resultado = await actualizarFechaSalidaPedido(pedidoId, nuevaFecha, tipo);
-
-      // Mostrar mensaje de éxito
       setMensajeExito({
         tipo: 'success',
         mensaje: resultado.message || 'Fecha actualizada correctamente',
         pedidoId: pedidoId,
         numeroPedido: resultado.numeroPedido,
         nuevaFecha: nuevaFecha,
-        tipoPedido: resultado.tipoPedido || tipo
       });
 
-      // Recargar TODOS los pedidos desde el servidor para reflejar el filtro actual
       await recargarPedidos();
-
       setEditandoFecha(null);
       setNuevaFecha('');
 
@@ -638,7 +1012,18 @@ export default function ConsolidacionMain() {
     setErrorPedidos(null);
 
     try {
-      const resultado = await actualizarDatosEnLote(filtros, datosEnLote);
+      let resultado;
+      if (esConsolidado) {
+        const [resultadoLocal, resultadoChile] = await Promise.all([
+          actualizarDatosEnLote(filtros, datosEnLote),
+          actualizarDatosEnLoteChile(filtros, datosEnLote)
+        ]);
+        resultado = {
+          pedidosActualizados: (resultadoLocal.pedidosActualizados || 0) + (resultadoChile.pedidosActualizados || 0)
+        };
+      } else {
+        resultado = esChile ? await actualizarDatosEnLoteChile(filtros, datosEnLote) : await actualizarDatosEnLote(filtros, datosEnLote);
+      }
 
       setMensajeExito({
         tipo: 'success',
@@ -701,12 +1086,27 @@ export default function ConsolidacionMain() {
     permisosAcciones.includes('gestionar_fechas_readonly') &&
     !permisosAcciones.includes('gestionar_fechas_full');
 
+  const cambiarPestana = (nuevaPestana) => {
+    setPestanaActiva(nuevaPestana);
+    setMostrarGestionFechas(false);
+    setMostrarCostosTransporte(false);
+    setMostrarCostosAereo(false);
+    setPedidos([]);
+    setCostosTransporte([]);
+    setCostosAereo([]);
+    setError(null);
+    setErrorPedidos(null);
+    setErrorCostos(null);
+    setErrorCostosAereo(null);
+    setMensajeExito(null);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 py-6">
+    <div className="min-h-screen bg-gray-50 py-6 animate-fadeIn">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* HEADER PRINCIPAL CON DEGRADADO */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mb-4">
             <span className="text-2xl text-white">📈</span>
           </div>
@@ -716,6 +1116,45 @@ export default function ConsolidacionMain() {
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Genera reportes consolidados por áreas específicas basados en los pedidos registrados
           </p>
+        </div>
+
+        {/* PESTAÑAS */}
+        <div className="sticky top-14 z-40 bg-white/95 backdrop-blur-md border border-gray-200 shadow-md rounded-2xl mb-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+              <span className="hidden sm:inline text-gray-500 font-medium">Consultando:</span>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${esChile ? 'bg-teal-100 text-teal-800' : esConsolidado ? 'bg-indigo-100 text-indigo-800' : 'bg-blue-100 text-blue-800'}`}>
+                {etiquetaOrigen}
+              </span>
+            </div>
+
+            <div className="inline-flex bg-gray-100 rounded-xl p-1 gap-1 w-full sm:w-auto">
+              <button
+                onClick={() => cambiarPestana("pedidos")}
+                className={`flex-1 sm:flex-none px-3 sm:px-5 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 ${pestanaActiva === "pedidos"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md ring-2 ring-blue-500/20"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-white"}`}
+              >
+                Pedidos Locales
+              </button>
+              <button
+                onClick={() => cambiarPestana("chile")}
+                className={`flex-1 sm:flex-none px-3 sm:px-5 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 ${pestanaActiva === "chile"
+                  ? "bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-md ring-2 ring-teal-500/20"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-white"}`}
+              >
+                Pedidos Chile
+              </button>
+              <button
+                onClick={() => cambiarPestana("consolidado")}
+                className={`flex-1 sm:flex-none px-3 sm:px-5 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 ${pestanaActiva === "consolidado"
+                  ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md ring-2 ring-violet-500/20"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-white"}`}
+              >
+                Consolidado
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* SECCIÓN DE FILTROS */}
@@ -794,23 +1233,37 @@ export default function ConsolidacionMain() {
               </button>
             </div>
 
-            {/* Botón Costos de Transporte */}
+            {/* Botón Costos de Transporte (Terrestre + Aéreo) */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 Costos de Transporte
               </label>
-              <button
-                onClick={() => setMostrarCostosTransporte(!mostrarCostosTransporte)}
-                disabled={!filtros.fechaDesde || !filtros.fechaHasta}
-                className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${!filtros.fechaDesde || !filtros.fechaHasta
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : mostrarCostosTransporte
-                    ? "bg-red-500 hover:bg-red-600 text-white"
-                    : "bg-green-500 hover:bg-green-600 text-white"
-                  }`}
-              >
-                {mostrarCostosTransporte ? "❌ Ocultar Costos" : "📦 Costos de Transporte"}
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setMostrarCostosTransporte(!mostrarCostosTransporte)}
+                  disabled={!filtros.fechaDesde || !filtros.fechaHasta}
+                  className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${!filtros.fechaDesde || !filtros.fechaHasta
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : mostrarCostosTransporte
+                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      : "bg-green-500 hover:bg-green-600 text-white"
+                    }`}
+                >
+                  {mostrarCostosTransporte ? "❌ Ocultar Costos" : "📦 Terrestre"}
+                </button>
+                <button
+                  onClick={() => setMostrarCostosAereo(!mostrarCostosAereo)}
+                  disabled={!filtros.fechaDesde || !filtros.fechaHasta}
+                  className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${!filtros.fechaDesde || !filtros.fechaHasta
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : mostrarCostosAereo
+                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      : "bg-sky-500 hover:bg-sky-600 text-white"
+                    }`}
+                >
+                  {mostrarCostosAereo ? "❌ Ocultar Aéreo" : "✈️ Aéreo"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -841,6 +1294,7 @@ export default function ConsolidacionMain() {
               <div className="flex items-center">
                 <div className="w-1 h-8 bg-green-500 rounded-full mr-3"></div>
                 <h2 className="text-xl font-semibold text-gray-800">Costos de Transporte Diario</h2>
+                <span className="ml-3 text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{etiquetaOrigen}</span>
                 <div className="ml-4 text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
                   {costosTransporte.length} costos en el rango
                 </div>
@@ -880,6 +1334,7 @@ export default function ConsolidacionMain() {
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Fecha</th>
+                        {esConsolidado && <th className="text-left py-3 px-4 font-medium text-gray-700">Origen</th>}
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Cantidad Camiones</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Valor Flete</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-700">Costo por Kg</th>
@@ -891,6 +1346,13 @@ export default function ConsolidacionMain() {
                       {costosTransporte.map((costo) => (
                         <tr key={costo.id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-3 px-4">{costo.Fecha}</td>
+                          {esConsolidado && (
+                            <td className="py-3 px-4">
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${costo.TipoPedido === 'chile' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800'}`}>
+                                {costo.TipoPedido === 'chile' ? 'Chile' : 'Locales'}
+                              </span>
+                            </td>
+                          )}
                           <td className="py-3 px-4">{formatearNumero(costo.CantidadCamiones)}</td>
                           <td className="py-3 px-4">${formatearNumero(costo.ValorFlete)}</td>
                           <td className="py-3 px-4">
@@ -927,6 +1389,11 @@ export default function ConsolidacionMain() {
                 <div className="lg:hidden space-y-3">
                   {costosTransporte.map((costo) => (
                     <div key={costo.id} className="border border-gray-200 rounded-xl p-4 bg-white">
+                      {esConsolidado && (
+                        <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium mb-2 ${costo.TipoPedido === 'chile' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800'}`}>
+                          {costo.TipoPedido === 'chile' ? 'Chile' : 'Locales'}
+                        </span>
+                      )}
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                           <p className="text-xs text-gray-600">Fecha</p>
@@ -962,6 +1429,175 @@ export default function ConsolidacionMain() {
                         </button>
                         <button
                           onClick={() => eliminarCosto(costo)}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SECCIÓN DE COSTOS DE TRANSPORTE AEREO */}
+        {mostrarCostosAereo && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="w-1 h-8 bg-sky-500 rounded-full mr-3"></div>
+                <h2 className="text-xl font-semibold text-gray-800">Costos de Transporte Aéreo</h2>
+                <span className="ml-3 text-xs font-medium bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{etiquetaOrigen}</span>
+                <div className="ml-4 text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                  {costosAereo.length} costos en el rango
+                </div>
+              </div>
+
+              <button
+                onClick={() => abrirModalAereo()}
+                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg font-medium transition-all"
+              >
+                + Nuevo Costo Aéreo
+              </button>
+            </div>
+
+            {errorCostosAereo && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                <div className="flex items-center">
+                  <div className="text-red-500 mr-2">⚠️</div>
+                  <p className="text-red-700">{errorCostosAereo}</p>
+                </div>
+              </div>
+            )}
+
+            {loadingCostosAereo ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500 mx-auto"></div>
+                <p className="text-gray-600 mt-2">Cargando costos de transporte aéreo...</p>
+              </div>
+            ) : costosAereo.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No se encontraron costos de transporte aéreo para las fechas seleccionadas
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Vista de escritorio - Tabla */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Fecha</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Guía Master</th>
+                        {esConsolidado && <th className="text-left py-3 px-4 font-medium text-gray-700">Origen</th>}
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Valor Flete (USD)</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">TRM</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Costo (COP)</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Peso Cobrado (Kg)</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Costo/Kg</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Observaciones</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costosAereo.map((costo) => (
+                        <tr key={costo.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4">{costo.Fecha}</td>
+                          <td className="py-3 px-4 font-mono text-sm">{costo.GuiaMaster}</td>
+                          {esConsolidado && (
+                            <td className="py-3 px-4">
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${costo.TipoPedido === 'chile' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800'}`}>
+                                {costo.TipoPedido === 'chile' ? 'Chile' : 'Locales'}
+                              </span>
+                            </td>
+                          )}
+                          <td className="py-3 px-4">${formatearNumero(costo.ValorFleteUSD)}</td>
+                          <td className="py-3 px-4">${formatearNumero(costo.TRM)}</td>
+                          <td className="py-3 px-4 font-medium">${formatearNumero(Math.round(costo.CostoCOP))}</td>
+                          <td className="py-3 px-4">{formatearNumero(costo.PesoCobrado)}</td>
+                          <td className="py-3 px-4">
+                            {costo.CostoAereoPorKg
+                              ? `$${parseFloat(costo.CostoAereoPorKg).toFixed(2)}`
+                              : 'N/A'}
+                          </td>
+                          <td className="py-3 px-4 max-w-xs truncate" title={costo.Observaciones}>
+                            {costo.Observaciones || '-'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => abrirModalAereo(costo)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => eliminarCostoAereoFn(costo)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Vista móvil - Tarjetas */}
+                <div className="lg:hidden space-y-3">
+                  {costosAereo.map((costo) => (
+                    <div key={costo.id} className="border border-gray-200 rounded-xl p-4 bg-white">
+                      {esConsolidado && (
+                        <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium mb-2 ${costo.TipoPedido === 'chile' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800'}`}>
+                          {costo.TipoPedido === 'chile' ? 'Chile' : 'Locales'}
+                        </span>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs text-gray-600">Fecha</p>
+                          <p className="font-medium">{costo.Fecha}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Guía Master</p>
+                          <p className="font-mono text-sm font-medium">{costo.GuiaMaster}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Valor Flete (USD)</p>
+                          <p className="font-medium">${formatearNumero(costo.ValorFleteUSD)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">TRM</p>
+                          <p className="font-medium">${formatearNumero(costo.TRM)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Costo (COP)</p>
+                          <p className="font-medium text-sky-700">${formatearNumero(Math.round(costo.CostoCOP))}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Costo/Kg</p>
+                          <p className="font-medium">
+                            {costo.CostoAereoPorKg
+                              ? `$${parseFloat(costo.CostoAereoPorKg).toFixed(2)}`
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-xs text-gray-600">Observaciones</p>
+                        <p className="text-sm">{costo.Observaciones || '-'}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => abrirModalAereo(costo)}
+                          className="flex-1 bg-sky-500 hover:bg-sky-600 text-white py-2 rounded-lg text-sm font-medium"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => eliminarCostoAereoFn(costo)}
                           className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium"
                         >
                           Eliminar
@@ -1165,6 +1801,11 @@ export default function ConsolidacionMain() {
                         <div className="lg:col-span-2">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-gray-900">{pedido.numero}</p>
+                            {esConsolidado && (
+                              <span className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${pedido.origen === 'chile' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800'}`}>
+                                {pedido.origen === 'chile' ? 'Chile' : 'Locales'}
+                              </span>
+                            )}
                             {tieneFactura(pedido) && (
                               <span className="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full">
                                 Fact: {pedido.facturaNo}
@@ -1173,6 +1814,9 @@ export default function ConsolidacionMain() {
                           </div>
                           <p className="text-sm text-gray-600">{pedido.cliente} - {pedido.region}</p>
                           <p className="text-xs text-gray-500">P.O: {pedido.ordenCompra}</p>
+                          {pedido.guiaMaster && (
+                            <p className="text-xs text-sky-600 font-mono">GM: {pedido.guiaMaster}</p>
+                          )}
                         </div>
 
                         {/* Detalles */}
@@ -1231,7 +1875,7 @@ export default function ConsolidacionMain() {
                                 />
                                 <div className="flex gap-1">
                                   <button
-                                    onClick={() => guardarFecha(pedido.id, pedido.tipoDato)}
+                                    onClick={() => guardarFecha(pedido.id, pedido.origen)}
                                     disabled={guardando}
                                     className="bg-green-500 hover:bg-green-600 text-white p-1 rounded text-xs disabled:opacity-50 flex items-center"
                                     title="Confirmar cambio"
@@ -1357,6 +2001,7 @@ export default function ConsolidacionMain() {
             <div className="flex items-center mb-6">
               <div className="w-1 h-8 bg-green-500 rounded-full mr-3"></div>
               <h2 className="text-xl font-semibold text-gray-800">Reportes por Área</h2>
+              <span className="ml-3 text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">{etiquetaOrigen}</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1435,7 +2080,7 @@ export default function ConsolidacionMain() {
                             }`}
                         >
                           {loading ? "Generando..." :
-                            reporte.disponible ? "Generar Reporte" : "Disponible Próximamente"}
+                            reporte.disponible ? (esConsolidado ? "Generar Consolidado" : "Generar Reporte") : "Disponible Próximamente"}
                         </button>
                       )}
                     </div>
@@ -1451,6 +2096,7 @@ export default function ConsolidacionMain() {
           <div className="flex items-center mb-4 sm:mb-6">
             <div className="w-1 h-6 sm:h-8 bg-purple-500 rounded-full mr-3"></div>
             <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Resumen del Período</h2>
+            <span className="ml-3 text-xs font-medium bg-purple-100 text-purple-800 px-2 py-1 rounded-full">{etiquetaOrigen}</span>
             {estadisticas.loading && (
               <div className="ml-3 sm:ml-4 flex items-center">
                 <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-purple-500"></div>
@@ -1570,6 +2216,24 @@ export default function ConsolidacionMain() {
                   </p>
                 </div>
 
+                {esConsolidado && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipo de Pedido <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formCosto.TipoPedido || ''}
+                      onChange={(e) => setFormCosto(prev => ({ ...prev, TipoPedido: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Seleccione tipo</option>
+                      <option value="normal">Pedidos Locales</option>
+                      <option value="chile">Pedidos Chile</option>
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Cantidad de Camiones <span className="text-red-500">*</span>
@@ -1683,6 +2347,191 @@ export default function ConsolidacionMain() {
                   </>
                 ) : (
                   'Guardar Costo'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Costos de Transporte Aéreo */}
+      {modalAereoAbierto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+            <div className="bg-sky-500 text-white p-4 rounded-t-2xl flex-shrink-0">
+              <h2 className="text-xl font-semibold">
+                {aereoEditando ? 'Editar Costo Aéreo' : 'Nuevo Costo de Transporte Aéreo'}
+              </h2>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formAereo.Fecha || ''}
+                    onChange={handleFechaAereoChange}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Solo fechas con Guía Master registrada en facturas
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Guía Master <span className="text-red-500">*</span>
+                  </label>
+                  {esConsolidado && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tipo de Pedido <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={formAereo.TipoPedido || ''}
+                        onChange={handleTipoAereoChange}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Seleccione tipo</option>
+                        <option value="normal">Pedidos Locales</option>
+                        <option value="chile">Pedidos Chile</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {loadingGuias ? (
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-500"></div>
+                      Cargando guías...
+                    </div>
+                  ) : guiasMasterDisponibles.length > 0 ? (
+                    <select
+                      value={formAereo.GuiaMaster}
+                      onChange={(e) => setFormAereo(prev => ({ ...prev, GuiaMaster: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Seleccione una Guía Master</option>
+                      {guiasMasterDisponibles.map((gm) => (
+                        <option key={gm} value={gm}>{gm}</option>
+                      ))}
+                    </select>
+                  ) : formAereo.Fecha ? (
+                    <p className="text-sm text-amber-600 bg-amber-50 rounded-lg p-2">
+                      No hay guías master disponibles para esta fecha
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400 bg-gray-50 rounded-lg p-2">
+                      Seleccione una fecha primero
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Valor Flete (USD) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formAereo.ValorFleteUSD || ''}
+                      onChange={(e) => setFormAereo(prev => ({ ...prev, ValorFleteUSD: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      TRM (USD→COP) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formAereo.TRM || ''}
+                      onChange={(e) => setFormAereo(prev => ({ ...prev, TRM: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {formAereo.ValorFleteUSD && formAereo.TRM && (
+                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-3">
+                    <p className="text-sm text-sky-800">
+                      <span className="font-medium">Costo en COP:</span>{' '}
+                      ${formatearNumero(Math.round(parseFloat(formAereo.ValorFleteUSD || 0) * parseFloat(formAereo.TRM || 0)))}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Peso Cobrado (Kg) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formAereo.PesoCobrado || ''}
+                    onChange={(e) => setFormAereo(prev => ({ ...prev, PesoCobrado: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observaciones
+                  </label>
+                  <textarea
+                    value={formAereo.Observaciones || ''}
+                    onChange={(e) => setFormAereo(prev => ({ ...prev, Observaciones: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    rows="3"
+                    placeholder="Notas adicionales..."
+                  />
+                </div>
+              </div>
+
+              {errorCostosAereo && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
+                  <div className="flex items-center">
+                    <div className="text-red-500 mr-2">⚠️</div>
+                    <p className="text-red-700 text-sm">{errorCostosAereo}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 p-6 pt-4 border-t border-gray-100 flex-shrink-0">
+              <button
+                onClick={cerrarModalAereo}
+                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarCostoAereoFn}
+                disabled={guardandoAereo}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${guardandoAereo
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-sky-500 hover:bg-sky-600 text-white'
+                  }`}
+              >
+                {guardandoAereo ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
+                  </>
+                ) : (
+                  'Guardar Costo Aéreo'
                 )}
               </button>
             </div>

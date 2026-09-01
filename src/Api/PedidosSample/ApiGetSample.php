@@ -26,14 +26,14 @@ if ($idPedido <= 0) {
 // ===================
 // Obtener encabezado
 // ===================
-$sqlEnc = "SELECT Id_EncabPedido, Cliente, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones
+$sqlEnc = "SELECT Id_EncabPedido, Cliente, Id_Cliente, Id_ClienteRegion, Id_Transportadora, Id_Bodega, PurchaseOrder, FechaOrden, FechaSalida, FechaEnroute, FechaDelivery, FechaIngreso, CantidadEstibas, IdAerolinea, IdAgencia, GuiaMaster, GuiaHija, Observaciones, Estado
              FROM EncabPedidoSample 
              WHERE Id_EncabPedido = ?";
 
 $stmtEnc = $enlace->prepare($sqlEnc);
 $stmtEnc->bind_param("i", $idPedido);
 $stmtEnc->execute();
-$stmtEnc->bind_result($idEncabPedido, $clienteTexto, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones);
+$stmtEnc->bind_result($idEncabPedido, $clienteTexto, $idCliente, $idClienteRegion, $idTransportadora, $idBodega, $purchaseOrder, $fechaOrden, $fechaSalida, $fechaEnroute, $fechaDelivery, $fechaIngreso, $cantidadEstibas, $idAerolinea, $idAgencia, $guiaMaster, $guiaHija, $observaciones, $estado);
 
 $header = null;
 if ($stmtEnc->fetch()) {
@@ -55,7 +55,8 @@ if ($stmtEnc->fetch()) {
         "Id_Agencia"      => $idAgencia,
         "GuiaMaster"     => $guiaMaster,
         "GuiaHija"       => $guiaHija,
-        "Observaciones"  => $observaciones
+        "Observaciones"  => $observaciones,
+        "Estado" => $estado
     ];
 }
 $stmtEnc->close();

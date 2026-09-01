@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import EnviarReporteDashboardModal from './EnviarReporteDashboardModal';
-import { fetchDashboardData, fetchVentasRegionCliente, fetchClientesProducto } from '../../services/dashboard/dashboardService';
+import { fetchDashboardData, fetchVentasRegionCliente, fetchClientesProducto, fetchIndicadoresOTIF, fetchDetalleIndicadorOTIF } from '../../services/dashboard/dashboardService';
 import KPICards from './KPICards';
+import KPIOTIFCards from './KPIOTIFCards';
+import ModalDetalleOTIF from './ModalDetalleOTIF';
 import ChartProveedoresClientes from './ChartProveedoresClientes';
 import ChartRegionesCliente from './ChartRegionesCliente';
 import ChartProductos from './ChartProductos';
@@ -9,6 +11,7 @@ import ChartTendencia from './ChartTendencia';
 import ChartClientesProducto from './ChartClientesProducto';
 import FiltrosFecha from './FiltrosFecha';
 import SeccionTransporte from './SeccionTransporte';
+import DashboardChile from './DashboardChile';
 import { APPS_CONFIG, fechaLocalStr } from '../../services/dashboard/dashboardService';
 import Swal from 'sweetalert2';
 
@@ -56,6 +59,11 @@ const ERROR_MESSAGES = {
  */
 const DashboardDibufala = () => {
     // ============================================
+    // ESTADO: Pestaña activa (Pedidos Normales | Chile)
+    // ============================================
+    const [pestanaActiva, setPestanaActiva] = useState("colombia");
+
+    // ============================================
     // ESTADO: Datos principales del dashboard
     // ============================================
     const dashboardRef = useRef(null);
@@ -91,12 +99,20 @@ const DashboardDibufala = () => {
     const [clientesProducto, setClientesProducto] = useState([]);
     const [cargandoClientesProducto, setCargandoClientesProducto] = useState(false);
 
+    // ============================================
+    // ESTADO: Indicadores OTIF
+    // ============================================
+    const [otif, setOtif] = useState(null);
+    const [modalOtifAbierto, setModalOtifAbierto] = useState(false);
+    const [modalOtifTipo, setModalOtifTipo] = useState("inFull");
+    const [modalOtifData, setModalOtifData] = useState(null);
+    const [cargandoDetalleOtif, setCargandoDetalleOtif] = useState(false);
 
     // ============================================
     // EFFECTS: Cargar datos al cambiar fechas
     // ============================================
     /**
-     * Carga los datos principales del dashboard
+     * Carga los datos principales del dashboard y los indicadores OTIF
      * Limpia las selecciones anteriores y establece el estado de carga
      */
     useEffect(() => {
@@ -111,8 +127,12 @@ const DashboardDibufala = () => {
             setClientesProducto([]);
 
             try {
-                const data = await fetchDashboardData(DASHBOARD_CONFIG.APP_ID, fechaInicio, fechaFin);
+                const [data, otifData] = await Promise.all([
+                    fetchDashboardData(DASHBOARD_CONFIG.APP_ID, fechaInicio, fechaFin),
+                    fetchIndicadoresOTIF(fechaInicio, fechaFin).catch(() => null),
+                ]);
                 setDatos(data);
+                setOtif(otifData);
             } catch (err) {
                 setError(err.message);
                 console.error('Error cargando datos del dashboard:', err);
@@ -212,10 +232,32 @@ const DashboardDibufala = () => {
      * Recarga los datos del dashboard
      */
     const handleRecargar = useCallback(() => {
-        // Usar el mismo estado que el useEffect para forzar la recarga
         setFechaInicio(fechaInicio);
         setFechaFin(fechaFin);
     }, [fechaInicio, fechaFin]);
+
+    /**
+     * Abre el modal de detalle para un indicador OTIF
+     */
+    const handleAbrirDetalleOTIF = useCallback(async (tipo) => {
+        setModalOtifAbierto(true);
+        setModalOtifTipo(tipo);
+        setCargandoDetalleOtif(true);
+        try {
+            const data = await fetchDetalleIndicadorOTIF(fechaInicio, fechaFin, tipo);
+            setModalOtifData(data);
+        } catch (error) {
+            console.error(`Error cargando detalle OTIF (${tipo}):`, error);
+            setModalOtifData({ pedidos: [], total: 0 });
+        } finally {
+            setCargandoDetalleOtif(false);
+        }
+    }, [fechaInicio, fechaFin]);
+
+    const cerrarModalOTIF = useCallback(() => {
+        setModalOtifAbierto(false);
+        setModalOtifData(null);
+    }, []);
 
     // ============================================
     // RENDERIZADO CONDICIONAL: Estados de carga y error
@@ -256,7 +298,39 @@ const DashboardDibufala = () => {
     // ============================================
     return (
         <>
-            <div ref={dashboardRef} data-dashboard-capture className="p-3 md:p-6 bg-gray-50 min-h-screen">
+            {/* 
+        =====================================
+        PESTAÑAS: Colombia | Chile
+        =====================================
+      */}
+            <div className="mb-4 md:mb-6">
+                <div className="bg-white rounded-xl shadow-md p-2">
+                    <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                        <button
+                            onClick={() => setPestanaActiva("colombia")}
+                            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm sm:text-base transition-all ${pestanaActiva === "colombia"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                                }`}
+                        >
+                            🇨🇴 Pedidos Normales
+                        </button>
+                        <button
+                            onClick={() => setPestanaActiva("chile")}
+                            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm sm:text-base transition-all ${pestanaActiva === "chile"
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                                }`}
+                        >
+                            🇨🇱 Chile
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {pestanaActiva === "colombia" ? (
+            <>
+            <div ref={dashboardRef} data-dashboard-capture className="p-3 md:p-6 bg-gray-50 min-h-screen animate-fadeIn">
                 {/* 
         =====================================
         HEADER: Título y botón de actualización
@@ -333,6 +407,18 @@ const DashboardDibufala = () => {
                                     color={configApp.colorVentas}
                                 />
                             </div>
+
+                            {/* Indicadores OTIF */}
+                            {otif?.success && (
+                                <div className="mb-6">
+                                    <KPIOTIFCards
+                                        indicadores={otif.indicadores}
+                                        detalle={otif.detalle}
+                                        onInFullClick={otif.indicadores.inFullPct < 100 ? () => handleAbrirDetalleOTIF("inFull") : undefined}
+                                        onOnTimeClick={otif.indicadores.onTimePct < 100 ? () => handleAbrirDetalleOTIF("onTime") : undefined}
+                                    />
+                                </div>
+                            )}
 
                             {/* 
               VERSIÓN DESKTOP (≥1280px): Layout de 2 columnas
@@ -723,6 +809,17 @@ const DashboardDibufala = () => {
                 fechaInicio={fechaInicio}
                 fechaFin={fechaFin}
             />
+
+            <ModalDetalleOTIF
+                isOpen={modalOtifAbierto}
+                onClose={cerrarModalOTIF}
+                tipo={modalOtifTipo}
+                data={cargandoDetalleOtif ? null : modalOtifData}
+            />
+            </>
+            ) : (
+                <DashboardChile />
+            )}
         </>
     );
 };

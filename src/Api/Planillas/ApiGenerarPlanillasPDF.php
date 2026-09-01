@@ -33,6 +33,15 @@ $con_firma = isset($input['con_firma']) ? (bool)$input['con_firma'] : true;
 $tipo_carta = $input['tipo_carta'];
 $id_planilla = intval($input['id_planilla']);
 
+// DETECTAR SI ES PLANILLA CHILE
+$sqlCheck = "SELECT Id_Planilla FROM PlanillasChile WHERE Id_Planilla = ?";
+$stmtCheck = $enlace->prepare($sqlCheck);
+$stmtCheck->bind_param("i", $id_planilla);
+$stmtCheck->execute();
+$stmtCheck->store_result();
+$esChile = $stmtCheck->num_rows > 0;
+$stmtCheck->close();
+
 // Función para convertir mes numérico a texto en español
 function mesEnEspanol($fecha)
 {
@@ -62,8 +71,37 @@ function mesEnEspanol($fecha)
     return $fecha;
 }
 
-// CONSULTA PRINCIPAL CORREGIDA: DATOS DE LA PLANILLA
-$sqlPlanilla = "SELECT
+// CONSULTAR DATOS DE LA PLANILLA (normal o Chile)
+$tablaPlanillas = $esChile ? 'PlanillasChile' : 'Planillas';
+$tablaEntidad = $esChile ? 'ClientesChile' : 'Consignatarios';
+$campoEntidad = $esChile ? 'Id_Cliente' : 'Id_Consignatario';
+$campoNombreEntidad = $esChile ? 'cli.Nombre' : 'csg.Nombre';
+
+$sqlPlanilla = $esChile ? "SELECT
+                pln.Id_Planilla,
+                DATE_FORMAT(pln.Fecha, '%d de %m de %Y') AS fecha_formateada,
+                pln.Facturas,
+                pln.GuiaMaster,
+                pln.GuiaHija,
+                pln.TotalPiezas,
+                pln.Precinto,
+                pln.Vehiculo,
+                pln.Placa,
+                cli.Nombre AS ConsignatarioFinal,
+                aer.NOMAEROLINEA AS Aerolinea,
+                age.NOMAGENCIA AS AgenciaCarga,
+                con.Nombre AS NombreConductor,
+                con.NoDocumento AS CedulaConductor,
+                con_ayu.Nombre AS NombreAyudante,
+                con_ayu.NoDocumento AS CedulaAyudante
+            FROM PlanillasChile pln
+            LEFT JOIN ClientesChile cli ON pln.Id_Cliente = cli.Id_Cliente
+            LEFT JOIN Aerolineas aer ON pln.IdAerolinea = aer.IdAerolinea
+            LEFT JOIN Agencias age ON pln.IdAgencia = age.IdAgencia
+            LEFT JOIN Conductores con ON pln.Id_Conductor = con.Id_Conductor
+            LEFT JOIN Conductores con_ayu ON pln.Id_Ayudante = con_ayu.Id_Conductor
+            WHERE pln.Id_Planilla = ?"
+            : "SELECT
                 pln.Id_Planilla,
                 DATE_FORMAT(pln.Fecha, '%d de %m de %Y') AS fecha_formateada,
                 pln.Facturas,
@@ -80,15 +118,13 @@ $sqlPlanilla = "SELECT
                 con.NoDocumento AS CedulaConductor,
                 con_ayu.Nombre AS NombreAyudante,
                 con_ayu.NoDocumento AS CedulaAyudante
-            FROM
-                Planillas pln
+            FROM Planillas pln
             LEFT JOIN Consignatarios csg ON pln.Id_Consignatario = csg.Id_Consignatario
             LEFT JOIN Aerolineas aer ON pln.IdAerolinea = aer.IdAerolinea
             LEFT JOIN Agencias age ON pln.IdAgencia = age.IdAgencia
             LEFT JOIN Conductores con ON pln.Id_Conductor = con.Id_Conductor
             LEFT JOIN Conductores con_ayu ON pln.Id_Ayudante = con_ayu.Id_Conductor
-            WHERE
-                pln.Id_Planilla = ?";
+            WHERE pln.Id_Planilla = ?";
 
 $stmtPlanilla = $enlace->prepare($sqlPlanilla);
 if (!$stmtPlanilla) {
@@ -280,12 +316,12 @@ $pdf->Cell(0, 5, $precinto, 0, 1, 'L');
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'AGENCIA DE CARGA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 5, $agencia_carga, 0, 1, 'L');
+$pdf->Cell(0, 5, utf8_decode($agencia_carga), 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'AEROLINEA', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 5, $aerolinea, 0, 1, 'L');
+$pdf->Cell(0, 5, utf8_decode($aerolinea), 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'EMPRESA TRANSPORTADORA', 0, 0, 'L');
@@ -295,7 +331,7 @@ $pdf->Cell(0, 5, 'PARTICULAR', 0, 1, 'L');
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'NOMBRE DEL CONDUCTOR', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 5, $nombre_conductor, 0, 1, 'L');
+$pdf->Cell(0, 5, utf8_decode($nombre_conductor), 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'CEDULA DE CIUDADANIA', 0, 0, 'L');
@@ -305,7 +341,7 @@ $pdf->Cell(0, 5, $cedula_conductor, 0, 1, 'L');
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'NOMBRE DEL AYUDANTE', 0, 0, 'L');
 $pdf->SetFont('Helvetica', '', 9);
-$pdf->Cell(0, 5, $nombre_ayudante, 0, 1, 'L');
+$pdf->Cell(0, 5, utf8_decode($nombre_ayudante), 0, 1, 'L');
 
 $pdf->SetFont('Helvetica', 'B', 9);
 $pdf->Cell(75, 5, 'CEDULA DE CIUDADANIA', 0, 0, 'L');

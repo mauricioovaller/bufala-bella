@@ -224,5 +224,7 @@ Si tienes problemas:
 ---
 
 **Última actualización:** 16 de Abril de 2026  
+| `crear_tablas_facturacion_chile.sql` | 2026-07-07 | Crea EncabInvoiceChile / DetInvoiceChile |
+
 **Responsable:** Equipo de Desarrollo  
 **Próxima revisión:** Cuando agregues nuevos scripts

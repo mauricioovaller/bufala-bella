@@ -8,8 +8,18 @@ import {
   actualizarCliente,
   validarCliente,
 } from "../services/clientesService";
+import {
+  listarClientesChile,
+  obtenerClienteChile,
+  guardarClienteChile,
+  actualizarClienteChile,
+  validarClienteChile,
+} from "../services/clientesChileService";
 
-export default function Clientes() {
+// ============================================================================
+// CONTENIDO: CLIENTES NORMALES (funcionalidad existente - no modificada)
+// ============================================================================
+function ClientesNormales() {
   const [form, setForm] = useState({
     idCliente: 0,
     nombre: "",
@@ -28,6 +38,7 @@ export default function Clientes() {
 
   useEffect(() => {
     cargarDatosIniciales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cargarDatosIniciales = async () => {
@@ -193,7 +204,7 @@ export default function Clientes() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Formulario */}
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
         <h2 className="text-xl font-semibold mb-4 text-slate-700">
@@ -534,6 +545,499 @@ export default function Clientes() {
             </>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// CONTENIDO: CLIENTES CHILE (nuevo CRUD sobre tabla ClientesChile)
+// ============================================================================
+function ClientesChileTab() {
+  const [form, setForm] = useState({
+    idCliente: 0,
+    nombre: "",
+    direccion: "",
+    ciudad: "",
+    pais: "Chile",
+    contacto: "",
+    email: "",
+    estado: "Activo",
+    rut: "",
+    telefono: "",
+  });
+
+  const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [mostrarLista, setMostrarLista] = useState(false);
+
+  useEffect(() => {
+    cargarDatosIniciales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cargarDatosIniciales = async () => {
+    try {
+      setLoading(true);
+      const data = await listarClientesChile();
+
+      if (data && data.clientes) {
+        setClientes(data.clientes);
+      } else if (Array.isArray(data)) {
+        setClientes(data);
+      } else {
+        setClientes([]);
+      }
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+      Swal.fire("Error", "No se pudieron cargar los datos", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleLista = () => {
+    setMostrarLista(!mostrarLista);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({
+      ...form,
+      [name]: value,
+    });
+  };
+
+  const limpiarFormulario = () => {
+    setForm({
+      idCliente: 0,
+      nombre: "",
+      direccion: "",
+      ciudad: "",
+      pais: "Chile",
+      contacto: "",
+      email: "",
+      estado: "Activo",
+      rut: "",
+      telefono: "",
+    });
+    setEditMode(false);
+  };
+
+  const validarDatos = async () => {
+    const tipo = editMode ? "editar" : "nuevo";
+    const res = await validarClienteChile(tipo, form.idCliente, form.nombre);
+    return res.success;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!form.nombre.trim()) {
+      Swal.fire("Error", "El nombre del cliente es obligatorio", "warning");
+      return;
+    }
+
+    try {
+      const esValido = await validarDatos();
+      if (!esValido) {
+        Swal.fire("Error", "Ya existe un cliente con ese nombre", "warning");
+        return;
+      }
+
+      let resultado;
+      if (editMode) {
+        resultado = await actualizarClienteChile(form);
+      } else {
+        resultado = await guardarClienteChile(form);
+      }
+
+      if (resultado.success) {
+        Swal.fire("Éxito", resultado.message, "success");
+        limpiarFormulario();
+        cargarDatosIniciales();
+      } else {
+        Swal.fire("Error", resultado.message, "error");
+      }
+    } catch (error) {
+      console.error("Error guardando cliente Chile:", error);
+      Swal.fire("Error", "Ocurrió un error al guardar el cliente", "error");
+    }
+  };
+
+  const handleEdit = async (idCliente) => {
+    try {
+      setLoading(true);
+      const data = await obtenerClienteChile(idCliente);
+
+      if (data.error) {
+        Swal.fire("Error", data.error, "error");
+        return;
+      }
+
+      setForm({
+        idCliente: data.cliente.Id_Cliente,
+        nombre: data.cliente.Nombre || "",
+        direccion: data.cliente.Direccion || "",
+        ciudad: data.cliente.Ciudad || "",
+        pais: data.cliente.Pais || "Chile",
+        contacto: data.cliente.Contacto || "",
+        email: data.cliente.Email || "",
+        estado: data.cliente.Estado || "Activo",
+        rut: data.cliente.Rut || "",
+        telefono: data.cliente.Telefono || "",
+      });
+
+      setEditMode(true);
+      setMostrarLista(false);
+    } catch (error) {
+      console.error("Error cargando cliente Chile:", error);
+      Swal.fire("Error", "No se pudo cargar el cliente", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      {/* Formulario */}
+      <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+        <h2 className="text-xl font-semibold mb-4 text-slate-700">
+          {editMode ? "Editar Cliente Chile" : "Registrar Cliente Chile"}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Nombre del Cliente *
+              </label>
+              <input
+                type="text"
+                name="nombre"
+                placeholder="Ingrese el nombre del cliente"
+                value={form.nombre}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                RUT
+              </label>
+              <input
+                type="text"
+                name="rut"
+                placeholder="Ej: 78.986.740-2"
+                value={form.rut}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Dirección
+              </label>
+              <input
+                type="text"
+                name="direccion"
+                placeholder="Dirección del cliente"
+                value={form.direccion}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Ciudad
+              </label>
+              <input
+                type="text"
+                name="ciudad"
+                placeholder="Ej: Santiago"
+                value={form.ciudad}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                País
+              </label>
+              <input
+                type="text"
+                name="pais"
+                placeholder="Chile"
+                value={form.pais}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Teléfono
+              </label>
+              <input
+                type="text"
+                name="telefono"
+                placeholder="Teléfono del cliente"
+                value={form.telefono}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Contacto
+              </label>
+              <input
+                type="text"
+                name="contacto"
+                placeholder="Persona de contacto"
+                value={form.contacto}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                placeholder="correo@cliente.cl"
+                value={form.email}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Estado
+              </label>
+              <select
+                name="estado"
+                value={form.estado}
+                onChange={handleChange}
+                className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="Activo">Activo</option>
+                <option value="Inactivo">Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Botones */}
+          <div className="flex flex-col sm:flex-row gap-2 pt-4">
+            <button
+              type="submit"
+              className="bg-blue-600 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-blue-700 transition font-medium flex-1"
+            >
+              {editMode ? "Actualizar Cliente" : "Guardar Cliente"}
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleLista}
+              className="bg-purple-600 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-purple-700 transition font-medium flex-1"
+            >
+              {mostrarLista ? "Ocultar Lista" : "Ver Clientes"}
+            </button>
+
+            {editMode && (
+              <button
+                type="button"
+                onClick={limpiarFormulario}
+                className="bg-gray-500 text-white rounded-lg px-4 py-3 sm:py-2 hover:bg-gray-600 transition font-medium flex-1"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+
+      {/* Lista de clientes Chile */}
+      {mostrarLista && (
+        <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-slate-700">
+              Lista de Clientes Chile ({clientes.length})
+            </h2>
+            <button
+              onClick={toggleLista}
+              className="bg-gray-500 text-white px-3 py-1 rounded-md hover:bg-gray-600 transition text-sm"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="text-center text-gray-500 py-4">Cargando clientes...</p>
+          ) : (
+            <>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="p-2 border">Nombre</th>
+                      <th className="p-2 border">RUT</th>
+                      <th className="p-2 border">Ciudad</th>
+                      <th className="p-2 border">Dirección</th>
+                      <th className="p-2 border">Teléfono</th>
+                      <th className="p-2 border">Estado</th>
+                      <th className="p-2 border text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientes.length > 0 ? (
+                      clientes.map((cliente) => (
+                        <tr key={cliente.Id_Cliente} className="hover:bg-gray-50">
+                          <td className="p-2 border font-medium">{cliente.Nombre}</td>
+                          <td className="p-2 border">{cliente.Rut}</td>
+                          <td className="p-2 border">{cliente.Ciudad}</td>
+                          <td className="p-2 border text-sm max-w-xs truncate" title={cliente.Direccion}>
+                            {cliente.Direccion}
+                          </td>
+                          <td className="p-2 border">{cliente.Telefono}</td>
+                          <td className="p-2 border text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${cliente.Estado === "Activo" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                              {cliente.Estado}
+                            </span>
+                          </td>
+                          <td className="p-2 border text-center">
+                            <button
+                              onClick={() => handleEdit(cliente.Id_Cliente)}
+                              className="bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600 transition text-sm"
+                            >
+                              Editar
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="7" className="p-4 text-center text-gray-500">
+                          No hay clientes Chile registrados
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:hidden">
+                {clientes.length > 0 ? (
+                  clientes.map((cliente) => (
+                    <div
+                      key={cliente.Id_Cliente}
+                      className="border rounded-lg p-4 shadow-sm bg-white"
+                    >
+                      <div className="space-y-2">
+                        <div>
+                          <span className="font-semibold text-gray-700">Nombre:</span>
+                          <p className="text-gray-900 font-medium mt-1">{cliente.Nombre}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-600">RUT:</span>
+                            <p className="font-medium">{cliente.Rut || "-"}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Ciudad:</span>
+                            <p className="font-medium">{cliente.Ciudad || "-"}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Teléfono:</span>
+                            <p className="font-medium">{cliente.Telefono || "-"}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Estado:</span>
+                            <p className="font-medium">{cliente.Estado}</p>
+                          </div>
+                        </div>
+                        {cliente.Direccion && (
+                          <div>
+                            <span className="text-gray-600">Dirección:</span>
+                            <p className="text-sm mt-1 text-gray-700">{cliente.Direccion}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleEdit(cliente.Id_Cliente)}
+                        className="mt-3 bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 transition w-full text-sm font-medium"
+                      >
+                        Editar Cliente
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-gray-50">
+                    <p>No hay clientes Chile registrados</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// PÁGINA PRINCIPAL CON PESTAÑAS: NORMAL | CHILE
+// ============================================================================
+export default function Clientes() {
+  const [pestanaActiva, setPestanaActiva] = useState("normal");
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      {/* Encabezado */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-800">Clientes</h1>
+      </div>
+
+      {/* Pestañas */}
+      <div className="bg-white rounded-xl shadow-md p-2">
+        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setPestanaActiva("normal")}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm sm:text-base transition-all ${pestanaActiva === "normal"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-600 hover:text-gray-900"
+              }`}
+          >
+            🇨🇴 Pedidos Normales
+          </button>
+          <button
+            onClick={() => setPestanaActiva("chile")}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm sm:text-base transition-all ${pestanaActiva === "chile"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-600 hover:text-gray-900"
+              }`}
+          >
+            🇨🇱 Chile
+          </button>
+        </div>
+      </div>
+
+      {/* Contenido según pestaña */}
+      {pestanaActiva === "normal" ? (
+        <ClientesNormales />
+      ) : (
+        <ClientesChileTab />
       )}
     </div>
   );

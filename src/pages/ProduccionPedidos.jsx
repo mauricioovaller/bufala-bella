@@ -1,6 +1,7 @@
 // src/pages/ProduccionPedidos.jsx
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
+import { MessageCircle } from "lucide-react";
 import {
   getPedidoProduccion,
   guardarProduccion,
@@ -29,8 +30,10 @@ export default function ProduccionPedidos() {
   const [responsables, setResponsables] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [cargandoListas, setCargandoListas] = useState(false);
-  // Estado para cambios locales (ahora incluye cantidades)
+  // Estado para cambios locales (normal/sample)
   const [itemsEditados, setItemsEditados] = useState({});
+  // Estado para cambios locales (Chile)
+  const [chileItemsEditados, setChileItemsEditados] = useState({});
   // Estados de auto-guardado
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -92,23 +95,40 @@ export default function ProduccionPedidos() {
     setCargandoPedido(true);
     setPedido(null);
     setItemsEditados({});
+    setChileItemsEditados({});
     try {
       const res = await getPedidoProduccion({ idPedido, tipo: tipoPedido });
       if (res.success) {
         setPedido(res.pedido);
-        const inicial = {};
-        res.pedido.items.forEach((item) => {
-          inicial[item.idDet] = {
-            idResponsable: item.idResponsable || "",
-            lotes: [
-              item.lotes?.lote1?.id || "",
-              item.lotes?.lote2?.id || "",
-              item.lotes?.lote3?.id || "",
-            ],
-            cantidades: item.cantidades || [0, 0, 0],
-          };
-        });
-        setItemsEditados(inicial);
+        if (tipoPedido === "chile") {
+          const inicialChile = {};
+          res.pedido.items.forEach((item) => {
+            inicialChile[item.idDet] = {
+              lote: item.lote?.id || "",
+              fechaElaboracion: item.fechaElaboracion || "",
+              fechaVencimiento: item.fechaVencimiento || "",
+              temperaturaInicial: item.temperaturaInicial || "",
+              temperaturaFinal: item.temperaturaFinal || "",
+              horaInicialPH: item.horaInicialPH || "",
+              horaFinalPH: item.horaFinalPH || "",
+            };
+          });
+          setChileItemsEditados(inicialChile);
+        } else {
+          const inicial = {};
+          res.pedido.items.forEach((item) => {
+            inicial[item.idDet] = {
+              idResponsable: item.idResponsable || "",
+              lotes: [
+                item.lotes?.lote1?.id || "",
+                item.lotes?.lote2?.id || "",
+                item.lotes?.lote3?.id || "",
+              ],
+              cantidades: item.cantidades || [0, 0, 0],
+            };
+          });
+          setItemsEditados(inicial);
+        }
       } else {
         Swal.fire("Error", res.message || "No se pudo cargar el pedido", "error");
       }
@@ -154,11 +174,42 @@ export default function ProduccionPedidos() {
     }
     return item.cantidades?.[posicion] || 0;
   };
+  // ===== Handlers para Chile =====
+  const getChileValue = (item, field) => {
+    const editado = chileItemsEditados[item.idDet];
+    if (editado && editado[field] !== undefined) return editado[field];
+    return item[field] || "";
+  };
+  const handleChileChange = (idDet, field, value) => {
+    setChileItemsEditados((prev) => {
+      const nuevoEstado = { ...prev };
+      if (field === "lote" || field === "fechaElaboracion") {
+        // Sincronizar lote y fecha de elaboracion con TODOS los items del pedido
+        pedido?.items?.forEach((item) => {
+          const current = nuevoEstado[item.idDet] || {};
+          nuevoEstado[item.idDet] = { ...current, [field]: value };
+          // Recalcular vencimiento si cambió fechaElaboracion
+          if (field === "fechaElaboracion" && value) {
+            const dias = item.diasVencimiento || 0;
+            if (dias > 0) {
+              const fecha = new Date(value);
+              fecha.setDate(fecha.getDate() + dias);
+              nuevoEstado[item.idDet].fechaVencimiento = fecha.toISOString().split("T")[0];
+            } else {
+              nuevoEstado[item.idDet].fechaVencimiento = "";
+            }
+          }
+        });
+      } else {
+        // temperaturaInicial, temperaturaFinal, horaInicialPH, horaFinalPH, fechaVencimiento — solo ese item
+        const current = nuevoEstado[idDet] || {};
+        nuevoEstado[idDet] = { ...current, [field]: value };
+      }
+      return nuevoEstado;
+    });
+  };
+
   const calcularTotalCantidades = (item) => {
-    const cant1 = getCantidadLoteValue(item, 0) || 0;
-    const cant2 = getCantidadLoteValue(item, 1) || 0;
-    const cant3 = getCantidadLoteValue(item, 2) || 0;
-    return cant1 + cant2 + cant3;
   };
   const validarCantidadesLotes = (item) => {
     const total = calcularTotalCantidades(item);
@@ -251,17 +302,38 @@ export default function ProduccionPedidos() {
       Swal.fire("Aviso", "No hay pedido cargado", "info");
       return;
     }
-    // Validar antes de guardar
-    const errores = validarTodosPedidos();
-    if (errores.length > 0) {
-      Swal.fire(
-        "Error de validación",
-        `Las siguientes cantidades exceden lo disponible:\n\n${errores.join("\n")}`,
-        "error"
-      );
-      return;
+    if (tipoPedido !== "chile") {
+      const errores = validarTodosPedidos();
+      if (errores.length > 0) {
+        Swal.fire("Error de validación", `Las siguientes cantidades exceden lo disponible:\n\n${errores.join("\n")}`, "error");
+        return;
+      }
+    }
+    if (tipoPedido === "chile") {
+      for (const item of pedido.items) {
+        const editado = chileItemsEditados[item.idDet] || {};
+        const horaIni = editado.horaInicialPH || item.horaInicialPH || "";
+        const horaFin = editado.horaFinalPH || item.horaFinalPH || "";
+        if (horaIni && horaFin && horaFin < horaIni) {
+          Swal.fire("Error de validación", `La Hora Final PH no puede ser menor que la Hora Inicial PH en el producto ${item.producto || item.idDet}.`, "error");
+          return;
+        }
+      }
     }
     const items = pedido.items.map((item) => {
+      if (tipoPedido === "chile") {
+        const editado = chileItemsEditados[item.idDet] || {};
+        return {
+          idDet: item.idDet,
+          lote: editado.lote || null,
+          fechaElaboracion: editado.fechaElaboracion || "",
+          fechaVencimiento: editado.fechaVencimiento || "",
+          temperaturaInicial: editado.temperaturaInicial || "",
+          temperaturaFinal: editado.temperaturaFinal || "",
+          horaInicialPH: editado.horaInicialPH || "",
+          horaFinalPH: editado.horaFinalPH || "",
+        };
+      }
       const editado = itemsEditados[item.idDet] || {};
       return {
         idDet: item.idDet,
@@ -278,7 +350,7 @@ export default function ProduccionPedidos() {
       });
       if (res.success) {
         Swal.fire("Éxito", "Producción guardada correctamente", "success");
-        handleCargarPedido(pedido.idPedido); // recargar
+        handleCargarPedido(pedido.idPedido);
       } else {
         Swal.fire("Error", res.message || "Error al guardar", "error");
       }
@@ -328,6 +400,19 @@ export default function ProduccionPedidos() {
     setAutoSaveStatus("");
     try {
       const items = pedido.items.map((item) => {
+        if (tipoPedido === "chile") {
+          const editado = chileItemsEditados[item.idDet] || {};
+          return {
+            idDet: item.idDet,
+            lote: editado.lote || null,
+            fechaElaboracion: editado.fechaElaboracion || "",
+            fechaVencimiento: editado.fechaVencimiento || "",
+            temperaturaInicial: editado.temperaturaInicial || "",
+            temperaturaFinal: editado.temperaturaFinal || "",
+            horaInicialPH: editado.horaInicialPH || "",
+            horaFinalPH: editado.horaFinalPH || "",
+          };
+        }
         const editado = itemsEditados[item.idDet] || {};
         return {
           idDet: item.idDet,
@@ -387,12 +472,81 @@ export default function ProduccionPedidos() {
     }
   }, [autoSaveStatus]);
 
+  const mostrarAyuda = () => {
+    let html = "";
+    if (tipoPedido === "chile") {
+      html = `
+        <div style="text-align:left;font-size:14px;line-height:1.6;">
+          <p><strong>Despachos — Pedidos Chile</strong></p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;">
+          <p><strong>Cómo asignar Lote y Fechas:</strong></p>
+          <ol style="padding-left:20px;margin-bottom:12px;">
+            <li>Seleccione tipo <strong>"Chile"</strong> y rango de fechas</li>
+            <li>Click <strong>"Buscar pedidos"</strong></li>
+            <li>Seleccione un pedido con <strong>"Cargar"</strong></li>
+            <li>Para cada producto asigne:
+              <ul><li><strong>Lote</strong> — seleccione de la lista</li>
+              <li><strong>F. Elaboración</strong> — Fecha de producción</li>
+              <li><strong>F. Vencimiento</strong> — Se auto calcula al poner F. Elaboración</li></ul>
+            </li>
+            <li>Click <strong>"Guardar Despachos"</strong></li>
+          </ol>
+          <p style="color:#2563eb;font-size:12px;font-weight:500;">🔗 IMPORTANTE: Todos los productos del mismo pedido comparten el mismo Lote y la misma Fecha de Elaboración. Al cambiar estos valores en cualquier producto, se actualizan automáticamente en todos los productos del pedido. La Fecha de Vencimiento se calcula individualmente según los días de cada producto.</p>
+          <p style="color:#6b7280;font-size:12px;">💡 Los datos se pueden consultar en el detalle del pedido Chile usando el botón 👁️.</p>
+        </div>`;
+    } else {
+      const esNormal = tipoPedido === "normal";
+      html = `
+        <div style="text-align:left;font-size:14px;line-height:1.6;">
+          <p><strong>Despachos — Pedidos ${esNormal ? "Normales" : "Sample"}</strong></p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;">
+          <p><strong>📋 ¿Cómo asignar responsable, lotes y cantidades?</strong></p>
+          <ol style="padding-left:20px;margin-bottom:12px;">
+            <li>Seleccione el tipo (${esNormal ? "Normal" : "Sample"}) y rango de fechas</li>
+            <li>Click <strong>"Buscar pedidos"</strong> → se listan los pedidos del período</li>
+            <li>Click <strong>"Cargar"</strong> en el pedido deseado</li>
+            <li>Para cada producto del detalle:
+              <ul style="margin-top:4px;">
+                <li><strong>Responsable</strong> — seleccione la persona a cargo</li>
+                <li><strong>Lote 1, 2, 3</strong> — seleccione hasta 3 lotes (no repetidos)</li>
+                <li><strong>Cantidad</strong> — ingrese las unidades por cada lote</li>
+              </ul>
+            </li>
+            <li>Click <strong>"Guardar Despachos"</strong> o espere al auto-guardado</li>
+          </ol>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;">
+          <p><strong>✅ Validaciones</strong></p>
+          <ul style="padding-left:20px;margin-bottom:12px;">
+            <li><span style="color:#059669;">✓ Fondo verde</span> = cantidades válidas</li>
+            <li><span style="color:#dc2626;">❌ Fondo rojo</span> = la suma de cantidades excede lo disponible</li>
+            <li>No se pueden repetir lotes en un mismo producto</li>
+            <li>Si hay lote asignado, debe haber responsable</li>
+          </ul>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0;">
+          <p><strong>🔄 Auto-guardado</strong></p>
+          <p style="margin-bottom:8px;">Los cambios se guardan automáticamente cada 30 segundos. Puede desactivarlo con el botón "⊙ Manual". El indicador muestra:</p>
+          <ul style="padding-left:20px;">
+            <li>🔄 <span style="color:#2563eb;">Auto-guardando...</span> — guardando cambios</li>
+            <li>✅ <span style="color:#059669;">Guardado</span> — cambios guardados correctamente</li>
+            <li>❌ <span style="color:#dc2626;">Error al guardar</span> — falló la conexión</li>
+          </ul>
+        </div>`;
+    }
+    Swal.fire({ title: "Ayuda - Despachos", html, confirmButtonText: "Entendido", confirmButtonColor: "#2563EB", width: 520 });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
-        <h2 className="text-xl font-semibold mb-4 text-slate-700">
-          Despachos: Asignar Responsable, Lotes y Cantidades
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className={`text-xl font-semibold ${tipoPedido === "chile" ? "text-teal-700" : "text-slate-700"}`}>
+            Despachos {tipoPedido === "chile" ? "— Pedidos Chile" : tipoPedido === "sample" ? "— Samples" : "— Pedidos"}
+          </h2>
+          <button onClick={mostrarAyuda} className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 rounded-lg text-sm font-medium transition" title="Ayuda">
+            <MessageCircle size={16} />
+            <span className="hidden sm:inline">Ayuda</span>
+          </button>
+        </div>
         {/* Filtros de búsqueda por fecha */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="space-y-1">
@@ -404,6 +558,7 @@ export default function ProduccionPedidos() {
             >
               <option value="normal">Normal</option>
               <option value="sample">Sample</option>
+              <option value="chile">Chile</option>
             </select>
           </div>
           <div className="space-y-1">
@@ -591,217 +746,210 @@ export default function ProduccionPedidos() {
             </div>
             {/* Vista escritorio/tablet: tabla de ítems */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="p-2 text-left">Producto</th>
-                    <th className="p-2 text-left">Descripción</th>
-                    <th className="p-2 text-right">Cantidad</th>
-                    <th className="p-2 text-left">Responsable</th>
-                    <th className="p-2 text-left" colSpan="3">Lotes y Cantidades</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pedido.items.map((item) => {
-                    const validacion = obtenerMensajeValidacion(item);
-                    return (
-                      <tr key={item.idDet} className={`border-b hover:bg-gray-50 ${validacion.bgColor}`}>
-                        <td className="p-2">{item.idProducto}</td>
-                        <td className="p-2">{item.producto}</td>
-                        <td className="p-2 text-right">{item.cantidad}</td>
-                        <td className="p-2">
-                          <select
-                            value={getResponsableValue(item)}
-                            onChange={(e) => handleResponsableChange(item.idDet, e.target.value)}
-                            className="border rounded p-1 text-xs w-32"
-                          >
-                            <option value="">-- Sin asignar --</option>
-                            {responsables.map((r) => (
-                              <option key={r.idResponsable} value={r.idResponsable}>
-                                {r.nombre}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="p-2">
-                          <div className="space-y-1">
-                            <select
-                              value={getLoteValue(item, 0)}
-                              onChange={(e) => handleLoteChange(item.idDet, 0, e.target.value)}
-                              className="border rounded p-1 text-xs w-24"
-                            >
-                              <option value="">-- Lote 1 --</option>
-                              {lotes.map((l) => (
-                                <option key={l.idLote} value={l.idLote}>
-                                  {l.codigoLote} - {l.descripcion}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              type="number"
-                              min="0"
-                              value={getCantidadLoteValue(item, 0)}
-                              onChange={(e) => handleCantidadLoteChange(item.idDet, 0, e.target.value)}
-                              className="border rounded p-1 text-xs w-24"
-                              placeholder="Cant."
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="space-y-1">
-                            <select
-                              value={getLoteValue(item, 1)}
-                              onChange={(e) => handleLoteChange(item.idDet, 1, e.target.value)}
-                              className="border rounded p-1 text-xs w-24"
-                            >
-                              <option value="">-- Lote 2 --</option>
-                              {lotes.map((l) => (
-                                <option key={l.idLote} value={l.idLote}>
-                                  {l.codigoLote} - {l.descripcion}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              type="number"
-                              min="0"
-                              value={getCantidadLoteValue(item, 1)}
-                              onChange={(e) => handleCantidadLoteChange(item.idDet, 1, e.target.value)}
-                              className="border rounded p-1 text-xs w-24"
-                              placeholder="Cant."
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="space-y-1">
-                            <select
-                              value={getLoteValue(item, 2)}
-                              onChange={(e) => handleLoteChange(item.idDet, 2, e.target.value)}
-                              className="border rounded p-1 text-xs w-24"
-                            >
-                              <option value="">-- Lote 3 --</option>
-                              {lotes.map((l) => (
-                                <option key={l.idLote} value={l.idLote}>
-                                  {l.codigoLote} - {l.descripcion}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              type="number"
-                              min="0"
-                              value={getCantidadLoteValue(item, 2)}
-                              onChange={(e) => handleCantidadLoteChange(item.idDet, 2, e.target.value)}
-                              className="border rounded p-1 text-xs w-24"
-                              placeholder="Cant."
-                            />
-                          </div>
-                        </td>
+              {tipoPedido === "chile" ? (
+                <>
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="p-2 text-left">Producto</th>
+                        <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-right">Cantidad</th>
+                        <th className="p-2 text-left">Lote</th>
+                        <th className="p-2 text-left">F. Elaboración</th>
+                        <th className="p-2 text-left">F. Vencimiento</th>
+                        <th className="p-2 text-left">Temp. Inicial</th>
+                        <th className="p-2 text-left">Temp. Final</th>
+                        <th className="p-2 text-left">H. Inicial pH</th>
+                        <th className="p-2 text-left">H. Final pH</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="mt-2 text-sm text-gray-600">
-                <strong>Leyenda:</strong> Las filas con fondo verde indican cantidades válidas. Las filas con fondo rojo indican que la suma de cantidades excede lo disponible.
-              </div>
+                    </thead>
+                    <tbody>
+                      {pedido.items.map((item) => (
+                        <tr key={item.idDet} className="border-b hover:bg-gray-50">
+                          <td className="p-2">{item.idProducto}</td>
+                          <td className="p-2">{item.producto}</td>
+                          <td className="p-2 text-right">{item.cantidad}</td>
+                          <td className="p-2">
+                            <select
+                              value={getChileValue(item, "lote")}
+                              onChange={(e) => handleChileChange(item.idDet, "lote", e.target.value)}
+                              className="border rounded p-1 text-xs w-32"
+                            >
+                              <option value="">-- Lote --</option>
+                              {lotes.map((l) => (
+                                <option key={l.idLote} value={l.idLote}>
+                                  {l.codigoLote} - {l.descripcion}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-2">
+                            <input type="date"
+                              value={getChileValue(item, "fechaElaboracion")}
+                              onChange={(e) => handleChileChange(item.idDet, "fechaElaboracion", e.target.value)}
+                              className="border rounded p-1 text-xs w-32" />
+                          </td>
+                          <td className="p-2">
+                            <input type="date"
+                              value={getChileValue(item, "fechaVencimiento")}
+                              onChange={(e) => handleChileChange(item.idDet, "fechaVencimiento", e.target.value)}
+                              className="border rounded p-1 text-xs w-32" />
+                          </td>
+                          <td className="p-2">
+                            <input type="number" step="0.1"
+                              value={getChileValue(item, "temperaturaInicial")}
+                              onChange={(e) => handleChileChange(item.idDet, "temperaturaInicial", e.target.value)}
+                              className="border rounded p-1 text-xs w-20" placeholder="°C" />
+                          </td>
+                          <td className="p-2">
+                            <input type="number" step="0.1"
+                              value={getChileValue(item, "temperaturaFinal")}
+                              onChange={(e) => handleChileChange(item.idDet, "temperaturaFinal", e.target.value)}
+                              className="border rounded p-1 text-xs w-20" placeholder="°C" />
+                          </td>
+                          <td className="p-2">
+                            <input type="time"
+                              value={getChileValue(item, "horaInicialPH")}
+                              onChange={(e) => handleChileChange(item.idDet, "horaInicialPH", e.target.value)}
+                              className="border rounded p-1 text-xs w-24" />
+                          </td>
+                          <td className="p-2">
+                            <input type="time"
+                              value={getChileValue(item, "horaFinalPH")}
+                              onChange={(e) => handleChileChange(item.idDet, "horaFinalPH", e.target.value)}
+                              className="border rounded p-1 text-xs w-24" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-2 text-sm text-gray-500">
+                    💡 Al ingresar F. Elaboración, F. Vencimiento se calcula automáticamente.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="p-2 text-left">Producto</th>
+                        <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-right">Cantidad</th>
+                        <th className="p-2 text-left">Responsable</th>
+                        <th className="p-2 text-left" colSpan="3">Lotes y Cantidades</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pedido.items.map((item) => {
+                        const validacion = obtenerMensajeValidacion(item);
+                        return (
+                          <tr key={item.idDet} className={`border-b hover:bg-gray-50 ${validacion.bgColor}`}>
+                            <td className="p-2">{item.idProducto}</td>
+                            <td className="p-2">{item.producto}</td>
+                            <td className="p-2 text-right">{item.cantidad}</td>
+                            <td className="p-2">
+                              <select value={getResponsableValue(item)} onChange={(e) => handleResponsableChange(item.idDet, e.target.value)} className="border rounded p-1 text-xs w-32">
+                                <option value="">-- Sin asignar --</option>
+                                {responsables.map((r) => (<option key={r.idResponsable} value={r.idResponsable}>{r.nombre}</option>))}
+                              </select>
+                            </td>
+                            {[0, 1, 2].map((pos) => (
+                              <td key={pos} className="p-2">
+                                <div className="space-y-1">
+                                  <select value={getLoteValue(item, pos)} onChange={(e) => handleLoteChange(item.idDet, pos, e.target.value)} className="border rounded p-1 text-xs w-24">
+                                    <option value="">-- Lote {pos + 1} --</option>
+                                    {lotes.map((l) => (<option key={l.idLote} value={l.idLote}>{l.codigoLote} - {l.descripcion}</option>))}
+                                  </select>
+                                  <input type="number" min="0" value={getCantidadLoteValue(item, pos)} onChange={(e) => handleCantidadLoteChange(item.idDet, pos, e.target.value)} className="border rounded p-1 text-xs w-24" placeholder="Cant." />
+                                </div>
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="mt-2 text-sm text-gray-600">
+                    <strong>Leyenda:</strong> Las filas con fondo verde indican cantidades válidas. Las filas con fondo rojo indican que la suma de cantidades excede lo disponible.
+                  </div>
+                </>
+              )}
             </div>
             {/* Vista móvil: tarjetas de ítems */}
             <div className="md:hidden space-y-3">
               {pedido.items.map((item) => {
+                  if (tipoPedido === "chile") {
+                    return (
+                      <div key={item.idDet} className="border rounded-lg p-4 shadow-sm bg-white">
+                        <div className="font-semibold text-gray-800">{item.producto}</div>
+                        <div className="text-sm text-gray-600 mb-3">Cantidad: {item.cantidad}</div>
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-xs font-medium text-gray-700">Lote</label>
+                            <select value={getChileValue(item, "lote")} onChange={(e) => handleChileChange(item.idDet, "lote", e.target.value)} className="border rounded p-2 w-full text-sm">
+                              <option value="">-- Lote --</option>
+                              {lotes.map((l) => (<option key={l.idLote} value={l.idLote}>{l.codigoLote} - {l.descripcion}</option>))}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-gray-700">F. Elaboración</label>
+                              <input type="date" value={getChileValue(item, "fechaElaboracion")} onChange={(e) => handleChileChange(item.idDet, "fechaElaboracion", e.target.value)} className="border rounded p-2 w-full text-sm" />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-gray-700">F. Vencimiento</label>
+                              <input type="date" value={getChileValue(item, "fechaVencimiento")} onChange={(e) => handleChileChange(item.idDet, "fechaVencimiento", e.target.value)} className="border rounded p-2 w-full text-sm" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-gray-700">Temp. Inicial (°C)</label>
+                              <input type="number" step="0.1" value={getChileValue(item, "temperaturaInicial")} onChange={(e) => handleChileChange(item.idDet, "temperaturaInicial", e.target.value)} className="border rounded p-2 w-full text-sm" placeholder="°C" />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-gray-700">Temp. Final (°C)</label>
+                              <input type="number" step="0.1" value={getChileValue(item, "temperaturaFinal")} onChange={(e) => handleChileChange(item.idDet, "temperaturaFinal", e.target.value)} className="border rounded p-2 w-full text-sm" placeholder="°C" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-gray-700">H. Inicial pH</label>
+                              <input type="time" value={getChileValue(item, "horaInicialPH")} onChange={(e) => handleChileChange(item.idDet, "horaInicialPH", e.target.value)} className="border rounded p-2 w-full text-sm" />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-gray-700">H. Final pH</label>
+                              <input type="time" value={getChileValue(item, "horaFinalPH")} onChange={(e) => handleChileChange(item.idDet, "horaFinalPH", e.target.value)} className="border rounded p-2 w-full text-sm" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                 const validacion = obtenerMensajeValidacion(item);
                 return (
                   <div key={item.idDet} className={`border rounded-lg p-3 ${validacion.bgColor}`}>
                     <div className="font-semibold">{item.producto}</div>
                     <div className="text-sm text-gray-600 mb-2">Cantidad disponible: {item.cantidad}</div>
-
                     <div className="mb-2">
                       <label className="text-xs font-medium">Responsable</label>
-                      <select
-                        value={getResponsableValue(item)}
-                        onChange={(e) => handleResponsableChange(item.idDet, e.target.value)}
-                        className="border rounded p-1 w-full text-sm"
-                      >
+                      <select value={getResponsableValue(item)} onChange={(e) => handleResponsableChange(item.idDet, e.target.value)} className="border rounded p-1 w-full text-sm">
                         <option value="">-- Sin asignar --</option>
-                        {responsables.map((r) => (
-                          <option key={r.idResponsable} value={r.idResponsable}>
-                            {r.nombre}
-                          </option>
-                        ))}
+                        {responsables.map((r) => (<option key={r.idResponsable} value={r.idResponsable}>{r.nombre}</option>))}
                       </select>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mb-2">
-                      <div>
-                        <label className="text-xs font-medium">Lote 1</label>
-                        <select
-                          value={getLoteValue(item, 0)}
-                          onChange={(e) => handleLoteChange(item.idDet, 0, e.target.value)}
-                          className="border rounded p-1 w-full text-xs"
-                        >
-                          <option value="">--</option>
-                          {lotes.map((l) => (
-                            <option key={l.idLote} value={l.idLote}>
-                              {l.codigoLote}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          min="0"
-                          value={getCantidadLoteValue(item, 0)}
-                          onChange={(e) => handleCantidadLoteChange(item.idDet, 0, e.target.value)}
-                          className="border rounded p-1 w-full text-xs mt-1"
-                          placeholder="Cantidad"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium">Lote 2</label>
-                        <select
-                          value={getLoteValue(item, 1)}
-                          onChange={(e) => handleLoteChange(item.idDet, 1, e.target.value)}
-                          className="border rounded p-1 w-full text-xs"
-                        >
-                          <option value="">--</option>
-                          {lotes.map((l) => (
-                            <option key={l.idLote} value={l.idLote}>
-                              {l.codigoLote}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          min="0"
-                          value={getCantidadLoteValue(item, 1)}
-                          onChange={(e) => handleCantidadLoteChange(item.idDet, 1, e.target.value)}
-                          className="border rounded p-1 w-full text-xs mt-1"
-                          placeholder="Cantidad"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium">Lote 3</label>
-                        <select
-                          value={getLoteValue(item, 2)}
-                          onChange={(e) => handleLoteChange(item.idDet, 2, e.target.value)}
-                          className="border rounded p-1 w-full text-xs"
-                        >
-                          <option value="">--</option>
-                          {lotes.map((l) => (
-                            <option key={l.idLote} value={l.idLote}>
-                              {l.codigoLote}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          min="0"
-                          value={getCantidadLoteValue(item, 2)}
-                          onChange={(e) => handleCantidadLoteChange(item.idDet, 2, e.target.value)}
-                          className="border rounded p-1 w-full text-xs mt-1"
-                          placeholder="Cantidad"
-                        />
-                      </div>
+                      {[0, 1, 2].map((pos) => (
+                        <div key={pos}>
+                          <label className="text-xs font-medium">Lote {pos + 1}</label>
+                          <select value={getLoteValue(item, pos)} onChange={(e) => handleLoteChange(item.idDet, pos, e.target.value)} className="border rounded p-1 w-full text-xs">
+                            <option value="">--</option>
+                            {lotes.map((l) => (<option key={l.idLote} value={l.idLote}>{l.codigoLote}</option>))}
+                          </select>
+                          <input type="number" min="0" value={getCantidadLoteValue(item, pos)} onChange={(e) => handleCantidadLoteChange(item.idDet, pos, e.target.value)} className="border rounded p-1 w-full text-xs mt-1" placeholder="Cantidad" />
+                        </div>
+                      ))}
                     </div>
-                    <div className={`text-xs font-medium ${validacion.color}`}>
-                      {validacion.texto}
-                    </div>
+                    <div className={`text-xs font-medium ${validacion.color}`}>{validacion.texto}</div>
                   </div>
                 );
               })}

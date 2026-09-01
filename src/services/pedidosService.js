@@ -77,12 +77,16 @@ export async function guardarPedido(encabezado, detalle) {
   }
 }
 
-export async function getPedidos() {
+export async function getPedidos(termino = "") {
   try {
     const res = await fetch(
       "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiGetPedidos.php",
       {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ termino }),
       },
     );
     return await res.json();
@@ -130,7 +134,22 @@ export async function actualizarPedido(encabezado, detalle) {
   }
 }
 
-// En services/pedidosService.js - AGREGAR ESTAS FUNCIONES:
+export async function anularPedido(idPedido) {
+  try {
+    const response = await fetch(
+      "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Pedidos/ApiAnularPedido.php",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idPedido }),
+      },
+    );
+    return await response.json();
+  } catch (err) {
+    console.error("Error al anular el pedido:", err);
+    throw err;
+  }
+}
 
 export async function imprimirPedido(idPedido, tipoDocumento = "pedido") {
   try {

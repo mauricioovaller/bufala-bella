@@ -76,10 +76,20 @@ try {
     // 4. ACTUALIZAR PEDIDOS - PONER FacturaNo EN BLANCO usando el número completo
     // Determinar tabla según el tipo de pedido
     $tablaPedidos = $tipoPedido === 'normal' ? 'EncabPedido' : 'EncabPedidoSample';
-    
-    $sqlUpdatePedidos = "UPDATE $tablaPedidos SET FacturaNo = '' WHERE FacturaNo = ?";
+
+    // Extraer el número puro para cubrir TODOS los formatos almacenados
+    $idNumerico = preg_replace('/[^0-9]/', '', $numeroFacturaCompleto);
+
+    if ($idNumerico === '') {
+        throw new Exception("Número de factura no válido para liberar pedidos");
+    }
+
+    $sqlUpdatePedidos = "UPDATE $tablaPedidos SET FacturaNo = ''
+                         WHERE FacturaNo = ?
+                            OR FacturaNo = CONCAT('FEX-', ?)
+                            OR FacturaNo = CONCAT('SMP-FEX-', ?)";
     $stmtUpdatePedidos = $enlace->prepare($sqlUpdatePedidos);
-    $stmtUpdatePedidos->bind_param("s", $numeroFacturaCompleto);
+    $stmtUpdatePedidos->bind_param("sss", $numeroFacturaCompleto, $idNumerico, $idNumerico);
     $stmtUpdatePedidos->execute();
 
     $pedidosActualizados = $stmtUpdatePedidos->affected_rows;

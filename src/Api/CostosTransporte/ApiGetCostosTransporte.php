@@ -20,11 +20,17 @@ $input = json_decode(file_get_contents("php://input"), true);
 
 $fechaDesde = $input['fechaDesde'] ?? null;
 $fechaHasta = $input['fechaHasta'] ?? null;
+$tipoPedido = $input['tipoPedido'] ?? 'normal';
 
 // Validar fechas
 if (!$fechaDesde || !$fechaHasta) {
     echo json_encode(["success" => false, "error" => "Debe proporcionar fechaDesde y fechaHasta"]);
     exit;
+}
+
+// Validar tipo de pedido (compatible hacia atras: default 'normal')
+if (!in_array($tipoPedido, ['normal', 'chile'], true)) {
+    $tipoPedido = 'normal';
 }
 
 try {
@@ -34,36 +40,56 @@ try {
                 ctd.Fecha,
                 ctd.CantidadCamiones,
                 ctd.ValorFlete,
+                ctd.TipoPedido,
                 ctd.Observaciones,
                 ctd.FechaRegistro,
                 ctd.UsuarioRegistro,
-                COALESCE((
-                    SELECT SUM(di.Kilogramos) 
-                    FROM EncabInvoice ei 
-                    INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice 
-                    WHERE ei.Fecha = ctd.Fecha
-                ), 0) AS TotalKgFacturado,
-                CASE 
-                    WHEN (
-                        SELECT SUM(di.Kilogramos) 
-                        FROM EncabInvoice ei 
-                        INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice 
+                COALESCE(
+                    CASE WHEN ctd.TipoPedido = 'chile' THEN (
+                        SELECT SUM(di.Kilogramos)
+                        FROM EncabInvoiceChile ei
+                        INNER JOIN DetInvoiceChile di ON ei.Id_EncabInvoice = di.Id_EncabInvoice
                         WHERE ei.Fecha = ctd.Fecha
-                    ) > 0 
-                    THEN ROUND(ctd.ValorFlete / (
-                        SELECT SUM(di.Kilogramos) 
-                        FROM EncabInvoice ei 
-                        INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice 
+                    ) ELSE (
+                        SELECT SUM(di.Kilogramos)
+                        FROM EncabInvoice ei
+                        INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice
+                        WHERE ei.Fecha = ctd.Fecha
+                    ) END,
+                    0
+                ) AS TotalKgFacturado,
+                CASE
+                    WHEN ctd.TipoPedido = 'chile' AND (
+                        SELECT SUM(di.Kilogramos)
+                        FROM EncabInvoiceChile ei
+                        INNER JOIN DetInvoiceChile di ON ei.Id_EncabInvoice = di.Id_EncabInvoice
+                        WHERE ei.Fecha = ctd.Fecha
+                    ) > 0 THEN ROUND(ctd.ValorFlete / (
+                        SELECT SUM(di.Kilogramos)
+                        FROM EncabInvoiceChile ei
+                        INNER JOIN DetInvoiceChile di ON ei.Id_EncabInvoice = di.Id_EncabInvoice
+                        WHERE ei.Fecha = ctd.Fecha
+                    ), 2)
+                    WHEN ctd.TipoPedido <> 'chile' AND (
+                        SELECT SUM(di.Kilogramos)
+                        FROM EncabInvoice ei
+                        INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice
+                        WHERE ei.Fecha = ctd.Fecha
+                    ) > 0 THEN ROUND(ctd.ValorFlete / (
+                        SELECT SUM(di.Kilogramos)
+                        FROM EncabInvoice ei
+                        INNER JOIN DetInvoice di ON ei.Id_EncabInvoice = di.Id_EncabInvoice
                         WHERE ei.Fecha = ctd.Fecha
                     ), 2)
                     ELSE 0
                 END AS CostoPorKg
             FROM CostosTransporteDiario ctd
             WHERE ctd.Fecha BETWEEN ? AND ?
+              AND ctd.TipoPedido = ?
             ORDER BY ctd.Fecha DESC";
 
     $stmt = $enlace->prepare($sql);
-    $stmt->bind_param("ss", $fechaDesde, $fechaHasta);
+    $stmt->bind_param("sss", $fechaDesde, $fechaHasta, $tipoPedido);
     $stmt->execute();
     
     $stmt->bind_result(
@@ -71,6 +97,7 @@ try {
         $fecha,
         $cantidadCamiones,
         $valorFlete,
+        $tipoPedidoRow,
         $observaciones,
         $fechaRegistro,
         $usuarioRegistro,
@@ -85,6 +112,7 @@ try {
             'Fecha' => $fecha,
             'CantidadCamiones' => $cantidadCamiones,
             'ValorFlete' => (float)$valorFlete,
+            'TipoPedido' => $tipoPedidoRow,
             'Observaciones' => $observaciones,
             'FechaRegistro' => $fechaRegistro,
             'UsuarioRegistro' => $usuarioRegistro,

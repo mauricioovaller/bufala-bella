@@ -15,6 +15,7 @@ import {
   enviarCorreo,
   obtenerDestinatariosPredeterminados,
   obtenerPlantillaPredeterminada,
+  normalizarNumeroFactura,
 } from "./correoService";
 
 const BASE_URL =
@@ -52,6 +53,36 @@ const GENERADORES_DOCUMENTOS = {
     },
     "reporte-despacho": {
       funcion: "generarReporteDespacho",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
+    "autodeclaracion-chile": {
+      funcion: "generarAutodeclaracionChile",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
+    "planilla-aerolinea": {
+      funcion: "generarPlanillaDespachoChile",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
+    "carta-dataloger": {
+      funcion: "generarCartaDatalogerChile",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
+    "solicitud-ica": {
+      funcion: "generarSolicitudICAChile",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
+    "certificado-tratamiento": {
+      funcion: "generarCertificadoTratamientoChile",
+      servicio: "planillasService",
+      obligatorio: false,
+    },
+    "tabla-hc-lacteos": {
+      funcion: "generarTablaHCLacteosChile",
       servicio: "planillasService",
       obligatorio: false,
     },
@@ -251,14 +282,35 @@ export async function generarDocumentosModulo(
  */
 function generarNombreDocumento(tipoDocumento, datos) {
   const fecha = new Date().toISOString().split("T")[0];
-  const numero = datos.numero || datos.id || "documento";
+  const numero = normalizarNumeroFactura(datos.numero) || datos.id || "documento";
 
   // Patrón para envío múltiple: "factura-{id}" → busca el número real en datos.facturas
   if (tipoDocumento.startsWith("factura-")) {
     const factId = tipoDocumento.replace("factura-", "");
     const factItem = datos.facturas?.find((f) => String(f.id) === factId);
-    const factNumero = factItem?.numero || factId;
+    const factNumero = normalizarNumeroFactura(factItem?.numero) || factId;
     return `factura-${factNumero}-${fecha}.pdf`;
+  }
+
+  // Patrón para envío múltiple: "plan-vallejo-{id}", "autodeclaracion-chile-{id}", etc.
+  const prefijosPorFactura = [
+    "plan-vallejo",
+    "reporte-despacho",
+    "autodeclaracion-chile",
+    "planilla-aerolinea",
+    "carta-dataloger",
+    "solicitud-ica",
+    "certificado-tratamiento",
+    "tabla-hc-lacteos",
+  ];
+  const prefijoEncontrado = prefijosPorFactura.find((prefijo) =>
+    tipoDocumento.startsWith(`${prefijo}-`),
+  );
+  if (prefijoEncontrado) {
+    const factId = tipoDocumento.replace(`${prefijoEncontrado}-`, "");
+    const factItem = datos.facturas?.find((f) => String(f.id) === factId);
+    const factNumero = normalizarNumeroFactura(factItem?.numero) || factId;
+    return `${prefijoEncontrado}-${factNumero}-${fecha}.pdf`;
   }
 
   const nombres = {
@@ -267,6 +319,12 @@ function generarNombreDocumento(tipoDocumento, datos) {
     "carta-aerolinea": `carta-aerolinea-${numero}-${fecha}.pdf`,
     "plan-vallejo": `plan-vallejo-${numero}-${fecha}.pdf`,
     "reporte-despacho": `reporte-despacho-${numero}-${fecha}.pdf`,
+    "autodeclaracion-chile": `autodeclaracion-chile-${numero}-${fecha}.pdf`,
+    "planilla-aerolinea": `planilla-aerolinea-${numero}-${fecha}.pdf`,
+    "carta-dataloger": `carta-dataloger-${numero}-${fecha}.pdf`,
+    "solicitud-ica": `solicitud-ica-${numero}-${fecha}.pdf`,
+    "certificado-tratamiento": `certificado-tratamiento-${numero}-${fecha}.pdf`,
+    "tabla-hc-lacteos": `tabla-hc-lacteos-${numero}-${fecha}.pdf`,
   };
 
   return (

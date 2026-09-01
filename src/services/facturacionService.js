@@ -291,3 +291,85 @@ export async function eliminarFacturaCompleta(facturaId, numeroFactura, tipoPedi
     throw new Error(`No se pudo eliminar la factura: ${error.message}`);
   }
 }
+
+// ============================================================================
+// SERVICIOS PARA FACTURACION CHILE
+// ============================================================================
+
+const BASE_CHILE = "https://portal.datenbankensoluciones.com.co/DatenBankenApp/DiBufala/Api/Facturacion";
+
+export async function obtenerPedidosChilePorFecha(filtros) {
+  const response = await fetch(BASE_CHILE + "/ApiObtenerPedidosChile.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fechaDesde: filtros.fechaDesde, fechaHasta: filtros.fechaHasta }),
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+  return data;
+}
+
+export async function guardarFacturaChile(encabezado, pedidosIds) {
+  const response = await fetch(BASE_CHILE + "/ApiGuardarFacturaChile.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ encabezado, pedidosIds }),
+  });
+  const result = await response.json();
+  if (!result.success) throw new Error(result.message || "Error al guardar la factura Chile");
+  return result;
+}
+
+export async function obtenerFacturasChile(fechaDesde, fechaHasta) {
+  const response = await fetch(BASE_CHILE + "/ApiObtenerFacturasChile.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta }),
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+  return data;
+}
+
+export async function generarFacturaPDFChile(idFactura) {
+  const response = await fetch(BASE_CHILE + "/ApiGenerarFacturaPDFChile.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id_factura: idFactura }),
+  });
+  if (!response.ok) throw new Error("Error " + response.status);
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message || "Error al generar PDF");
+  const byteCharacters = atob(data.pdf);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: "application/pdf" });
+  return blob;
+}
+
+export async function obtenerFacturasChileConFiltros(filtros) {
+  const response = await fetch(BASE_CHILE + "/ApiObtenerFacturasChile.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fecha_desde: filtros.fechaDesde,
+      fecha_hasta: filtros.fechaHasta,
+      numero_factura: filtros.numeroFactura || ""
+    }),
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message || "Error en la respuesta del servidor");
+  return data;
+}
+
+export async function eliminarFacturaChile(facturaId, numeroFactura) {
+  const response = await fetch(BASE_CHILE + "/ApiEliminarFacturaChile.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ facturaId, numeroFactura }),
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message || "Error al eliminar la factura Chile");
+  return data;
+}

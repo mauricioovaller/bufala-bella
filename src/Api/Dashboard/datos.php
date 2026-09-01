@@ -168,23 +168,57 @@ try {
     $stmtVentKPI->fetch();
     $stmtVentKPI->close();
 
-    // 2B. CLIENTES (TOP 10)
+    // Restar notas cr�dito activas de los KPIs de ventas
+    $sqlNotasCredito = "SELECT 
+                        COALESCE(SUM(dnc.PesoNetoCredito), 0) AS pesoNetoNC,
+                        COALESCE(SUM(dnc.ValorCreditoCOP), 0) AS valorTotalNC
+                      FROM EncabNotaCredito encNC
+                      INNER JOIN DetNotaCredito dnc ON encNC.Id_EncabNotaCredito = dnc.Id_EncabNotaCredito
+                      WHERE dnc.FechaSalidaPedido BETWEEN ? AND ? AND encNC.Estado = 'Activo'";
+
+    $stmtNC = ejecutarConsulta($enlace, $sqlNotasCredito, [$fechaInicio, $fechaFin]);
+    $stmtNC->bind_result($pesoNetoNC, $valorTotalNC);
+    $stmtNC->fetch();
+    $stmtNC->close();
+
+    $pesoNetoVentas = floatval($pesoNetoVentas) - floatval($pesoNetoNC);
+    $valorTotalVentas = floatval($valorTotalVentas) - floatval($valorTotalNC);
+    // Ajustar org�nico/no org�nico proporcionalmente si hay NC
+    if (floatval($pesoNetoNC) > 0 && (floatval($pesoNetoOrganicoVentas) + floatval($pesoNetoNoOrganicoVentas)) > 0) {
+        $totalPesoOriginal = floatval($pesoNetoOrganicoVentas) + floatval($pesoNetoNoOrganicoVentas) + floatval($pesoNetoNC);
+        $proporcionOrganico = $totalPesoOriginal > 0 ? floatval($pesoNetoOrganicoVentas) / $totalPesoOriginal : 0;
+        $pesoNetoOrganicoVentas = floatval($pesoNetoOrganicoVentas) - (floatval($pesoNetoNC) * $proporcionOrganico);
+        $pesoNetoNoOrganicoVentas = floatval($pesoNetoNoOrganicoVentas) - (floatval($pesoNetoNC) * (1 - $proporcionOrganico));
+    }
+    $promedioVentas = $cantidadVentas > 0 ? $valorTotalVentas / $cantidadVentas : 0;
+
+    // 2B. CLIENTES (TOP 10) - con descuento de notas cr�dito
     $sqlClientes = "SELECT 
                     cli.Id_Cliente AS idCliente,
                     cli.Nombre as nombre,
                     COUNT(DISTINCT enc.Id_EncabPedido) as cantidad,
-                    SUM(dek.PesoNeto) as pesoNeto,
-                    SUM(dek.PesoNeto * dek.PrecioUnitario) as valor
+                    COALESCE(SUM(dek.PesoNeto), 0) - COALESCE(nc.pesoNetoNC, 0) as pesoNeto,
+                    COALESCE(SUM(dek.PesoNeto * dek.PrecioUnitario), 0) - COALESCE(nc.valorNC, 0) as valor
                     FROM EncabPedido enc
                     INNER JOIN Clientes cli ON enc.Id_Cliente = cli.Id_Cliente
                     INNER JOIN DetPedido dek ON enc.Id_EncabPedido = dek.Id_EncabPedido
+                    LEFT JOIN (
+                        SELECT encNC.Id_Cliente,
+                               SUM(dnc.PesoNetoCredito) AS pesoNetoNC,
+                               SUM(dnc.ValorCreditoCOP) AS valorNC
+                        FROM EncabNotaCredito encNC
+                        INNER JOIN DetNotaCredito dnc ON encNC.Id_EncabNotaCredito = dnc.Id_EncabNotaCredito
+                        WHERE dnc.FechaSalidaPedido BETWEEN ? AND ? AND encNC.Estado = 'Activo'
+                        GROUP BY encNC.Id_Cliente
+                    ) nc ON enc.Id_Cliente = nc.Id_Cliente
                     WHERE enc.FechaSalida BETWEEN ? AND ?
                     AND enc.Estado = 'Activo'
                     GROUP BY cli.Id_Cliente, cli.Nombre
+                    HAVING valor > 0
                     ORDER BY valor DESC
                     LIMIT 10";
 
-    $stmtCli = ejecutarConsulta($enlace, $sqlClientes, [$fechaInicio, $fechaFin]);
+    $stmtCli = ejecutarConsulta($enlace, $sqlClientes, [$fechaInicio, $fechaFin, $fechaInicio, $fechaFin]);
     $stmtCli->bind_result($idCli, $nombreCli, $cantidadCli, $pesoNetoCli, $valorCli);
 
     $clientes = [];
@@ -277,20 +311,29 @@ try {
     foreach ($productosNoOrganicos as &$p) {
         $p['porcentaje'] = $totalValorNoOrganicos > 0 ? round(($p['valor'] / $totalValorNoOrganicos) * 100, 2) : 0;
     }
-    // 4B. TENDENCIA DE VENTAS POR DÍA
+    // 4B. TENDENCIA DE VENTAS POR DÍA - con descuento de notas crédito
     $sqlTendenciaVentas = "SELECT 
                             DATE(enc.FechaSalida) as fecha,
                             COUNT(DISTINCT enc.Id_EncabPedido) as cantidad,
-                            SUM(dek.PesoNeto) AS pesoNeto,
-                            SUM(dek.PesoNeto * dek.PrecioUnitario) AS valor
+                            COALESCE(SUM(dek.PesoNeto), 0) - COALESCE(nc.pesoNetoNC, 0) AS pesoNeto,
+                            COALESCE(SUM(dek.PesoNeto * dek.PrecioUnitario), 0) - COALESCE(nc.valorNC, 0) AS valor
                             FROM EncabPedido enc
-                            INNER JOIN DetPedido dek ON enc.Id_EncabPedido = dek.Id_EncabPedido                           
+                            INNER JOIN DetPedido dek ON enc.Id_EncabPedido = dek.Id_EncabPedido
+                            LEFT JOIN (
+                                SELECT dnc.FechaSalidaPedido AS FechaNC,
+                                       SUM(dnc.PesoNetoCredito) AS pesoNetoNC,
+                                       SUM(dnc.ValorCreditoCOP) AS valorNC
+                                FROM EncabNotaCredito encNC
+                                INNER JOIN DetNotaCredito dnc ON encNC.Id_EncabNotaCredito = dnc.Id_EncabNotaCredito
+                                WHERE dnc.FechaSalidaPedido BETWEEN ? AND ? AND encNC.Estado = 'Activo'
+                                GROUP BY dnc.FechaSalidaPedido
+                            ) nc ON DATE(enc.FechaSalida) = nc.FechaNC
                             WHERE enc.FechaSalida BETWEEN ? AND ?
                             AND enc.Estado = 'Activo'
                             GROUP BY DATE(enc.FechaSalida)
                             ORDER BY fecha;";
 
-    $stmtTenVent = ejecutarConsulta($enlace, $sqlTendenciaVentas, [$fechaInicio, $fechaFin]);
+    $stmtTenVent = ejecutarConsulta($enlace, $sqlTendenciaVentas, [$fechaInicio, $fechaFin, $fechaInicio, $fechaFin]);
     $stmtTenVent->bind_result($fechaVent, $cantidadDiaVent, $pesoNetoDiaVent, $valorDiaVent);
 
     $tendenciaVentas = [];

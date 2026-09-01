@@ -4,6 +4,7 @@ import {
   validarEmail,
   parsearListaEmails,
   formatearListaEmails,
+  normalizarNumeroFactura,
   generarNombreFactura,
   generarVariablesFactura,
   obtenerDestinatarios,
@@ -129,6 +130,31 @@ describe("generarNombreFactura", () => {
     const nombre = generarNombreFactura({ numero: "FAC-003", cliente: "ABC" });
     expect(nombre).toContain(hoy);
   });
+
+  it("normaliza el prefijo CHI-FEX- a FEX- en el nombre del archivo", () => {
+    const nombre = generarNombreFactura({
+      numero: "CHI-FEX-123",
+      cliente: "Cliente Chile",
+    });
+    expect(nombre).toContain("FEX-123");
+    expect(nombre).not.toContain("CHI-FEX");
+  });
+});
+
+describe("normalizarNumeroFactura", () => {
+  it("reemplaza CHI-FEX- por FEX-", () => {
+    expect(normalizarNumeroFactura("CHI-FEX-10")).toBe("FEX-10");
+  });
+
+  it("deja intacto un número que ya empieza por FEX-", () => {
+    expect(normalizarNumeroFactura("FEX-10")).toBe("FEX-10");
+  });
+
+  it("maneja valores nulos o vacíos", () => {
+    expect(normalizarNumeroFactura(null)).toBe("");
+    expect(normalizarNumeroFactura(undefined)).toBe("");
+    expect(normalizarNumeroFactura("")).toBe("");
+  });
 });
 
 describe("generarVariablesFactura", () => {
@@ -151,6 +177,12 @@ describe("generarVariablesFactura", () => {
     const docs = [{ nombre: "Factura.pdf" }, { nombre: "BOL.pdf" }];
     const vars = generarVariablesFactura(factura, docs);
     expect(vars.adjuntos).toEqual(["Factura.pdf", "BOL.pdf"]);
+  });
+
+  it("normaliza el prefijo CHI-FEX- en la variable {numero}", () => {
+    const factura = { numero: "CHI-FEX-50", cliente: "Cliente Chile", valorTotal: 0 };
+    const vars = generarVariablesFactura(factura);
+    expect(vars.numero).toBe("FEX-50");
   });
 
   it("maneja valor total como string numérico", () => {

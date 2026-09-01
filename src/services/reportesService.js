@@ -27,10 +27,11 @@ export async function getReporteKilosSemanales(fechaDesde, fechaHasta) {
     throw new Error(json.message || "Error al obtener el reporte");
   }
 
-  // Pivotar ambos datasets usando las mismas semanas del rango
+  // Pivotar todos los datasets (pedidos, samples, notas crédito) usando las mismas semanas del rango
   return pivotarDatos(
     json.datos,
     json.datosSamples || [],
+    json.datosNC || [],
     fechaDesde,
     fechaHasta,
   );
@@ -85,7 +86,7 @@ function formatDateDMY(date) {
  * Las semanas se generan a partir del RANGO solicitado (no solo de los datos),
  * de modo que la semana inicial y final aparecen aunque sean parciales.
  */
-function pivotarDatos(datos, datosSamples, fechaDesde, fechaHasta) {
+function pivotarDatos(datos, datosSamples, datosNC, fechaDesde, fechaHasta) {
   // Parsear límites del rango como fechas UTC
   const [dY, dM, dD] = fechaDesde.split("-").map(Number);
   const [hY, hM, hD] = fechaHasta.split("-").map(Number);
@@ -144,6 +145,21 @@ function pivotarDatos(datos, datosSamples, fechaDesde, fechaHasta) {
 
       const fila = filasMap.get(clave);
       fila[semClave] = (fila[semClave] || 0) + cajas;
+    },
+  );
+
+  // Restar notas crédito del mapa de filas
+  (datosNC || []).forEach(
+    ({ cliente, region, descripcion, unidades, anio, semana, cajas }) => {
+      const clave = `${cliente}|||${region}|||${descripcion}|||${unidades}`;
+      const semClave = `${anio}-W${String(semana).padStart(2, "0")}`;
+
+      if (!filasMap.has(clave)) {
+        filasMap.set(clave, { cliente, region, descripcion, unidades });
+      }
+
+      const fila = filasMap.get(clave);
+      fila[semClave] = (fila[semClave] || 0) + cajas; // cajas son negativas
     },
   );
 
