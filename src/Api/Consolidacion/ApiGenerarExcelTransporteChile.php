@@ -10,7 +10,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die(json_encode(["error" => "MÃ©todo no permitido. Usa POST."]));
+    die(json_encode(["error" => "Método no permitido. Usa POST."]));
 }
 
 $input = json_decode(file_get_contents("php://input"), true);
@@ -19,7 +19,7 @@ $fechaHasta = $input['fechaHasta'] ?? null;
 $campoFechaBD = consolidacion_mapear_campo_fecha($input['tipoFecha'] ?? 'fechaSalida');
 
 if (!$fechaDesde || !$fechaHasta) {
-    die(json_encode(["error" => "Debe proporcionar un rango de fechas vÃ¡lido."]));
+    die(json_encode(["error" => "Debe proporcionar un rango de fechas válido."]));
 }
 
 try {
@@ -33,7 +33,7 @@ try {
     $sheet->setCellValue('A1', 'TRANSPORTE POR DIA - PEDIDOS CHILE');
     $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
     $sheet->mergeCells('A1:L1');
-    $sheet->setCellValue('A2', 'PerÃ­odo: ' . $fechaDesde . ' a ' . $fechaHasta);
+    $sheet->setCellValue('A2', 'Período: ' . $fechaDesde . ' a ' . $fechaHasta);
     $sheet->getStyle('A2')->getFont()->setItalic(true);
     $sheet->mergeCells('A2:L2');
 

@@ -111,141 +111,172 @@ if (!function_exists('consolidacion_obtener_produccion_local')) {
 }
 
 if (!function_exists('consolidacion_obtener_transporte_local')) {
+    /**
+     * Transporte - Pedidos Locales (normales + muestras) desglosado por
+     * Fecha + Guia Master + Guia Hija (una fila por cada guia del dia).
+     * El costo de transporte diario se prorratea por cantidad de cajas
+     * entre todas las filas (guias) del dia. Las facturas y precintos se
+     * asocian a cada fila por Fecha + Guia Master.
+     */
     function consolidacion_obtener_transporte_local($enlace, $fechaInicio, $fechaFin, $campoFechaBD)
     {
         $sql = "SELECT
-                    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-                    DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-                    SUM(det.Cantidad) AS CantidadCajas,
-                    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-                    ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
-                    enc.GuiaMaster,
-                    enc.GuiaHija,
-                    MAX(est.TotalEstibas) AS CantidadEstibas,
-                    COALESCE(etp.TotalEstibasPagas, 0) AS CantidadEstibasPagas,
-                    '07:00:00' AS HoraCargue,
-                    'Normal' AS TipoDato,
-                    COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'normal'), '') AS Facturas,
-                    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'normal'), '') AS Precintos,
-                    COALESCE(ctr.CostoTransporte, 0) AS CostoTransporte
-                FROM EncabPedido enc
-                INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
-                INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-                INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-                INNER JOIN (
-                    SELECT {$campoFechaBD}, SUM(CantidadEstibas) AS TotalEstibas
-                    FROM EncabPedido
-                    WHERE {$campoFechaBD} BETWEEN ? AND ? AND Estado = 'Activo'
-                    GROUP BY {$campoFechaBD}
-                ) est ON est.{$campoFechaBD} = enc.{$campoFechaBD}
-                LEFT JOIN (
-                    SELECT FechaSalida, SUM(EstibasPagas) AS TotalEstibasPagas
-                    FROM (
-                        SELECT enc.FechaSalida, IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS EstibasPagas
-                        FROM EncabPedido enc
-                        INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
-                        WHERE enc.FechaSalida BETWEEN ? AND ?
-                        GROUP BY enc.Id_EncabPedido
-                    ) AS pedidos_agrupados
-                    GROUP BY FechaSalida
-                ) etp ON etp.FechaSalida = enc.FechaSalida
-                LEFT JOIN (
-                    SELECT Fecha, SUM(ValorFlete) AS CostoTransporte
-                    FROM CostosTransporteDiario
-                    WHERE Fecha BETWEEN ? AND ?
-                    GROUP BY Fecha
-                ) ctr ON ctr.Fecha = enc.{$campoFechaBD}
-                WHERE enc.{$campoFechaBD} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-                GROUP BY enc.{$campoFechaBD}
+                    g.FechaKey,
+                    DATE_FORMAT(MIN(g.FechaSalida), '%W, %e de %M de %Y') AS FechaCompleta,
+                    DATE_FORMAT(MIN(g.FechaSalida), '%d/%m/%Y') AS FechaCorta,
+                    COALESCE(NULLIF(g.GuiaMaster, ''), '') AS GuiaMaster,
+                    COALESCE(NULLIF(g.GuiaHija, ''), '') AS GuiaHija,
+                    SUM(g.Cajas) AS CantidadCajas,
+                    ROUND(SUM(g.PesoNeto), 2) AS PesoNeto,
+                    ROUND(SUM(g.PesoNeto * 2.6), 2) AS PesoBruto,
+                    SUM(g.Estibas) AS CantidadEstibas,
+                    SUM(g.EstibasPagas) AS CantidadEstibasPagas,
+                    COALESCE((SELECT GROUP_CONCAT(DISTINCT ei.Id_EncabInvoice ORDER BY ei.Id_EncabInvoice SEPARATOR '-')
+                              FROM EncabInvoice ei
+                              WHERE ei.Fecha = g.FechaKey
+                                AND COALESCE(ei.GuiaMaster, '') = COALESCE(NULLIF(g.GuiaMaster, ''), '')), '') AS Facturas,
+                    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-')
+                              FROM EncabInvoice ei
+                              INNER JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla
+                              WHERE ei.Fecha = g.FechaKey
+                                AND COALESCE(ei.GuiaMaster, '') = COALESCE(NULLIF(g.GuiaMaster, ''), '')), '') AS Precintos
+                FROM (
+                    SELECT enc.{$campoFechaBD} AS FechaKey,
+                           enc.FechaSalida,
+                           enc.GuiaMaster,
+                           enc.GuiaHija,
+                           SUM(det.Cantidad) AS Cajas,
+                           SUM(det.PesoNeto) AS PesoNeto,
+                           MAX(enc.CantidadEstibas) AS Estibas,
+                           IF(SUM(det.Cantidad) < 20, 0, MAX(enc.CantidadEstibas)) AS EstibasPagas
+                    FROM EncabPedido enc
+                    INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
+                    WHERE enc.{$campoFechaBD} BETWEEN ? AND ? AND enc.Estado = 'Activo'
+                    GROUP BY enc.Id_EncabPedido, enc.{$campoFechaBD}, enc.FechaSalida, enc.GuiaMaster, enc.GuiaHija
 
-                UNION ALL
+                    UNION ALL
 
-                SELECT
-                    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-                    DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-                    SUM(det.Cantidad) AS CantidadCajas,
-                    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-                    ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
-                    enc.GuiaMaster,
-                    enc.GuiaHija,
-                    MAX(est.TotalEstibas) AS CantidadEstibas,
-                    0 AS CantidadEstibasPagas,
-                    '07:00:00' AS HoraCargue,
-                    'Sample' AS TipoDato,
-                    COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'sample'), '') AS Facturas,
-                    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'sample'), '') AS Precintos,
-                    0 AS CostoTransporte
-                FROM EncabPedidoSample enc
-                INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
-                INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-                INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-                INNER JOIN (
-                    SELECT {$campoFechaBD}, SUM(CantidadEstibas) AS TotalEstibas
-                    FROM EncabPedidoSample
-                    WHERE {$campoFechaBD} BETWEEN ? AND ? AND Estado = 'Activo'
-                    GROUP BY {$campoFechaBD}
-                ) est ON est.{$campoFechaBD} = enc.{$campoFechaBD}
-                WHERE enc.{$campoFechaBD} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-                GROUP BY enc.{$campoFechaBD}
-
-                ORDER BY FechaCorta ASC";
+                    SELECT enc.{$campoFechaBD},
+                           enc.FechaSalida,
+                           enc.GuiaMaster,
+                           enc.GuiaHija,
+                           SUM(det.Cantidad),
+                           SUM(det.PesoNeto),
+                           MAX(enc.CantidadEstibas),
+                           0
+                    FROM EncabPedidoSample enc
+                    INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido
+                    WHERE enc.{$campoFechaBD} BETWEEN ? AND ? AND enc.Estado = 'Activo'
+                    GROUP BY enc.Id_EncabPedido, enc.{$campoFechaBD}, enc.FechaSalida, enc.GuiaMaster, enc.GuiaHija
+                ) g
+                GROUP BY g.FechaKey, g.GuiaMaster, g.GuiaHija
+                ORDER BY g.FechaKey ASC, g.GuiaMaster ASC, g.GuiaHija ASC";
 
         $stmt = $enlace->prepare($sql);
-        $stmt->bind_param("ssssssssssss", $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin);
+        $stmt->bind_param("ssss", $fechaInicio, $fechaFin, $fechaInicio, $fechaFin);
         $stmt->execute();
-        $stmt->bind_result($fechaCompleta, $fechaCorta, $cantidadCajas, $pesoNeto, $pesoBruto, $guiaMaster, $guiaHija, $cantidadEstibas, $cantidadEstibasPagas, $horaCargue, $tipoDato, $facturas, $precintos, $costoTransporte);
+        $stmt->bind_result($fechaKey, $fechaCompleta, $fechaCorta, $guiaMaster, $guiaHija, $cantidadCajas, $pesoNeto, $pesoBruto, $cantidadEstibas, $cantidadEstibasPagas, $facturas, $precintos);
 
-        $datosConsolidados = [];
+        $filas = [];
         while ($stmt->fetch()) {
-            $claveUnica = $fechaCorta;
-            if (isset($datosConsolidados[$claveUnica])) {
-                $datosConsolidados[$claveUnica]['CantidadCajas'] += $cantidadCajas;
-                $datosConsolidados[$claveUnica]['PesoNeto'] += $pesoNeto;
-                $datosConsolidados[$claveUnica]['PesoBruto'] += $pesoBruto;
-                $datosConsolidados[$claveUnica]['CantidadEstibas'] += $cantidadEstibas;
-                $datosConsolidados[$claveUnica]['CantidadEstibasPagas'] += $cantidadEstibasPagas;
-                $datosConsolidados[$claveUnica]['CostoTransporte'] += $costoTransporte;
-                if ($tipoDato === 'Normal') {
-                    $datosConsolidados[$claveUnica]['GuiaMaster'] = $guiaMaster;
-                    $datosConsolidados[$claveUnica]['GuiaHija'] = $guiaHija;
-                }
-                if (!empty($facturas)) {
-                    $existingFacturas = $datosConsolidados[$claveUnica]['Facturas'] ?? '';
-                    $combined = array_unique(array_merge(
-                        $existingFacturas !== '' ? explode('-', $existingFacturas) : [],
-                        explode('-', $facturas)
-                    ));
-                    $datosConsolidados[$claveUnica]['Facturas'] = implode('-', array_filter($combined));
-                }
-                if (!empty($precintos)) {
-                    $existingPrecintos = $datosConsolidados[$claveUnica]['Precintos'] ?? '';
-                    $combined = array_unique(array_merge(
-                        $existingPrecintos !== '' ? explode('-', $existingPrecintos) : [],
-                        explode('-', $precintos)
-                    ));
-                    $datosConsolidados[$claveUnica]['Precintos'] = implode('-', array_filter($combined));
-                }
-            } else {
-                $datosConsolidados[$claveUnica] = [
-                    'FechaCompleta' => $fechaCompleta,
-                    'FechaCorta' => $fechaCorta,
-                    'CantidadCajas' => $cantidadCajas,
-                    'PesoNeto' => $pesoNeto,
-                    'PesoBruto' => $pesoBruto,
-                    'GuiaMaster' => $guiaMaster,
-                    'GuiaHija' => $guiaHija,
-                    'CantidadEstibas' => $cantidadEstibas,
-                    'CantidadEstibasPagas' => $cantidadEstibasPagas,
-                    'HoraCargue' => $horaCargue,
-                    'Facturas' => $facturas,
-                    'Precintos' => $precintos,
-                    'CostoTransporte' => $costoTransporte
-                ];
-            }
+            $filas[] = [
+                'FechaKey' => $fechaKey,
+                'FechaCompleta' => $fechaCompleta,
+                'FechaCorta' => $fechaCorta,
+                'GuiaMaster' => $guiaMaster === null ? '' : (string)$guiaMaster,
+                'GuiaHija' => $guiaHija === null ? '' : (string)$guiaHija,
+                'CantidadCajas' => (float)$cantidadCajas,
+                'PesoNeto' => (float)$pesoNeto,
+                'PesoBruto' => (float)$pesoBruto,
+                'CantidadEstibas' => (float)$cantidadEstibas,
+                'CantidadEstibasPagas' => (float)$cantidadEstibasPagas,
+                'Facturas' => $facturas === null ? '' : (string)$facturas,
+                'Precintos' => $precintos === null ? '' : (string)$precintos
+            ];
         }
         $stmt->close();
 
-        return array_values($datosConsolidados);
+        // Costo de transporte terrestre del dia (tipo 'normal', incluye registros
+        // historicos sin TipoPedido) para prorratear entre las guias del dia.
+        $costoPorFecha = [];
+        $sqlCosto = "SELECT Fecha, SUM(ValorFlete)
+                     FROM CostosTransporteDiario
+                     WHERE Fecha BETWEEN ? AND ? AND COALESCE(TipoPedido, 'normal') = 'normal'
+                     GROUP BY Fecha";
+        $stmtCosto = $enlace->prepare($sqlCosto);
+        $stmtCosto->bind_param("ss", $fechaInicio, $fechaFin);
+        $stmtCosto->execute();
+        $stmtCosto->bind_result($costoFecha, $costoValor);
+        while ($stmtCosto->fetch()) {
+            $costoPorFecha[$costoFecha] = (float)$costoValor;
+        }
+        $stmtCosto->close();
+
+        return consolidacion_aplicar_prorrateo_costo($filas, $costoPorFecha);
+    }
+}
+
+if (!function_exists('consolidacion_aplicar_prorrateo_costo')) {
+    /**
+     * Asigna a cada fila (guia) su parte proporcional del costo de transporte
+     * del dia segun la cantidad de cajas. La ultima fila de cada dia absorbe
+     * la diferencia de redondeo para que la suma coincida con el costo diario.
+     * Las filas de pedidos sin guia se etiquetan como 'SIN GUIA'.
+     */
+    function consolidacion_aplicar_prorrateo_costo($filas, $costoPorFecha)
+    {
+        $cajasPorFecha = [];
+        foreach ($filas as $fila) {
+            $fechaKey = $fila['FechaKey'];
+            $cajasPorFecha[$fechaKey] = ($cajasPorFecha[$fechaKey] ?? 0) + $fila['CantidadCajas'];
+        }
+
+        $ultimoIndicePorFecha = [];
+        foreach ($filas as $indice => $fila) {
+            $ultimoIndicePorFecha[$fila['FechaKey']] = $indice;
+        }
+
+        $asignadoPorFecha = [];
+        $resultado = [];
+        foreach ($filas as $indice => $fila) {
+            $fechaKey = $fila['FechaKey'];
+            $costoDia = (float)($costoPorFecha[$fechaKey] ?? 0);
+            $cajasDia = $cajasPorFecha[$fechaKey] ?? 0;
+            $esUltimaFila = ($ultimoIndicePorFecha[$fechaKey] === $indice);
+
+            if ($costoDia > 0 && $cajasDia > 0 && !$esUltimaFila) {
+                $parte = round($costoDia * $fila['CantidadCajas'] / $cajasDia, 2);
+            } elseif ($costoDia > 0 && $esUltimaFila) {
+                $parte = round($costoDia - ($asignadoPorFecha[$fechaKey] ?? 0), 2);
+            } else {
+                $parte = 0.0;
+            }
+            $asignadoPorFecha[$fechaKey] = ($asignadoPorFecha[$fechaKey] ?? 0) + $parte;
+
+            $guiaMaster = $fila['GuiaMaster'];
+            $guiaHija = $fila['GuiaHija'];
+            if ($guiaMaster === '') {
+                $guiaMaster = 'SIN GUIA';
+                $guiaHija = '';
+            }
+
+            $resultado[] = [
+                'FechaCompleta' => $fila['FechaCompleta'],
+                'FechaCorta' => $fila['FechaCorta'],
+                'CantidadCajas' => $fila['CantidadCajas'],
+                'PesoNeto' => $fila['PesoNeto'],
+                'PesoBruto' => $fila['PesoBruto'],
+                'GuiaMaster' => $guiaMaster,
+                'GuiaHija' => $guiaHija,
+                'CantidadEstibas' => $fila['CantidadEstibas'],
+                'CantidadEstibasPagas' => $fila['CantidadEstibasPagas'],
+                'CostoTransporte' => $parte,
+                'Facturas' => $fila['Facturas'],
+                'Precintos' => $fila['Precintos']
+            ];
+        }
+
+        return $resultado;
     }
 }
 
@@ -461,80 +492,91 @@ if (!function_exists('consolidacion_obtener_excel_proceso_chile')) {
 }
 
 if (!function_exists('consolidacion_obtener_transporte_chile')) {
+    /**
+     * Transporte - Pedidos Chile desglosado por Fecha + Guia Master + Guia Hija
+     * (una fila por cada guia del dia). El costo diario se prorratea por cajas
+     * entre las guias del dia. Facturas y precintos se asocian por Fecha + Guia Master.
+     */
     function consolidacion_obtener_transporte_chile($enlace, $fechaInicio, $fechaFin, $campoFechaBD)
     {
         $sql = "SELECT
-                    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-                    DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-                    SUM(det.Cantidad) AS CantidadCajas,
-                    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-                    ROUND(SUM(det.PesoBruto), 2) AS PesoBruto,
-                    enc.GuiaMaster,
-                    enc.GuiaHija,
-                    MAX(est.TotalEstibas) AS CantidadEstibas,
-                    COALESCE(etp.TotalEstibasPagas, 0) AS CantidadEstibasPagas,
-                    '07:00:00' AS HoraCargue,
-                    'Chile' AS TipoDato,
-                    COALESCE((SELECT GROUP_CONCAT(DISTINCT ei.Id_EncabInvoice ORDER BY ei.Id_EncabInvoice SEPARATOR '-') FROM EncabInvoiceChile ei WHERE DATE(enc.FechaSalida) = ei.Fecha), '') AS Facturas,
-                    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoiceChile ei LEFT JOIN PlanillasChile pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha), '') AS Precintos,
-                    COALESCE(ctr.CostoTransporte, 0) AS CostoTransporte
-                FROM EncabPedidoChile enc
-                INNER JOIN DetPedidoChile det ON enc.Id_EncabPedido = det.Id_EncabPedido
-                INNER JOIN ProductosChile prd ON det.Id_Producto = prd.Id_Producto
-                INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-                INNER JOIN (
-                    SELECT {$campoFechaBD}, SUM(CantidadEstibas) AS TotalEstibas
-                    FROM EncabPedidoChile
-                    WHERE {$campoFechaBD} BETWEEN ? AND ? AND Estado = 'Activo'
-                    GROUP BY {$campoFechaBD}
-                ) est ON est.{$campoFechaBD} = enc.{$campoFechaBD}
-                LEFT JOIN (
-                    SELECT FechaSalida, SUM(EstibasPagas) AS TotalEstibasPagas
-                    FROM (
-                        SELECT enc.FechaSalida, IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS EstibasPagas
-                        FROM EncabPedidoChile enc
-                        INNER JOIN DetPedidoChile det ON enc.Id_EncabPedido = det.Id_EncabPedido
-                        WHERE enc.FechaSalida BETWEEN ? AND ?
-                        GROUP BY enc.Id_EncabPedido
-                    ) AS pedidos_agrupados
-                    GROUP BY FechaSalida
-                ) etp ON etp.FechaSalida = enc.FechaSalida
-                LEFT JOIN (
-                    SELECT Fecha, SUM(ValorFlete) AS CostoTransporte
-                    FROM CostosTransporteDiario
-                    WHERE Fecha BETWEEN ? AND ? AND TipoPedido = 'chile'
-                    GROUP BY Fecha
-                ) ctr ON ctr.Fecha = enc.{$campoFechaBD}
-                WHERE enc.{$campoFechaBD} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-                GROUP BY enc.{$campoFechaBD}
-                ORDER BY FechaCorta ASC";
+                    g.FechaKey,
+                    DATE_FORMAT(MIN(g.FechaSalida), '%W, %e de %M de %Y') AS FechaCompleta,
+                    DATE_FORMAT(MIN(g.FechaSalida), '%d/%m/%Y') AS FechaCorta,
+                    COALESCE(NULLIF(g.GuiaMaster, ''), '') AS GuiaMaster,
+                    COALESCE(NULLIF(g.GuiaHija, ''), '') AS GuiaHija,
+                    SUM(g.Cajas) AS CantidadCajas,
+                    ROUND(SUM(g.PesoNeto), 2) AS PesoNeto,
+                    ROUND(SUM(g.PesoBruto), 2) AS PesoBruto,
+                    SUM(g.Estibas) AS CantidadEstibas,
+                    SUM(g.EstibasPagas) AS CantidadEstibasPagas,
+                    COALESCE((SELECT GROUP_CONCAT(DISTINCT ei.Id_EncabInvoice ORDER BY ei.Id_EncabInvoice SEPARATOR '-')
+                              FROM EncabInvoiceChile ei
+                              WHERE ei.Fecha = g.FechaKey
+                                AND COALESCE(ei.GuiaMaster, '') = COALESCE(NULLIF(g.GuiaMaster, ''), '')), '') AS Facturas,
+                    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-')
+                              FROM EncabInvoiceChile ei
+                              INNER JOIN PlanillasChile pl ON ei.Id_Planilla = pl.Id_Planilla
+                              WHERE ei.Fecha = g.FechaKey
+                                AND COALESCE(ei.GuiaMaster, '') = COALESCE(NULLIF(g.GuiaMaster, ''), '')), '') AS Precintos
+                FROM (
+                    SELECT enc.{$campoFechaBD} AS FechaKey,
+                           enc.FechaSalida,
+                           enc.GuiaMaster,
+                           enc.GuiaHija,
+                           SUM(det.Cantidad) AS Cajas,
+                           SUM(det.PesoNeto) AS PesoNeto,
+                           SUM(det.PesoBruto) AS PesoBruto,
+                           MAX(enc.CantidadEstibas) AS Estibas,
+                           IF(SUM(det.Cantidad) < 20, 0, MAX(enc.CantidadEstibas)) AS EstibasPagas
+                    FROM EncabPedidoChile enc
+                    INNER JOIN DetPedidoChile det ON enc.Id_EncabPedido = det.Id_EncabPedido
+                    WHERE enc.{$campoFechaBD} BETWEEN ? AND ? AND enc.Estado = 'Activo'
+                    GROUP BY enc.Id_EncabPedido, enc.{$campoFechaBD}, enc.FechaSalida, enc.GuiaMaster, enc.GuiaHija
+                ) g
+                GROUP BY g.FechaKey, g.GuiaMaster, g.GuiaHija
+                ORDER BY g.FechaKey ASC, g.GuiaMaster ASC, g.GuiaHija ASC";
 
         $stmt = $enlace->prepare($sql);
-        $stmt->bind_param("ssssssss", $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin);
+        $stmt->bind_param("ss", $fechaInicio, $fechaFin);
         $stmt->execute();
-        $stmt->bind_result($fechaCompleta, $fechaCorta, $cantidadCajas, $pesoNeto, $pesoBruto, $guiaMaster, $guiaHija, $cantidadEstibas, $cantidadEstibasPagas, $horaCargue, $tipoDato, $facturas, $precintos, $costoTransporte);
+        $stmt->bind_result($fechaKey, $fechaCompleta, $fechaCorta, $guiaMaster, $guiaHija, $cantidadCajas, $pesoNeto, $pesoBruto, $cantidadEstibas, $cantidadEstibasPagas, $facturas, $precintos);
 
-        $datosConsolidados = [];
+        $filas = [];
         while ($stmt->fetch()) {
-            $datosConsolidados[$fechaCorta] = [
+            $filas[] = [
+                'FechaKey' => $fechaKey,
                 'FechaCompleta' => $fechaCompleta,
                 'FechaCorta' => $fechaCorta,
-                'CantidadCajas' => $cantidadCajas,
-                'PesoNeto' => $pesoNeto,
-                'PesoBruto' => $pesoBruto,
-                'GuiaMaster' => $guiaMaster,
-                'GuiaHija' => $guiaHija,
-                'CantidadEstibas' => $cantidadEstibas,
-                'CantidadEstibasPagas' => $cantidadEstibasPagas,
-                'HoraCargue' => $horaCargue,
-                'Facturas' => $facturas,
-                'Precintos' => $precintos,
-                'CostoTransporte' => $costoTransporte
+                'GuiaMaster' => $guiaMaster === null ? '' : (string)$guiaMaster,
+                'GuiaHija' => $guiaHija === null ? '' : (string)$guiaHija,
+                'CantidadCajas' => (float)$cantidadCajas,
+                'PesoNeto' => (float)$pesoNeto,
+                'PesoBruto' => (float)$pesoBruto,
+                'CantidadEstibas' => (float)$cantidadEstibas,
+                'CantidadEstibasPagas' => (float)$cantidadEstibasPagas,
+                'Facturas' => $facturas === null ? '' : (string)$facturas,
+                'Precintos' => $precintos === null ? '' : (string)$precintos
             ];
         }
         $stmt->close();
 
-        return array_values($datosConsolidados);
+        // Costo de transporte terrestre del dia para pedidos Chile
+        $costoPorFecha = [];
+        $sqlCosto = "SELECT Fecha, SUM(ValorFlete)
+                     FROM CostosTransporteDiario
+                     WHERE Fecha BETWEEN ? AND ? AND TipoPedido = 'chile'
+                     GROUP BY Fecha";
+        $stmtCosto = $enlace->prepare($sqlCosto);
+        $stmtCosto->bind_param("ss", $fechaInicio, $fechaFin);
+        $stmtCosto->execute();
+        $stmtCosto->bind_result($costoFecha, $costoValor);
+        while ($stmtCosto->fetch()) {
+            $costoPorFecha[$costoFecha] = (float)$costoValor;
+        }
+        $stmtCosto->close();
+
+        return consolidacion_aplicar_prorrateo_costo($filas, $costoPorFecha);
     }
 }
 

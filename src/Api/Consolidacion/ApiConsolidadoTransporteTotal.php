@@ -7,7 +7,7 @@ $enlace->set_charset("utf8mb4");
 date_default_timezone_set('America/Bogota');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die(json_encode(["error" => "MÃ©todo no permitido. Usa POST."]));
+    die(json_encode(["error" => "Método no permitido. Usa POST."]));
 }
 
 $input = json_decode(file_get_contents("php://input"), true);
@@ -43,9 +43,11 @@ class PDFTransporteConsolidado extends FPDF
         $this->Image($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/img/bufalabella.jpg", 10, 10, 10);
         $this->SetFont('Arial', 'B', 16);
         $this->Cell(0, 10, utf8_decode('TRANSPORTE POR DIA - CONSOLIDADO'), 0, 1, 'C');
+        $this->SetFont('Arial', 'B', 10);
+        $this->Cell(0, 6, utf8_decode('DETALLE POR GUIA MASTER / HIJA'), 0, 1, 'C');
         $this->SetFont('Arial', 'I', 10);
         global $fechaInicio, $fechaFin;
-        $this->Cell(0, 6, utf8_decode('PerÃ­odo: ' . $fechaInicio . ' a ' . $fechaFin), 0, 1, 'C');
+        $this->Cell(0, 6, utf8_decode('Período: ' . $fechaInicio . ' a ' . $fechaFin), 0, 1, 'C');
         $this->Ln(5);
     }
 
@@ -53,7 +55,7 @@ class PDFTransporteConsolidado extends FPDF
     {
         $this->SetY(-15);
         $this->SetFont('Arial', 'I', 8);
-        $this->Cell(0, 10, utf8_decode('PÃ¡gina ') . $this->PageNo() . '/{nb}', 0, 0, 'C');
+        $this->Cell(0, 10, utf8_decode('Página ') . $this->PageNo() . '/{nb}', 0, 0, 'C');
     }
 
     function agregarEncabezadoSeccion($titulo)
@@ -204,7 +206,7 @@ if (!empty($datosLocal) || !empty($datosChile)) {
 
 if (empty($datosLocal) && empty($datosChile)) {
     $pdf->SetFont('Arial', 'B', 12);
-    $pdf->Cell(0, 10, utf8_decode('No se encontraron datos para el perÃ­odo seleccionado.'), 0, 1, 'C');
+    $pdf->Cell(0, 10, utf8_decode('No se encontraron datos para el período seleccionado.'), 0, 1, 'C');
 }
 
 $nombreArchivo = 'Transporte_Consolidado_' . date('Y-m-d_His') . '.pdf';

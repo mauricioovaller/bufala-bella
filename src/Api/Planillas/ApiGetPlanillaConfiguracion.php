@@ -38,11 +38,14 @@ $tablaPlanillas = $esChile ? 'PlanillasChile' : 'Planillas';
 
 try {
     if ($esChile) {
-        $sql = "SELECT MercanciaSeleccionada, AnexosSeleccionados FROM PlanillasChile WHERE Id_Planilla = ?";
+        // Id_Cliente + seleccion guardada (JSON historico) de la planilla
+        $sql = "SELECT Id_Cliente, MercanciaSeleccionada, AnexosSeleccionados
+                FROM PlanillasChile
+                WHERE Id_Planilla = ?";
         $stmt = $enlace->prepare($sql);
         $stmt->bind_param("i", $idPlanilla);
         $stmt->execute();
-        $stmt->bind_result($mercancia, $anexos);
+        $stmt->bind_result($idClientePlanilla, $mercancia, $anexos);
         $stmt->fetch();
         $stmt->close();
 
@@ -55,10 +58,48 @@ try {
                 $mercanciaArr = array_map('intval', $decoded);
             }
         }
-        if ($anexos !== null && $anexos !== '') {
+
+        // SPEC 0002: prioridad 1 -> filas de planillas_chile_documentos
+        $anexosFilas = [];
+        $sqlFilas = "SELECT Id_Documento FROM planillas_chile_documentos
+                     WHERE Id_Planilla = ? AND Tipo = 'anexo'
+                     ORDER BY Id_PlanillaDocumento";
+        $stmtFilas = $enlace->prepare($sqlFilas);
+        $stmtFilas->bind_param("i", $idPlanilla);
+        $stmtFilas->execute();
+        $stmtFilas->bind_result($idDocumentoFila);
+        while ($stmtFilas->fetch()) {
+            $anexosFilas[] = (int)$idDocumentoFila;
+        }
+        $stmtFilas->close();
+
+        if (!empty($anexosFilas)) {
+            $anexosArr = $anexosFilas;
+        } elseif ($anexos !== null && $anexos !== '') {
+            // Prioridad 2 -> JSON historico de la planilla
             $decoded = json_decode($anexos, true);
             if (is_array($decoded)) {
                 $anexosArr = array_map('intval', $decoded);
+            }
+        } elseif ($idClientePlanilla > 0) {
+            // Prioridad 3 -> preseleccion por defecto del cliente (mapeo en BD)
+            $anexosDefault = [];
+            $sqlDef = "SELECT cad.Id_Documento
+                       FROM clientes_chile_anexos_default cad
+                       INNER JOIN documentos_chile_items di ON di.Id = cad.Id_Documento
+                           AND di.Tipo = 'anexo' AND di.Activo = 1
+                       WHERE cad.Id_Cliente = ?
+                       ORDER BY di.Orden";
+            $stmtDef = $enlace->prepare($sqlDef);
+            $stmtDef->bind_param("i", $idClientePlanilla);
+            $stmtDef->execute();
+            $stmtDef->bind_result($idDocumentoDef);
+            while ($stmtDef->fetch()) {
+                $anexosDefault[] = (int)$idDocumentoDef;
+            }
+            $stmtDef->close();
+            if (!empty($anexosDefault)) {
+                $anexosArr = $anexosDefault;
             }
         }
 

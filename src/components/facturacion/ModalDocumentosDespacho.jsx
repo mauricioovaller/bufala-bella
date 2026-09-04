@@ -9,6 +9,7 @@ const ModalDocumentosDespacho = ({
     facturasSeleccionadas,
     onGuardarConfiguracion,
     conductores: conductoresProp,
+    esChile = false,
 }) => {
     const [conductores, setConductores] = useState([]);
     const [ayudantes, setAyudantes] = useState([]);
@@ -23,6 +24,15 @@ const ModalDocumentosDespacho = ({
     const [documentosItems, setDocumentosItems] = useState({ mercancia: [], anexo: [] });
     const [mercanciaSeleccionada, setMercanciaSeleccionada] = useState([]);
     const [anexosSeleccionados, setAnexosSeleccionados] = useState([]);
+    const [anexosDefault, setAnexosDefault] = useState([]);
+
+    // Extrae el id numerico de la factura (ej. CHI-FEX-123 -> 123)
+    const extraerIdFactura = (numero) => {
+        if (!numero) return null;
+        const n = String(numero).replace(/^(CHI-FEX-|SMP-FEX-|FEX-)/, '');
+        const id = parseInt(n, 10);
+        return isNaN(id) ? null : id;
+    };
 
     // Datos mock de conductores (solo como respaldo)
     const conductoresMock = [
@@ -131,14 +141,28 @@ const ModalDocumentosDespacho = ({
 
             // Cargar items seleccionables para documentos Chile
             try {
-                const itemsRes = await getDocumentosChileItems();
+                // SPEC 0002: para facturas Chile se pide la preseleccion por cliente
+                // (mapeo configurable en BD) usando la primera factura del despacho.
+                const idFacturaPreseleccion = esChile && facturasSeleccionadas.length > 0
+                    ? extraerIdFactura(facturasSeleccionadas[0].numero)
+                    : null;
+
+                const itemsRes = await getDocumentosChileItems(idFacturaPreseleccion);
                 if (itemsRes.success && itemsRes.items) {
                     setDocumentosItems(itemsRes.items);
-                    // Por defecto seleccionar todos
+                    // Por defecto seleccionar todos (mercancia) - sin cambios
                     const todasMercancia = itemsRes.items.mercancia?.map(i => i.id) || [];
                     const todosAnexos = itemsRes.items.anexo?.map(i => i.id) || [];
                     setMercanciaSeleccionada(todasMercancia);
-                    setAnexosSeleccionados(todosAnexos);
+
+                    // Anexos: en Chile la lista YA viene filtrada por el backend
+                    // con los anexos del cliente (Spec 0002 v1.2); se preseleccionan
+                    // esos y el usuario puede marcar/desmarcar dentro de la lista.
+                    const idsAnexosVisibles = esChile
+                        ? (itemsRes.items.anexo?.map(i => i.id) || [])
+                        : todosAnexos;
+                    setAnexosDefault(idsAnexosVisibles);
+                    setAnexosSeleccionados(idsAnexosVisibles);
                 }
             } catch (err) {
                 console.warn('Error cargando items documentos Chile:', err);
@@ -283,7 +307,8 @@ const ModalDocumentosDespacho = ({
         const todasMercancia = documentosItems.mercancia?.map(i => i.id) || [];
         const todosAnexos = documentosItems.anexo?.map(i => i.id) || [];
         setMercanciaSeleccionada(todasMercancia);
-        setAnexosSeleccionados(todosAnexos);
+        // SPEC 0002: al limpiar en Chile se vuelve a la preseleccion del cliente
+        setAnexosSeleccionados(esChile ? anexosDefault : todosAnexos);
     };
 
     if (!isOpen) return null;
@@ -571,6 +596,11 @@ const ModalDocumentosDespacho = ({
                         <div className="border-t border-gray-200 pt-4">
                             <h3 className="font-semibold text-gray-800 mb-2">Anexos - Autodeclaración Chile</h3>
                             <p className="text-xs text-gray-500 mb-3">Selecciona los anexos que aparecerán en la sección "Envase y etiquetado"</p>
+                            {esChile && facturasSeleccionadas[0]?.cliente && (
+                                <p className="text-xs text-blue-600 font-medium mb-2">
+                                    Cliente del despacho: <strong>{facturasSeleccionadas[0].cliente}</strong>
+                                </p>
+                            )}
                             <div className="space-y-2">
                                 {documentosItems.anexo.map(item => (
                                     <label key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">

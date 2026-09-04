@@ -30,6 +30,8 @@ $sqlEnc = "SELECT
     CONCAT('FEX-', enc.Id_EncabInvoice) AS numero_factura,
     DATE_FORMAT(enc.Fecha, '%Y/%m/%d') AS fecha,
     COALESCE(DATE_FORMAT(MIN(epc.FechaIngreso), '%Y/%m/%d'), DATE_FORMAT(enc.Fecha, '%Y/%m/%d')) AS fecha_ingreso,
+    enc.Id_Cliente,
+    enc.Id_Planilla,
     cli.Nombre AS cliente_nombre,
     cli.Rut,
     cli.Direccion,
@@ -41,12 +43,12 @@ FROM EncabInvoiceChile enc
 INNER JOIN ClientesChile cli ON enc.Id_Cliente = cli.Id_Cliente
 LEFT JOIN EncabPedidoChile epc ON epc.FacturaNo = CONCAT('FEX-', enc.Id_EncabInvoice) OR epc.FacturaNo = CONCAT('CHI-FEX-', enc.Id_EncabInvoice)
 WHERE enc.Id_EncabInvoice = ?
-GROUP BY enc.Id_EncabInvoice";
+GROUP BY enc.Id_EncabInvoice, enc.Id_Cliente, enc.Id_Planilla, cli.Id_Cliente";
 
 $stmtEnc = $enlace->prepare($sqlEnc);
 $stmtEnc->bind_param("i", $id_factura);
 $stmtEnc->execute();
-$stmtEnc->bind_result($id_factura, $numero_factura, $fecha, $fecha_ingreso, $cliente_nombre, $rut, $direccion, $ciudad, $pais, $telefono, $email);
+$stmtEnc->bind_result($id_factura, $numero_factura, $fecha, $fecha_ingreso, $id_cliente_factura, $id_planilla_factura, $cliente_nombre, $rut, $direccion, $ciudad, $pais, $telefono, $email);
 
 if (!$stmtEnc->fetch()) {
     die(json_encode(["error" => "Factura Chile no encontrada."]));
@@ -511,19 +513,82 @@ $precauciones = "Implementación de sistema de inocuidad HACCP.\n"
 drawRow($pdf, 'Precauciones post-tratamiento', $precauciones, 55, '10');
 
 // Construir $envase dinamicamente desde documentos_chile_items
-$anexos_textos = [];
+// SPEC 0002: resolver la seleccion de anexos con prioridad:
+//   1) anexos_ids enviados por el frontend
+//   2) filas guardadas de la planilla (planillas_chile_documentos)
+//   3) JSON historico de la planilla (PlanillasChile.AnexosSeleccionados)
+//   4) preseleccion por defecto del cliente (clientes_chile_anexos_default)
+//   5) sin anexos
+$idsAnexosFinales = [];
 if (!empty($anexos_ids) && is_array($anexos_ids)) {
-    $ids_placeholder = str_repeat('?,', count($anexos_ids) - 1) . '?';
-    $sqlAnexos = "SELECT Texto FROM documentos_chile_items WHERE Tipo = 'anexo' AND Id IN ($ids_placeholder) AND Activo = 1 ORDER BY Orden";
+    foreach ($anexos_ids as $idAnexo) {
+        $idAnexoInt = (int)$idAnexo;
+        if ($idAnexoInt > 0) {
+            $idsAnexosFinales[] = $idAnexoInt;
+        }
+    }
+}
+
+if (empty($idsAnexosFinales) && $id_planilla_factura > 0) {
+    $sqlFilas = "SELECT Id_Documento FROM planillas_chile_documentos
+                 WHERE Id_Planilla = ? AND Tipo = 'anexo'
+                 ORDER BY Id_PlanillaDocumento";
+    $stmtFilas = $enlace->prepare($sqlFilas);
+    $stmtFilas->bind_param("i", $id_planilla_factura);
+    $stmtFilas->execute();
+    $stmtFilas->bind_result($idDocumentoFila);
+    while ($stmtFilas->fetch()) {
+        $idsAnexosFinales[] = (int)$idDocumentoFila;
+    }
+    $stmtFilas->close();
+}
+
+if (empty($idsAnexosFinales) && $id_planilla_factura > 0) {
+    $sqlJson = "SELECT AnexosSeleccionados FROM PlanillasChile WHERE Id_Planilla = ?";
+    $stmtJson = $enlace->prepare($sqlJson);
+    $stmtJson->bind_param("i", $id_planilla_factura);
+    $stmtJson->execute();
+    $stmtJson->bind_result($anexosJson);
+    $stmtJson->fetch();
+    $stmtJson->close();
+    if ($anexosJson !== null && $anexosJson !== '') {
+        $decodedJson = json_decode($anexosJson, true);
+        if (is_array($decodedJson)) {
+            foreach ($decodedJson as $idAnexo) {
+                $idAnexoInt = (int)$idAnexo;
+                if ($idAnexoInt > 0) {
+                    $idsAnexosFinales[] = $idAnexoInt;
+                }
+            }
+        }
+    }
+}
+
+if (empty($idsAnexosFinales) && $id_cliente_factura > 0) {
+    $sqlDef = "SELECT cad.Id_Documento
+               FROM clientes_chile_anexos_default cad
+               INNER JOIN documentos_chile_items di ON di.Id = cad.Id_Documento
+                   AND di.Tipo = 'anexo' AND di.Activo = 1
+               WHERE cad.Id_Cliente = ?
+               ORDER BY di.Orden";
+    $stmtDef = $enlace->prepare($sqlDef);
+    $stmtDef->bind_param("i", $id_cliente_factura);
+    $stmtDef->execute();
+    $stmtDef->bind_result($idDocumentoDef);
+    while ($stmtDef->fetch()) {
+        $idsAnexosFinales[] = (int)$idDocumentoDef;
+    }
+    $stmtDef->close();
+}
+
+$anexos_textos = [];
+if (!empty($idsAnexosFinales)) {
+    $ids_placeholder = str_repeat('?,', count($idsAnexosFinales) - 1) . '?';
+    $sqlAnexos = "SELECT Texto FROM documentos_chile_items
+                  WHERE Tipo = 'anexo' AND Activo = 1 AND Id IN ($ids_placeholder)
+                  ORDER BY Orden";
     $stmtAnexos = $enlace->prepare($sqlAnexos);
-    $stmtAnexos->bind_param(str_repeat('i', count($anexos_ids)), ...$anexos_ids);
-    $stmtAnexos->execute();
-    $stmtAnexos->bind_result($textoAnexo);
-    while ($stmtAnexos->fetch()) { $anexos_textos[] = $textoAnexo; }
-    $stmtAnexos->close();
-} else {
-    $sqlAnexos = "SELECT Texto FROM documentos_chile_items WHERE Tipo = 'anexo' AND Activo = 1 ORDER BY Orden";
-    $stmtAnexos = $enlace->prepare($sqlAnexos);
+    $stmtAnexos->bind_param(str_repeat('i', count($idsAnexosFinales)), ...$idsAnexosFinales);
     $stmtAnexos->execute();
     $stmtAnexos->bind_result($textoAnexo);
     while ($stmtAnexos->fetch()) { $anexos_textos[] = $textoAnexo; }

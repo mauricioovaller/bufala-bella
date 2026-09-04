@@ -246,6 +246,26 @@ export default function FacturacionMain() {
             });
             return;
         }
+
+        // SPEC 0002: un solo cliente por despacho (facturas Chile) para poder
+        // preseleccionar los anexos de la Autodeclaración por cliente.
+        if (tipoPedido === 'chile') {
+            const clientesUnicos = [...new Set(
+                facturasSeleccionadas
+                    .map(f => (f.cliente || '').trim().toLowerCase())
+                    .filter(Boolean)
+            )];
+            if (clientesUnicos.length > 1) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Clientes diferentes',
+                    text: 'Para la Autodeclaración Chile el despacho debe ser de un solo cliente. Selecciona facturas del mismo cliente.',
+                    confirmButtonColor: '#3085d6',
+                });
+                return;
+            }
+        }
+
         setModalConfiguracionAbierto(true);
     };
 
@@ -824,6 +844,7 @@ export default function FacturacionMain() {
                     facturasSeleccionadas={facturasSeleccionadas}
                     onGuardarConfiguracion={handleGuardarConfiguracion}
                     conductores={datosSelect.conductores}
+                    esChile={tipoPedido === 'chile'}
                 />
 
                 {/* MODAL DE DOCUMENTOS DE FACTURA */}

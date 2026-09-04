@@ -165,6 +165,33 @@ try {
         }
     }
 
+    // SPEC 0002: GUARDAR ANEXOS SELECCIONADOS POR PLANILLA (una fila por anexo,
+    // con el id exacto de documentos_chile_items) para clientes Chile.
+    if ($esChile) {
+        // Re-ejecutable: limpiar filas previas de la planilla (si se reconfigura)
+        $sqlLimpiarAnexos = "DELETE FROM planillas_chile_documentos WHERE Id_Planilla = ?";
+        $stmtLimpiarAnexos = $enlace->prepare($sqlLimpiarAnexos);
+        $stmtLimpiarAnexos->bind_param("i", $idPlanilla);
+        $stmtLimpiarAnexos->execute();
+        $stmtLimpiarAnexos->close();
+
+        $anexosConfig = (isset($configuracion["anexosSeleccionados"]) && is_array($configuracion["anexosSeleccionados"]))
+            ? $configuracion["anexosSeleccionados"]
+            : [];
+
+        if (!empty($anexosConfig)) {
+            $sqlInsertAnexo = "INSERT INTO planillas_chile_documentos (Id_Planilla, Id_Documento, Tipo) VALUES (?, ?, 'anexo')";
+            $stmtInsertAnexo = $enlace->prepare($sqlInsertAnexo);
+            foreach ($anexosConfig as $idDocumento) {
+                $idDocumentoInt = validar_entero($idDocumento);
+                if (!$idDocumentoInt) continue;
+                $stmtInsertAnexo->bind_param("ii", $idPlanilla, $idDocumentoInt);
+                $stmtInsertAnexo->execute();
+            }
+            $stmtInsertAnexo->close();
+        }
+    }
+
     $enlace->commit();
 
     echo json_encode([

@@ -2,6 +2,7 @@
 
 require $_SERVER['DOCUMENT_ROOT'] . "/vendor/autoload.php";
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
+require_once __DIR__ . '/consolidacion_reportes_helper.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -24,215 +25,16 @@ if (!$fechaDesde || !$fechaHasta) {
 }
 
 // Mapear tipo de fecha al campo correcto en la base de datos
-$campoFecha = '';
-switch($tipoFecha) {
-    case 'fechaEnroute':
-        $campoFecha = 'FechaEnroute';
-        break;
-    case 'fechaDelivery':
-        $campoFecha = 'FechaDelivery';
-        break;
-    default:
-        $campoFecha = 'FechaSalida';
-}
+$campoFechaBD = consolidacion_mapear_campo_fecha($tipoFecha);
 
 try {
     // Establecer idioma para días de la semana en español
     $enlace->query("SET lc_time_names = 'es_ES'");
     
-    // CONSULTA SQL UNIFICADA - COMBINA DATOS NORMALES Y SAMPLE
-    $sql = "SELECT
-        DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-        DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-        SUM(det.Cantidad) AS CantidadCajas,
-        ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-        ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
-        enc.GuiaMaster,
-        enc.GuiaHija,
-        MAX(est.TotalEstibas) AS CantidadEstibas,
-        COALESCE(etp.TotalEstibasPagas, 0) AS CantidadEstibasPagas,
-        '07:00:00' AS HoraCargue,
-        'Normal' AS TipoDato,
-        COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'normal'), '') AS Facturas,
-        COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'normal'), '') AS Precintos,
-        COALESCE(ctr.CostoTransporte, 0) AS CostoTransporte
-    FROM EncabPedido enc
-    INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido   
-    INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-    INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-    INNER JOIN (
-        SELECT 
-            {$campoFecha},
-            SUM(CantidadEstibas) AS TotalEstibas
-        FROM EncabPedido
-        WHERE {$campoFecha} BETWEEN ? AND ?
-          AND Estado = 'Activo'
-        GROUP BY {$campoFecha}
-    ) est ON est.{$campoFecha} = enc.{$campoFecha}
+    // Datos de transporte: una fila por Fecha + Guia Master + Guia Hija
+    // (costo diario prorrateado por cajas; facturas/precintos por Fecha + Guia Master)
+    $datosTransporte = consolidacion_obtener_transporte_local($enlace, $fechaDesde, $fechaHasta, $campoFechaBD);
 
-    LEFT JOIN (
-        SELECT
-        FechaSalida,
-        SUM(EstibasPagas) AS TotalEstibasPagas
-        FROM (
-            SELECT
-                enc.FechaSalida,
-                IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS EstibasPagas
-            FROM
-                EncabPedido enc 
-                INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
-            WHERE
-                enc.FechaSalida BETWEEN ? AND ?   
-            GROUP BY
-                enc.Id_EncabPedido
-        ) AS pedidos_agrupados
-        GROUP BY
-            FechaSalida
-        ORDER BY
-            FechaSalida
-    ) etp ON etp.FechaSalida = enc.FechaSalida
-
-    LEFT JOIN (
-        SELECT 
-            Fecha,
-            SUM(ValorFlete) AS CostoTransporte
-        FROM CostosTransporteDiario
-        WHERE Fecha BETWEEN ? AND ?      
-        GROUP BY Fecha
-    ) ctr ON ctr.Fecha = enc.{$campoFecha}
-    WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-    GROUP BY enc.{$campoFecha}
-
-    UNION ALL
-
-    SELECT
-        DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-        DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-        SUM(det.Cantidad) AS CantidadCajas,
-        ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-        ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
-        enc.GuiaMaster,
-        enc.GuiaHija,
-        MAX(est.TotalEstibas) AS CantidadEstibas,
-        0 AS CantidadEstibasPagas,
-        '07:00:00' AS HoraCargue,
-        'Sample' AS TipoDato,
-        COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'sample'), '') AS Facturas,
-        COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'sample'), '') AS Precintos,
-        0 AS CostoTransporte    FROM EncabPedidoSample enc
-    INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido   
-    INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-    INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-    INNER JOIN (
-        SELECT 
-            {$campoFecha},
-            SUM(CantidadEstibas) AS TotalEstibas
-        FROM EncabPedidoSample
-        WHERE {$campoFecha} BETWEEN ? AND ?
-          AND Estado = 'Activo'
-        GROUP BY {$campoFecha}
-    ) est ON est.{$campoFecha} = enc.{$campoFecha}
-    WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-    GROUP BY enc.{$campoFecha}
-
-    ORDER BY FechaCorta ASC";
-
-    // Preparar y ejecutar la consulta
-    $stmt = $enlace->prepare($sql);
-    $stmt->bind_param("ssssssssssss", $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta, $fechaDesde, $fechaHasta);
-    $stmt->execute();
-    
-    // BIND RESULT
-    $stmt->bind_result(
-        $fechaCompleta,
-        $fechaCorta,
-        $cantidadCajas,
-        $pesoNeto,
-        $pesoBruto,
-        $guiaMaster,
-        $guiaHija,
-        $cantidadEstibas,
-        $cantidadEstibasPagas,
-        $horaCargue,
-        $tipoDato,
-        $facturas,
-        $precintos,
-        $costoTransporte
-    );
-    
-    // Procesar y consolidar datos por fecha (igual que en ApiConsolidadoTransporte.php)
-    $datosConsolidados = [];
-    
-    while ($stmt->fetch()) {
-        $claveUnica = $fechaCorta;
-
-        if (isset($datosConsolidados[$claveUnica])) {
-            // Sumar todos los valores
-            $datosConsolidados[$claveUnica]['CantidadCajas'] += $cantidadCajas;
-            $datosConsolidados[$claveUnica]['PesoNeto'] += $pesoNeto;
-            $datosConsolidados[$claveUnica]['PesoBruto'] += $pesoBruto;
-            $datosConsolidados[$claveUnica]['CantidadEstibas'] += $cantidadEstibas;
-            $datosConsolidados[$claveUnica]['CantidadEstibasPagas'] += $cantidadEstibasPagas;
-            $datosConsolidados[$claveUnica]['CostoTransporte'] += $costoTransporte;
-
-
-            // Para Guías: mantener la del registro "Normal" o concatenar
-            if ($tipoDato === 'Normal') {
-                $datosConsolidados[$claveUnica]['GuiaMaster'] = $guiaMaster;
-                $datosConsolidados[$claveUnica]['GuiaHija'] = $guiaHija;
-            }
-
-            // Combinar Facturas y Precintos
-            if (!empty($facturas)) {
-                $existingFacturas = $datosConsolidados[$claveUnica]['Facturas'] ?? '';
-                if (!empty($existingFacturas)) {
-                    // Combinar y eliminar duplicados
-                    $combined = array_unique(array_merge(
-                        explode('-', $existingFacturas),
-                        explode('-', $facturas)
-                    ));
-                    $datosConsolidados[$claveUnica]['Facturas'] = implode('-', array_filter($combined));
-                } else {
-                    $datosConsolidados[$claveUnica]['Facturas'] = $facturas;
-                }
-            }
-
-            if (!empty($precintos)) {
-                $existingPrecintos = $datosConsolidados[$claveUnica]['Precintos'] ?? '';
-                if (!empty($existingPrecintos)) {
-                    $combined = array_unique(array_merge(
-                        explode('-', $existingPrecintos),
-                        explode('-', $precintos)
-                    ));
-                    $datosConsolidados[$claveUnica]['Precintos'] = implode('-', array_filter($combined));
-                } else {
-                    $datosConsolidados[$claveUnica]['Precintos'] = $precintos;
-                }
-            }
-        } else {
-            $datosConsolidados[$claveUnica] = [
-                'FechaCompleta' => $fechaCompleta,
-                'FechaCorta' => $fechaCorta,
-                'CantidadCajas' => $cantidadCajas,
-                'PesoNeto' => $pesoNeto,
-                'PesoBruto' => $pesoBruto,
-                'GuiaMaster' => $guiaMaster,
-                'GuiaHija' => $guiaHija,
-                'CantidadEstibas' => $cantidadEstibas,
-                'CantidadEstibasPagas' => $cantidadEstibasPagas,
-                'HoraCargue' => $horaCargue,
-                'Facturas' => $facturas,
-                'Precintos' => $precintos,
-                'CostoTransporte' => $costoTransporte
-            ];
-        }
-    }
-    
-    $stmt->close();
-    
-    // Convertir el array asociativo a indexado para facilitar el uso
-    $datosTransporte = array_values($datosConsolidados);
-    
     // CREAR EL EXCEL
     $spreadsheet = new Spreadsheet();
     $sheet = $spreadsheet->getActiveSheet();

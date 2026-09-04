@@ -36,9 +36,15 @@ export async function crearPlanillaChile(facturasIds, configuracion) {
 }
 
 // Obtener items seleccionables para documentos Chile
-export const getDocumentosChileItems = async () => {
+// SPEC 0002: idFactura (opcional) permite traer tambien la preseleccion de
+// anexos por cliente (anexosDefault) desde clientes_chile_anexos_default.
+export const getDocumentosChileItems = async (idFactura = null) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/ApiGetDocumentosChileItems.php`, {
+    let url = `${API_BASE_URL}/ApiGetDocumentosChileItems.php`;
+    if (idFactura) {
+      url += `?id_factura=${encodeURIComponent(idFactura)}`;
+    }
+    const response = await fetch(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
@@ -46,7 +52,7 @@ export const getDocumentosChileItems = async () => {
     return await response.json();
   } catch (error) {
     console.error("Error obteniendo items documentos Chile:", error);
-    return { success: false, items: { mercancia: [], anexo: [] } };
+    return { success: false, items: { mercancia: [], anexo: [] }, anexosDefault: [] };
   }
 };
 

@@ -10,7 +10,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die(json_encode(["error" => "MÃ©todo no permitido. Usa POST."]));
+    die(json_encode(["error" => "Método no permitido. Usa POST."]));
 }
 
 $input = json_decode(file_get_contents("php://input"), true);
@@ -19,13 +19,13 @@ $fechaHasta = $input['fechaHasta'] ?? null;
 $campoFechaBD = consolidacion_mapear_campo_fecha($input['tipoFecha'] ?? 'fechaSalida');
 
 if (!$fechaDesde || !$fechaHasta) {
-    die(json_encode(["error" => "Debe proporcionar un rango de fechas vÃ¡lido."]));
+    die(json_encode(["error" => "Debe proporcionar un rango de fechas válido."]));
 }
 
 function consolidacion_llenar_hoja_proceso($sheet, $rows)
 {
     $encabezados = [
-        'AÃ±o', 'Mes', 'Frecuencia', 'Region', 'Orden', 'ListaEmpaque',
+        'Año', 'Mes', 'Frecuencia', 'Region', 'Orden', 'ListaEmpaque',
         'Codigo_Siesa', 'Codigo_FDA', 'Cliente', 'Direccion', 'Lote',
         'Descripcion', 'DescripFactura', 'CajasOrden', 'CajasDespachadas',
         'CantidadCaja', 'TotalTM', 'PesoUnd', 'PesoCj', 'KgNet', 'KgBrt',
@@ -80,7 +80,7 @@ function consolidacion_llenar_hoja_proceso($sheet, $rows)
     }
 
     if (empty($rows)) {
-        $sheet->setCellValue('A2', 'No hay datos para el perÃ­odo seleccionado');
+        $sheet->setCellValue('A2', 'No hay datos para el período seleccionado');
     }
 
     foreach (range('A', 'AG') as $columnID) {

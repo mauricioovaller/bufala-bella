@@ -1,6 +1,7 @@
 <?php
 require_once($_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/fpdf/fpdf.php");
 include $_SERVER['DOCUMENT_ROOT'] . "/DatenBankenApp/DiBufala/conexionBaseDatos/conexionbd.php";
+require_once __DIR__ . '/consolidacion_reportes_helper.php';
 $enlace->set_charset("utf8mb4");
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -20,220 +21,15 @@ if (!isset($input['fechaDesde']) || !isset($input['fechaHasta']) || !isset($inpu
 
 $fechaInicio = $input['fechaDesde'];
 $fechaFin = $input['fechaHasta'];
-$campoFecha = $input['tipoFecha'];
+$campoFechaBD = consolidacion_mapear_campo_fecha($input['tipoFecha']);
 
 // Establecer idioma para días de la semana en español
 $enlace->query("SET lc_time_names = 'es_ES'");
 
-// CONSULTA UNIFICADA - COMBINA DATOS DE TABLAS NORMALES Y SAMPLE
-$sql = "SELECT
-    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-    DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-    SUM(det.Cantidad) AS CantidadCajas,
-    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-    ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
-    enc.GuiaMaster,
-    enc.GuiaHija,
-    MAX(est.TotalEstibas) AS CantidadEstibas,
-    COALESCE(etp.TotalEstibasPagas, 0) AS CantidadEstibasPagas,  
-    '07:00:00' AS HoraCargue,  -- Hora por defecto
-    'Normal' AS TipoDato,  -- Identificador para datos normales
-    COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'normal'), '') AS Facturas,
-    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'normal'), '') AS Precintos,
-    COALESCE(ctr.CostoTransporte, 0) AS CostoTransporte
-FROM EncabPedido enc
-INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido   
-INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-INNER JOIN (
-    SELECT 
-        {$campoFecha},
-        SUM(CantidadEstibas) AS TotalEstibas
-    FROM EncabPedido
-    WHERE {$campoFecha} BETWEEN ? AND ?
-      AND Estado = 'Activo'
-    GROUP BY {$campoFecha}
-) est ON est.{$campoFecha} = enc.{$campoFecha}
+// Datos de transporte: una fila por Fecha + Guia Master + Guia Hija
+// (costo diario prorrateado por cajas; facturas/precintos por Fecha + Guia Master)
+$datosTransporte = consolidacion_obtener_transporte_local($enlace, $fechaInicio, $fechaFin, $campoFechaBD);
 
-LEFT JOIN (
-    SELECT
-    FechaSalida,
-    SUM(EstibasPagas) AS TotalEstibasPagas
-    FROM (
-        SELECT
-            enc.FechaSalida,
-            IF(SUM(det.Cantidad) < 20, 0, enc.CantidadEstibas) AS EstibasPagas
-        FROM
-            EncabPedido enc 
-            INNER JOIN DetPedido det ON enc.Id_EncabPedido = det.Id_EncabPedido
-        WHERE
-            enc.FechaSalida BETWEEN ? AND ?   
-        GROUP BY
-            enc.Id_EncabPedido
-    ) AS pedidos_agrupados
-    GROUP BY
-        FechaSalida
-    ORDER BY
-        FechaSalida
-) etp ON etp.FechaSalida = enc.FechaSalida
-
-LEFT JOIN (
-    SELECT 
-        Fecha,
-        SUM(ValorFlete) AS CostoTransporte
-    FROM CostosTransporteDiario
-    WHERE Fecha BETWEEN ? AND ?      
-    GROUP BY Fecha
-) ctr ON ctr.Fecha = enc.{$campoFecha}
-WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-GROUP BY enc.{$campoFecha}
-
-UNION ALL
-
-SELECT
-    DATE_FORMAT(enc.FechaSalida, '%W, %e de %M de %Y') AS FechaCompleta,
-    DATE_FORMAT(enc.FechaSalida, '%d/%m/%Y') AS FechaCorta,
-    SUM(det.Cantidad) AS CantidadCajas,
-    ROUND(SUM(det.PesoNeto), 2) AS PesoNeto,
-    ROUND(SUM(det.PesoNeto * 2.6), 2) AS PesoBruto,
-    enc.GuiaMaster,
-    enc.GuiaHija,
-    MAX(est.TotalEstibas) AS CantidadEstibas,
-    0 AS CantidadEstibasPagas,
-    '07:00:00' AS HoraCargue,  -- Hora por defecto
-    'Sample' AS TipoDato,  -- Identificador para datos sample
-    COALESCE((SELECT GROUP_CONCAT(DISTINCT Id_EncabInvoice ORDER BY Id_EncabInvoice SEPARATOR '-') FROM EncabInvoice WHERE DATE(enc.FechaSalida) = Fecha AND TipoPedido = 'sample'), '') AS Facturas,
-    COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.Precinto ORDER BY pl.Precinto SEPARATOR '-') FROM EncabInvoice ei LEFT JOIN Planillas pl ON ei.Id_Planilla = pl.Id_Planilla WHERE DATE(enc.FechaSalida) = ei.Fecha AND ei.TipoPedido = 'sample'), '') AS Precintos,
-    0 AS CostoTransporte
-FROM EncabPedidoSample enc
-INNER JOIN DetPedidoSample det ON enc.Id_EncabPedido = det.Id_EncabPedido   
-INNER JOIN Productos prd ON det.Id_Producto = prd.Id_Producto
-INNER JOIN Embalajes emb ON det.Id_Embalaje = emb.Id_Embalaje
-INNER JOIN (
-    SELECT 
-        {$campoFecha},
-        SUM(CantidadEstibas) AS TotalEstibas
-    FROM EncabPedidoSample
-    WHERE {$campoFecha} BETWEEN ? AND ?
-      AND Estado = 'Activo'
-    GROUP BY {$campoFecha}
-) est ON est.{$campoFecha} = enc.{$campoFecha}
-WHERE enc.{$campoFecha} BETWEEN ? AND ? AND enc.Estado = 'Activo'
-GROUP BY enc.{$campoFecha}
-
--- Agrupar por fecha para consolidar ambos tipos de datos
-ORDER BY FechaCorta ASC;";
-
-$stmt = $enlace->prepare($sql);
-$stmt->bind_param("ssssssssssss", $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin);
-$stmt->execute();
-
-// Bind de resultados
-$stmt->bind_result(
-    $fechaCompleta,
-    $fechaCorta,
-    $cantidadCajas,
-    $pesoNeto,
-    $pesoBruto,
-    $guiaMaster,
-    $guiaHija,
-    $cantidadEstibas,
-    $cantidadEstibasPagas,
-    $horaCargue,
-    $tipoDato,
-    $facturas,
-    $precintos,
-    $costoTransporte
-);
-
-// Obtener todos los datos y consolidar por fecha
-$datosConsolidados = [];
-$totalCajas = 0;
-$totalPesoNeto = 0;
-$totalPesoBruto = 0;
-$totalEstibas = 0;
-$totalEstibasPagas = 0;
-$totalCostoTransporte = 0;
-
-while ($stmt->fetch()) {
-    $claveUnica = $fechaCorta;
-
-    if (isset($datosConsolidados[$claveUnica])) {
-        // Sumar todos los valores
-        $datosConsolidados[$claveUnica]['CantidadCajas'] += $cantidadCajas;
-        $datosConsolidados[$claveUnica]['PesoNeto'] += $pesoNeto;
-        $datosConsolidados[$claveUnica]['PesoBruto'] += $pesoBruto;
-        $datosConsolidados[$claveUnica]['CantidadEstibas'] += $cantidadEstibas;
-        $datosConsolidados[$claveUnica]['CantidadEstibasPagas'] += $cantidadEstibasPagas;
-        $datosConsolidados[$claveUnica]['CostoTransporte'] += $costoTransporte;
-
-        // Para Guías: mantener la del registro "Normal" o concatenar
-        if ($tipoDato === 'Normal') {
-            $datosConsolidados[$claveUnica]['GuiaMaster'] = $guiaMaster;
-            $datosConsolidados[$claveUnica]['GuiaHija'] = $guiaHija;
-        }
-
-        // Combinar Facturas y Precintos
-        if (!empty($facturas)) {
-            $existingFacturas = $datosConsolidados[$claveUnica]['Facturas'] ?? '';
-            if (!empty($existingFacturas)) {
-                // Combinar y eliminar duplicados
-                $combined = array_unique(array_merge(
-                    explode('-', $existingFacturas),
-                    explode('-', $facturas)
-                ));
-                $datosConsolidados[$claveUnica]['Facturas'] = implode('-', array_filter($combined));
-            } else {
-                $datosConsolidados[$claveUnica]['Facturas'] = $facturas;
-            }
-        }
-
-        if (!empty($precintos)) {
-            $existingPrecintos = $datosConsolidados[$claveUnica]['Precintos'] ?? '';
-            if (!empty($existingPrecintos)) {
-                $combined = array_unique(array_merge(
-                    explode('-', $existingPrecintos),
-                    explode('-', $precintos)
-                ));
-                $datosConsolidados[$claveUnica]['Precintos'] = implode('-', array_filter($combined));
-            } else {
-                $datosConsolidados[$claveUnica]['Precintos'] = $precintos;
-            }
-        }
-    } else {
-        $datosConsolidados[$claveUnica] = [
-            'FechaCompleta' => $fechaCompleta,
-            'FechaCorta' => $fechaCorta,
-            'CantidadCajas' => $cantidadCajas,
-            'PesoNeto' => $pesoNeto,
-            'PesoBruto' => $pesoBruto,
-            'GuiaMaster' => $guiaMaster,
-            'GuiaHija' => $guiaHija,
-            'CantidadEstibas' => $cantidadEstibas,
-            'CantidadEstibasPagas' => $cantidadEstibasPagas,
-            'HoraCargue' => $horaCargue,
-            'Facturas' => $facturas,
-            'Precintos' => $precintos,
-            'CostoTransporte' => $costoTransporte
-        ];
-    }
-
-    // Totales globales
-    $totalCajas += $cantidadCajas;
-    $totalPesoNeto += $pesoNeto;
-    $totalPesoBruto += $pesoBruto;
-    $totalEstibas += $cantidadEstibas;
-    $totalEstibasPagas += $cantidadEstibasPagas;
-    $totalCostoTransporte += $costoTransporte;
-}
-
-
-$stmt->close();
-
-// Convertir el array asociativo a indexado para facilitar el uso
-$datosTransporte = array_values($datosConsolidados);
-
-// ======================
 // CLASE PDF PARA REPORTE DE TRANSPORTE
 // ======================
 class PDFTransporte extends FPDF
@@ -253,6 +49,8 @@ class PDFTransporte extends FPDF
         // Título principal
         $this->SetFont('Arial', 'B', 16);
         $this->Cell(0, 10, utf8_decode('TRANSPORTE POR DÍA'), 0, 1, 'C');
+        $this->SetFont('Arial', 'B', 10);
+        $this->Cell(0, 6, utf8_decode('DETALLE POR GUIA MASTER / HIJA'), 0, 1, 'C');
 
         // Información del rango de fechas
         $this->SetFont('Arial', 'I', 10);
@@ -323,9 +121,6 @@ class PDFTransporte extends FPDF
 
     function agregarFila($fecha, $cajas, $pesoNeto, $pesoBruto, $guiaMaster, $guiaHija, $cantidadEstibas, $cantidadEstibasPagas, $costoTransporte, $facturas, $precintos)
     {
-        // DEBUG: Ver qué fila se está agregando
-        error_log("PDF TRANSPORTE - Agregando: $fecha - $cajas cajas - $pesoNeto kg");
-
         // Verificar si necesita nueva página
         if ($this->GetY() > 250) {
             $this->AddPage();
@@ -380,10 +175,6 @@ $pdf = new PDFTransporte('L', 'mm', 'Letter');
 $pdf->SetMargins(15, 15, 15);
 $pdf->AliasNbPages();
 $pdf->AddPage();
-
-// DEBUG: Antes de generar PDF
-error_log("=== GENERANDO PDF TRANSPORTE ===");
-error_log("Total filas a procesar: " . count($datosTransporte));
 
 // Agregar encabezado de columnas
 $pdf->agregarEncabezadoColumnas();

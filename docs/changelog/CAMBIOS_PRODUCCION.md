@@ -2,6 +2,62 @@
 
 ---
 
+## [2026-09-02] Anexos Autodeclaración Chile por cliente — Spec 0002
+
+### Descripción
+
+Preselección de anexos por cliente (Globe Italia / Cencosud, configurable desde BD), selección
+editable y guardado exacto por planilla para que la Autodeclaración Chile muestre/envíe
+exactamente los anexos marcados (consultar existente y correo individual/múltiple).
+
+### Cambios
+
+- **BD (scripts a ejecutar):** `database/scripts/crear_tablas_anexos_autodeclaracion_chile.sql`
+  (tablas `clientes_chile_anexos_default` y `planillas_chile_documentos`) y
+  `database/scripts/seed_anexos_defaults_clientes_chile.sql` (mapeo Globe/Cencosud, Paso 0 de datos).
+- **Backend:** `ApiGuardarPlanilla.php` (guarda filas por anexo), `ApiGetDocumentosChileItems.php`
+  (devuelve `anexosDefault` del cliente), `ApiGetPlanillaConfiguracion.php` y
+  `ApiAutodeclaracionChile.php` (resolución: ids → filas planilla → JSON → default cliente → vacío).
+- **Frontend:** `ModalDocumentosDespacho.jsx` (preselección por cliente + info del cliente),
+  `FacturacionMain.jsx` (validación de un solo cliente por despacho Chile),
+  `services/planillasService.js` (envío de `id_factura`).
+
+### Validación
+
+- `php -l` OK (módulo Planillas) y `php scripts/check_encoding.php src/Api/Planillas` → exit 0.
+- Spec 0002 en estado `Cerrada` (el usuario probó en su entorno el 2026-09-02 y confirmó que funciona).
+
+---
+
+## [2026-09-02] SDD + corrección de codificación (tildes/ñ) en Reportes por Área — Spec 0001
+
+### Descripción
+
+1. **Metodología Spec-Driven Development (SDD):** se creó `docs/specs/` con índice
+   (`README.md`), plantilla (`_template.md`) y la **Spec 0001** (piloto). A partir de ahora toda
+   solicitud inicia con una spec en borrador, se aprueba con el usuario y luego se implementa.
+2. **Corrección de codificación:** 12 generadores PDF/Excel de "Reportes por Área" tenían los
+   textos fijos con doble/triple codificación (mojibake) que mostraba símbolos raros
+   (ej. `MÃ©todo`, `PerÃodo`, `DÃA`). Se normalizaron a UTF-8 correcto: ahora salen bien las
+   tildes y la `ñ` tanto en PDF (Latin-1 vía `utf8_decode`) como en Excel (UTF-8 puro).
+
+### Archivos
+
+- `docs/specs/README.md`, `docs/specs/_template.md`, `docs/specs/consolidacion/0001-correccion-codificacion-reportes-por-area.md`
+- `scripts/check_encoding.php` — gate automático de codificación (BOM / UTF-8 inválido / mojibake).
+- 12 endpoints normalizados: Producción/Empaque (Chile, Consolidado), Transporte PDF (3
+  pestañas), Excel Transporte (3 pestañas), Excel Proceso Actual (Chile, Consolidado).
+- `CLAUDE.md` y `AGENTS.md` — sección SDD y regla/gate de codificación actualizados.
+
+### Validación
+
+- `php -l` → OK en los 25 PHP del módulo.
+- `php scripts/check_encoding.php src/Api/Consolidacion` → exit 0 (sin mojibake/BOM).
+- Generadores Excel con 0 usos de `utf8_decode` (UTF-8 puro).
+- Spec 0001 en estado `Verificada` (el usuario confirmó el 2026-09-02 que los textos con tildes/ñ salen correctos).
+
+---
+
 ## [2026-08-25] Regla de oro para codificación de texto
 
 ### Descripción

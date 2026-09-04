@@ -10,7 +10,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die(json_encode(["error" => "MÃ©todo no permitido. Usa POST."]));
+    die(json_encode(["error" => "Método no permitido. Usa POST."]));
 }
 
 $input = json_decode(file_get_contents("php://input"), true);
@@ -19,7 +19,7 @@ $fechaHasta = $input['fechaHasta'] ?? null;
 $campoFechaBD = consolidacion_mapear_campo_fecha($input['tipoFecha'] ?? 'fechaSalida');
 
 if (!$fechaDesde || !$fechaHasta) {
-    die(json_encode(["error" => "Debe proporcionar un rango de fechas vÃ¡lido."]));
+    die(json_encode(["error" => "Debe proporcionar un rango de fechas válido."]));
 }
 
 try {
@@ -28,10 +28,10 @@ try {
 
     $spreadsheet = new Spreadsheet();
     $sheet = $spreadsheet->getActiveSheet();
-    $sheet->setTitle("ConsolidaciÃ³n Chile");
+    $sheet->setTitle("Consolidación Chile");
 
     $encabezados = [
-        'AÃ±o', 'Mes', 'Frecuencia', 'Region', 'Orden', 'ListaEmpaque',
+        'Año', 'Mes', 'Frecuencia', 'Region', 'Orden', 'ListaEmpaque',
         'Codigo_Siesa', 'Codigo_FDA', 'Cliente', 'Direccion', 'Lote',
         'Descripcion', 'DescripFactura', 'CajasOrden', 'CajasDespachadas',
         'CantidadCaja', 'TotalTM', 'PesoUnd', 'PesoCj', 'KgNet', 'KgBrt',

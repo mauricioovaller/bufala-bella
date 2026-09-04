@@ -7,8 +7,8 @@
 ║ ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-**Última actualización:** 19 de Agosto de 2026  
-**Versión:** 1.8  
+**Última actualización:** 02 de Septiembre de 2026  
+**Versión:** 1.9  
 **Responsable:** Equipo de Desarrollo
 
 ---
@@ -28,6 +28,7 @@
 - 📋 **Tabla desktop + cards móvil** como patrón para listados
 - 🔄 **No romper funcionalidad existente** — extender, no reescribir
 - 🔤 **Codificación de texto obligatoria** — preservar correctamente tildes, ñ y caracteres especiales en BD, APIs, PDFs y frontend
+- 📐 **Spec-Driven Development (SDD) OBLIGATORIO** — ninguna solicitud de cambio se implementa sin una **spec aprobada**. El flujo: spec borrador en `docs/specs/<modulo>/NNN-nombre.md` → aprobación del usuario → implementación → actualizar estado. Detalle y plantilla: `docs/specs/README.md` y `docs/specs/_template.md`
 - 📝 **Documentar en el momento** — AGENTS.md + CAMBIOS_PRODUCCION.md en cada cambio
 - 🎨 **Paleta uniforme** — usar colores del sistema, no inventar nuevos estilos
 - 🗂️ **Verificar antes de crear** — ANTES de crear cualquier archivo en una carpeta de módulo (`Api/`, `components/`, `services/`, `pages/`), verificar con `glob` si la carpeta ya existe y qué archivos contiene. NUNCA crear carpetas nuevas si el módulo ya existe bajo otro nombre.
@@ -1231,6 +1232,11 @@ docs/changelog/
   ├── CHANGELOG_CORREOS.md                    ✅ Historia de correos
   ├── CAMBIOS_PRODUCCION.md                   ✅ Cambios production
   └── VERSION_HISTORY.md                       (mantener actualizado)
+
+docs/specs/                                    ✅ Spec-Driven Development
+  ├── README.md                                Índice, flujo y estados SDD
+  ├── _template.md                             Plantilla obligatoria de specs
+  └── <modulo>/NNN-nombre-corto.md             Una spec por cambio (aprobada antes de implementar)
 ```
 
 ### 12.2 Cómo Documentar una Funcionalidad Nueva
@@ -1269,6 +1275,20 @@ Descripción clara de qué resuelve
 - Limitaciones
 - Mejoras futuras
 ```
+
+### 12.3 Especificaciones — Spec-Driven Development (SDD)
+
+Desde la Spec 0001 el proyecto trabaja con **Spec-Driven Development**: toda solicitud de
+cambio comienza escribiendo una especificación en `docs/specs/<modulo>/NNN-nombre-corto.md`
+usando la plantilla `docs/specs/_template.md`, **se aprueba con el usuario** y solo entonces
+se implementa. Reglas:
+
+- Estados: `Borrador → Aprobada → En implementación → Implementada → Verificada` (o `Cancelada`).
+- La spec es la fuente de verdad: no se agregan requisitos fuera de ella sin actualizarla antes.
+- Al terminar, actualizar el estado en la spec y en el índice `docs/specs/README.md`.
+- Los commits del cambio deben referenciar la spec (p. ej. `feat(consolidacion): ... (Spec 0001)`).
+
+Detalle del flujo, estructura e índice actual: **`docs/specs/README.md`**.
 
 ---
 
@@ -1916,6 +1936,8 @@ npm run preview   # Ver build localmente
 npm test          # Ejecutar todos los tests
 npm run test:watch    # Tests en modo observador
 npm run test:coverage # Tests + cobertura
+php -l <archivo.php>              # Lint de sintaxis PHP
+php scripts/check_encoding.php    # Gate de codificación (tildes/ñ, sin mojibake/BOM) — exit 0 = limpio
 git log --oneline # Ver commits
 ```
 
@@ -1931,6 +1953,8 @@ git log --oneline # Ver commits
 - [ ] Responsivo en mobile
 - [ ] Sin credenciales en código
 - [ ] Sin archivos temporales
+- [ ] `php -l` en los archivos PHP tocados
+- [ ] `php scripts/check_encoding.php` → exit 0 (sin mojibake/BOM) si tocaste PHP
 
 **Tests:**
 
@@ -1941,6 +1965,7 @@ git log --oneline # Ver commits
 **Documentación (OBLIGATORIA — no opcional):**
 
 - [ ] AGENTS.md actualizado si hubo cambios de arquitectura o tests
+- [ ] Spec SDD actualizada: estado en `docs/specs/<modulo>/NNN-*.md` e índice `docs/specs/README.md` (si el cambio es de una funcionalidad nueva o ajuste)
 - [ ] `docs/changelog/CAMBIOS_PRODUCCION.md` con entrada del cambio realizado
 - [ ] Si es módulo nuevo: guía creada en `docs/guides/`
 - [ ] Si hay tablas SQL nuevas: `database/scripts/README.md` actualizado
